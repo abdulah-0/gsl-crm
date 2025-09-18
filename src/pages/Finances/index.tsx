@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
+import { supabase } from '../../lib/supabaseClient';
+
 import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts';
 
 type VoucherStatus = 'Approved' | 'Pending' | 'Rejected';
@@ -17,6 +19,34 @@ type VoucherRow = {
   status: VoucherStatus;
   description?: string;
 };
+
+type DBVoucher = {
+  id: string;
+  code: string;
+  vtype: 'cash_in' | 'cash_out' | 'online' | 'bank' | 'transfer';
+  amount: number;
+  branch: string;
+  occurred_at: string;
+  status: VoucherStatus;
+  description?: string | null;
+};
+
+function mapDbToRow(v: DBVoucher): VoucherRow {
+  const typeMap: Record<DBVoucher['vtype'], VoucherRow['type']> = {
+    cash_in: 'Cash In', cash_out: 'Cash Out', online: 'Online', bank: 'Bank', transfer: 'Transfer'
+  };
+  return {
+    id: v.code || v.id,
+    type: typeMap[v.vtype],
+    amount: Number(v.amount),
+    branch: v.branch,
+    date: v.occurred_at,
+    status: v.status,
+    description: v.description ?? undefined,
+  };
+}
+
+
 
 const BRANCHES = ['Main Branch', 'North Branch', 'South Branch', 'East Branch', 'West Branch'];
 
@@ -36,6 +66,51 @@ function voucherTypeToRowType(v: VoucherType): VoucherRow['type'] {
   }
 }
 
+function voucherTypeToDbType(v: VoucherType): DBVoucher['vtype'] {
+  switch (v) {
+    case 'Cash Receipt': return 'cash_in';
+    case 'Cash Payment': return 'cash_out';
+    case 'Online Payment': return 'online';
+    case 'Bank Deposit': return 'bank';
+    case 'Transfer': return 'transfer';
+  }
+}
+
+async function exportExcel(filename: string, rows: VoucherRow[]) {
+  try {
+    const XLSX: any = await import('xlsx');
+    const data = rows.map(r => ({
+      Voucher: r.id,
+      Type: r.type,
+      Amount: r.amount,
+      Branch: r.branch,
+      Date: new Date(r.date).toLocaleDateString(),
+      Status: r.status,
+      Description: r.description ?? ''
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Vouchers');
+    XLSX.writeFile(wb, filename);
+  } catch (e) {
+    alert('Excel export requires the xlsx package. Reply yes and I will install it.');
+  }
+}
+
+async function exportPDF(filename: string, rows: VoucherRow[]) {
+  try {
+    const jspdfmod: any = await import('jspdf');
+    await import('jspdf-autotable');
+    const doc = new jspdfmod.jsPDF();
+    const head = [['Voucher ID','Type','Amount','Branch','Date','Status','Description']];
+    const body = rows.map(r => [r.id, r.type, r.amount, r.branch, new Date(r.date).toLocaleDateString(), r.status, r.description ?? '']);
+    (doc as any).autoTable({ head, body });
+    doc.save(filename);
+  } catch (e) {
+    alert('PDF export requires jspdf and jspdf-autotable. Reply yes and I will install them.');
+  }
+}
+
 function downloadCSV(filename: string, rows: VoucherRow[]) {
   const header = ['Voucher ID','Type','Amount','Branch','Date','Status','Description'];
   const lines = rows.map(r => [r.id, r.type, r.amount, r.branch, r.date, r.status, r.description ?? '']);
@@ -50,7 +125,7 @@ function downloadCSV(filename: string, rows: VoucherRow[]) {
 
 const Finances: React.FC = () => {
 
-  const [vouchers, setVouchers] = useState<VoucherRow[]>(initialVouchers);
+  const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [voucherType, setVoucherType] = useState<VoucherType | ''>('');
   const [amount, setAmount] = useState<string>('');
   const [branch, setBranch] = useState<string>('');
@@ -75,25 +150,33 @@ const Finances: React.FC = () => {
     setVoucherType(type);
   };
 
-  const handleGenerate = (e: React.FormEvent) => {
+  const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid) return;
-    const newIndex = vouchers.length + 1;
-    const id = `VCH-${new Date().getFullYear()}-${String(newIndex).padStart(3,'0')}`;
+
     const rowType = voucherTypeToRowType(voucherType as VoucherType);
+    const dbType = voucherTypeToDbType(voucherType as VoucherType);
     const amt = Number(amount);
     const signedAmt = rowType === 'Cash Out' ? -Math.abs(amt) : Math.abs(amt);
+    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+    const occurred_at = new Date().toISOString();
 
-    const newVoucher: VoucherRow = {
-      id,
-      type: rowType,
-      amount: signedAmt,
-      branch,
-      date: new Date().toISOString().slice(0,10),
-      status,
-      description,
-    };
-    setVouchers([newVoucher, ...vouchers]);
+    // Optimistic UI update (will be reconciled by realtime)
+    setVouchers(prev => ([
+      { id: code, type: rowType, amount: signedAmt, branch, date: occurred_at, status, description },
+      ...prev
+    ]));
+
+    const { error } = await supabase.from('vouchers').insert([
+      { code, vtype: dbType, amount: signedAmt, branch, occurred_at, status, description }
+    ]);
+    if (error) {
+      // rollback optimistic add if failed
+      setVouchers(prev => prev.filter(v => v.id !== code));
+      alert(`Failed to create voucher: ${error.message}`);
+      return;
+    }
+
     // reset minimal
     setAmount('');
     setDescription('');
@@ -138,6 +221,74 @@ const Finances: React.FC = () => {
     ];
   }, [vouchers]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('vouchers')
+        .select('*')
+        .order('occurred_at', { ascending: false })
+        .limit(500);
+      if (!cancelled && data) setVouchers(data.map(mapDbToRow));
+      if (error) console.error('Load vouchers error', error);
+    };
+    load();
+
+    const channel = supabase
+      .channel('public:vouchers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vouchers' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newRow = mapDbToRow(payload.new as DBVoucher);
+          setVouchers(prev => [newRow, ...prev.filter(p => p.id !== newRow.id)]);
+        } else if (payload.eventType === 'UPDATE') {
+          const newRow = mapDbToRow(payload.new as DBVoucher);
+          setVouchers(prev => prev.map(p => p.id === newRow.id ? newRow : p));
+        } else if (payload.eventType === 'DELETE') {
+          const oldAny = payload.old as any;
+          const id = oldAny.code || oldAny.id;
+          setVouchers(prev => prev.filter(p => p.id !== id));
+        }
+      })
+      .subscribe();
+
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, []);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const curMonth = now.getMonth();
+    const curYear = now.getFullYear();
+    const prevMonth = (curMonth + 11) % 12;
+    const prevYear = curMonth === 0 ? curYear - 1 : curYear;
+
+    const sum = { cur: { cashIn: 0, cashOut: 0, online: 0, bank: 0 }, prev: { cashIn: 0, cashOut: 0, online: 0, bank: 0 } };
+    const add = (bucket: any, r: VoucherRow) => {
+      if (r.type === 'Cash In') bucket.cashIn += Math.max(0, r.amount);
+      if (r.type === 'Cash Out') bucket.cashOut += Math.abs(Math.min(0, r.amount));
+      if (r.type === 'Online') bucket.online += Math.max(0, r.amount);
+      if (r.type === 'Bank') bucket.bank += Math.max(0, r.amount);
+    };
+
+    for (const r of vouchers) {
+      const d = new Date(r.date);
+      if (d.getFullYear() === curYear && d.getMonth() === curMonth) add(sum.cur, r);
+      else if (d.getFullYear() === prevYear && d.getMonth() === prevMonth) add(sum.prev, r);
+    }
+
+    const pct = (cur: number, prev: number) => {
+      if (prev === 0) return cur > 0 ? 100 : 0;
+      return ((cur - prev) / prev) * 100;
+    };
+
+    return {
+      cashIn: { value: sum.cur.cashIn, pct: pct(sum.cur.cashIn, sum.prev.cashIn) },
+      cashOut: { value: sum.cur.cashOut, pct: pct(sum.cur.cashOut, sum.prev.cashOut) },
+      online: { value: sum.cur.online, pct: pct(sum.cur.online, sum.prev.online) },
+      bank: { value: sum.cur.bank, pct: pct(sum.cur.bank, sum.prev.bank) },
+    };
+  }, [vouchers]);
+
+
   return (
 
     <>
@@ -166,8 +317,8 @@ const Finances: React.FC = () => {
                   <span className="text-sm text-text-secondary font-semibold" style={{ fontFamily: 'Nunito Sans' }}>Cash In</span>
                   <img src="/images/img_icn_general_upload.svg" alt="cash in" className="w-6 h-6" />
                 </div>
-                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs 100,000</div>
-                <div className="mt-1 text-sm font-semibold text-green-600">+6% from last month</div>
+                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs {stats.cashIn.value.toLocaleString()}</div>
+                <div className={`mt-1 text-sm font-semibold ${stats.cashIn.pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>{`${stats.cashIn.pct >= 0 ? '+' : ''}${stats.cashIn.pct.toFixed(1)}% from last month`}</div>
               </div>
               {/* Cash Out */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
@@ -175,8 +326,8 @@ const Finances: React.FC = () => {
                   <span className="text-sm text-text-secondary font-semibold" style={{ fontFamily: 'Nunito Sans' }}>Cash Out</span>
                   <img src="/images/img_icn_general_attach.svg" alt="cash out" className="w-6 h-6" />
                 </div>
-                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs 50,000</div>
-                <div className="mt-1 text-sm font-semibold text-red-600">-12% from last month</div>
+                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs {stats.cashOut.value.toLocaleString()}</div>
+                <div className={`mt-1 text-sm font-semibold ${stats.cashOut.pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>{`${stats.cashOut.pct >= 0 ? '+' : ''}${stats.cashOut.pct.toFixed(1)}% from last month`}</div>
               </div>
               {/* Online Payments */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
@@ -184,8 +335,8 @@ const Finances: React.FC = () => {
                   <span className="text-sm text-text-secondary font-semibold" style={{ fontFamily: 'Nunito Sans' }}>Online Payments</span>
                   <img src="/images/img_icn_general_time_filled.svg" alt="online" className="w-6 h-6" />
                 </div>
-                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs 156,910</div>
-                <div className="mt-1 text-sm font-semibold text-orange-500">+75% from last month</div>
+                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs {stats.online.value.toLocaleString()}</div>
+                <div className="mt-1 text-sm font-semibold text-orange-500">{`${stats.online.pct >= 0 ? '+' : ''}${stats.online.pct.toFixed(1)}% from last month`}</div>
               </div>
               {/* Bank Deposits */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
@@ -193,8 +344,8 @@ const Finances: React.FC = () => {
                   <span className="text-sm text-text-secondary font-semibold" style={{ fontFamily: 'Nunito Sans' }}>Bank Deposits</span>
                   <img src="/images/img_notifications.svg" alt="bank" className="w-6 h-6" />
                 </div>
-                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs 50,000</div>
-                <div className="mt-1 text-sm font-semibold text-purple-600">+10.2% from last month</div>
+                <div className="mt-2 text-3xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Rs {stats.bank.value.toLocaleString()}</div>
+                <div className="mt-1 text-sm font-semibold text-purple-600">{`${stats.bank.pct >= 0 ? '+' : ''}${stats.bank.pct.toFixed(1)}% from last month`}</div>
               </div>
             </div>
           </section>
@@ -271,8 +422,8 @@ const Finances: React.FC = () => {
                   <input value={search} onChange={(e)=>{ setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
                   <div className="flex gap-2">
                     <button onClick={()=>downloadCSV('vouchers.csv', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">CSV</button>
-                    <button onClick={()=>downloadCSV('vouchers.xlsx', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">Excel</button>
-                    <button onClick={()=>downloadCSV('vouchers.pdf', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">PDF</button>
+                    <button onClick={()=>exportExcel('vouchers.xlsx', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">Excel</button>
+                    <button onClick={()=>exportPDF('vouchers.pdf', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">PDF</button>
                   </div>
                 </div>
               </div>

@@ -211,6 +211,21 @@ CREATE TABLE IF NOT EXISTS accounts_transactions (
   created_at   timestamptz NOT NULL DEFAULT now()
 );
 
+-- 5b) Vouchers (for Finance tab)
+CREATE TABLE IF NOT EXISTS vouchers (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code        text UNIQUE NOT NULL,
+  vtype       text NOT NULL CHECK (vtype IN ('cash_in','cash_out','online','bank','transfer')),
+  amount      numeric(14,2) NOT NULL,
+  branch      text NOT NULL,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  status      text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved','Rejected')),
+  description text,
+  created_by  bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+
 -- 6) SaaS B2B
 CREATE TABLE IF NOT EXISTS b2b_accounts (
   id          bigserial PRIMARY KEY,
@@ -481,6 +496,8 @@ ALTER TABLE employee_attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leaves ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll ENABLE ROW LEVEL SECURITY;
 ALTER TABLE accounts_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vouchers ENABLE ROW LEVEL SECURITY;
+
 ALTER TABLE b2b_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partner_leads ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
@@ -567,6 +584,13 @@ CREATE POLICY acct_sel_superadmin ON accounts_transactions FOR SELECT USING (is_
 CREATE POLICY acct_ins_superadmin ON accounts_transactions FOR INSERT WITH CHECK (is_superadmin());
 CREATE POLICY acct_upd_superadmin ON accounts_transactions FOR UPDATE USING (is_superadmin()) WITH CHECK (is_superadmin());
 CREATE POLICY acct_del_superadmin ON accounts_transactions FOR DELETE USING (is_superadmin());
+
+-- Vouchers
+CREATE POLICY vch_sel_superadmin ON vouchers FOR SELECT USING (is_superadmin());
+CREATE POLICY vch_ins_superadmin ON vouchers FOR INSERT WITH CHECK (is_superadmin());
+CREATE POLICY vch_upd_superadmin ON vouchers FOR UPDATE USING (is_superadmin()) WITH CHECK (is_superadmin());
+CREATE POLICY vch_del_superadmin ON vouchers FOR DELETE USING (is_superadmin());
+
 
 -- B2B
 CREATE POLICY b2b_sel_superadmin ON b2b_accounts FOR SELECT USING (is_superadmin());
