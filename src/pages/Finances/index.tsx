@@ -99,15 +99,27 @@ async function exportExcel(filename: string, rows: VoucherRow[]) {
 
 async function exportPDF(filename: string, rows: VoucherRow[]) {
   try {
-    const jspdfmod: any = await import('jspdf');
-    await import('jspdf-autotable');
-    const doc = new jspdfmod.jsPDF();
+    const { jsPDF } = await import('jspdf');
+    // Support both plugin-style and function export
+    const mod: any = await import('jspdf-autotable');
+    const autoTable = mod?.default || mod?.autoTable;
+
+    const doc = new jsPDF();
     const head = [['Voucher ID','Type','Amount','Branch','Date','Status','Description']];
     const body = rows.map(r => [r.id, r.type, r.amount, r.branch, new Date(r.date).toLocaleDateString(), r.status, r.description ?? '']);
-    (doc as any).autoTable({ head, body });
+
+    if (typeof autoTable === 'function') {
+      autoTable(doc, { head, body, styles: { fontSize: 9 } });
+    } else if (typeof (doc as any).autoTable === 'function') {
+      (doc as any).autoTable({ head, body });
+    } else {
+      console.error('jspdf-autotable not initialized');
+    }
+
     doc.save(filename);
   } catch (e) {
-    alert('PDF export requires jspdf and jspdf-autotable. Reply yes and I will install them.');
+    console.error('PDF export error', e);
+    alert('Failed to generate PDF. Please try again.');
   }
 }
 
@@ -124,6 +136,13 @@ function downloadCSV(filename: string, rows: VoucherRow[]) {
 
 
 const Finances: React.FC = () => {
+
+
+  // Row actions state
+  const [viewVoucher, setViewVoucher] = useState<VoucherRow | null>(null);
+  const [editVoucher, setEditVoucher] = useState<VoucherRow | null>(null);
+  const [editStatus, setEditStatus] = useState<VoucherStatus>('Pending');
+  const [editDescription, setEditDescription] = useState<string>('');
 
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [voucherType, setVoucherType] = useState<VoucherType | ''>('');
@@ -180,6 +199,23 @@ const Finances: React.FC = () => {
     // reset minimal
     setAmount('');
     setDescription('');
+  };
+
+  // Row action handlers
+  const onView = (r: VoucherRow) => setViewVoucher(r);
+  const onEdit = (r: VoucherRow) => { setEditVoucher(r); setEditStatus(r.status); setEditDescription(r.description ?? ''); };
+  const onDelete = async (r: VoucherRow) => {
+    if (!confirm(`Delete voucher ${r.id}?`)) return;
+    const { error } = await supabase.from('vouchers').delete().or(`code.eq.${r.id},id.eq.${r.id}`);
+    if (error) alert(`Failed to delete: ${error.message}`);
+  };
+  const onSaveEdit = async () => {
+    if (!editVoucher) return;
+    const { error } = await supabase.from('vouchers')
+      .update({ status: editStatus, description: editDescription })
+      .or(`code.eq.${editVoucher.id},id.eq.${editVoucher.id}`);
+    if (error) { alert(`Failed to update: ${error.message}`); return; }
+    setEditVoucher(null);
   };
 
   const filtered = useMemo(() => {
@@ -456,9 +492,9 @@ const Finances: React.FC = () => {
                         </td>
                         <td className="py-2 pr-4">
                           <div className="flex gap-2 text-sm">
-                            <button className="text-blue-600 hover:underline">View</button>
-                            <button className="text-orange-600 hover:underline">Edit</button>
-                            <button className="text-red-600 hover:underline">Delete</button>
+                            <button onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
+                            <button onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>
+                            <button onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>
                           </div>
                         </td>
                       </tr>
@@ -494,6 +530,54 @@ const Finances: React.FC = () => {
                       <Legend />
                       <Bar dataKey="revenue" name="Revenue" fill="#3f8cff" />
                     </BarChart>
+
+        {/* View Modal */}
+        {viewVoucher && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
+              <h3 className="text-lg font-bold mb-3">Voucher #{viewVoucher.id}</h3>
+              <div className="text-sm space-y-1">
+                <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
+                <div><span className="text-text-secondary">Amount:</span> Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount>=0? '(In)':'(Out)'}</div>
+                <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
+                <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
+                <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
+                {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
+              </div>
+              <div className="mt-4 text-right">
+                <button onClick={()=>setViewVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Modal */}
+        {editVoucher && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
+              <h3 className="text-lg font-bold mb-3">Edit Voucher #{editVoucher.id}</h3>
+              <div className="space-y-3">
+                <label className="block text-sm">
+                  <span className="text-text-secondary">Status</span>
+                  <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
+                    <option>Pending</option>
+                    <option>Approved</option>
+                    <option>Rejected</option>
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="text-text-secondary">Description</span>
+                  <textarea value={editDescription} onChange={(e)=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
+                </label>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button onClick={()=>setEditVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Cancel</button>
+                <button onClick={onSaveEdit} className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+              </div>
+            </div>
+          </div>
+        )}
+
                   </ResponsiveContainer>
                 </div>
               </div>
