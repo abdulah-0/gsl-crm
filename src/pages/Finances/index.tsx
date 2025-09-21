@@ -5,6 +5,9 @@ import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
 
 import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 
 type VoucherStatus = 'Approved' | 'Pending' | 'Rejected';
 
@@ -99,34 +102,34 @@ async function exportExcel(filename: string, rows: VoucherRow[]) {
 
 async function exportPDF(filename: string, rows: VoucherRow[]) {
   try {
-    const { jsPDF } = await import('jspdf');
-    // Support both plugin-style and function export
-    const mod: any = await import('jspdf-autotable');
-    const autoTable = mod?.default || mod?.autoTable;
-
     const doc = new jsPDF();
     const head = [['Voucher ID','Type','Amount','Branch','Date','Status','Description']];
     const body = rows.map(r => [r.id, r.type, r.amount, r.branch, new Date(r.date).toLocaleDateString(), r.status, r.description ?? '']);
 
-    if (typeof autoTable === 'function') {
-      autoTable(doc, { head, body, styles: { fontSize: 9 } });
+    if (typeof (autoTable as any) === 'function') {
+      (autoTable as any)(doc, { head, body, styles: { fontSize: 9 } });
     } else if (typeof (doc as any).autoTable === 'function') {
       (doc as any).autoTable({ head, body });
-    } else {
-      console.error('jspdf-autotable not initialized');
     }
 
-    doc.save(filename);
+    // Fallback: ensure download triggers reliably on iOS/Safari
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
   } catch (e) {
     console.error('PDF export error', e);
-    alert('Failed to generate PDF. Please try again.');
+    alert('Failed to generate PDF. Please check console for details.');
   }
 }
 
 function downloadCSV(filename: string, rows: VoucherRow[]) {
   const header = ['Voucher ID','Type','Amount','Branch','Date','Status','Description'];
   const lines = rows.map(r => [r.id, r.type, r.amount, r.branch, r.date, r.status, r.description ?? '']);
-  const csv = [header, ...lines].map(arr => arr.map(x => `"${String(x).replaceAll('"','""')}"`).join(',')).join('\n');
+  const csv = [header, ...lines]
+    .map(arr => arr.map(x => `"${String(x).replace(/\"/g,'\"\"')}"`).join(','))
+    .join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -149,7 +152,7 @@ const Finances: React.FC = () => {
   const [amount, setAmount] = useState<string>('');
   const [branch, setBranch] = useState<string>('');
   const [description, setDescription] = useState<string>('');
-  const [status, setStatus] = useState<VoucherStatus>('Pending');
+  const [status] = useState<VoucherStatus>('Pending');
 
   const [search, setSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState<string>('All Branches');
@@ -531,52 +534,6 @@ const Finances: React.FC = () => {
                       <Bar dataKey="revenue" name="Revenue" fill="#3f8cff" />
                     </BarChart>
 
-        {/* View Modal */}
-        {viewVoucher && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-bold mb-3">Voucher #{viewVoucher.id}</h3>
-              <div className="text-sm space-y-1">
-                <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
-                <div><span className="text-text-secondary">Amount:</span> Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount>=0? '(In)':'(Out)'}</div>
-                <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
-                <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
-                <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
-                {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
-              </div>
-              <div className="mt-4 text-right">
-                <button onClick={()=>setViewVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Close</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Edit Modal */}
-        {editVoucher && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
-              <h3 className="text-lg font-bold mb-3">Edit Voucher #{editVoucher.id}</h3>
-              <div className="space-y-3">
-                <label className="block text-sm">
-                  <span className="text-text-secondary">Status</span>
-                  <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
-                    <option>Pending</option>
-                    <option>Approved</option>
-                    <option>Rejected</option>
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="text-text-secondary">Description</span>
-                  <textarea value={editDescription} onChange={(e)=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
-                </label>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button onClick={()=>setEditVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Cancel</button>
-                <button onClick={onSaveEdit} className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
-              </div>
-            </div>
-          </div>
-        )}
 
                   </ResponsiveContainer>
                 </div>
@@ -591,7 +548,7 @@ const Finances: React.FC = () => {
                       <Tooltip formatter={(v:any, n:any)=>[`Rs ${Number(v).toLocaleString()}`, n as string]} />
                       <Legend />
                       <Pie data={methodChartData} dataKey="value" nameKey="name" outerRadius={90} label={(e)=>`${e.name} ${e.pct}%`}>
-                        {methodChartData.map((entry, index) => (
+                        {methodChartData.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={["#22c55e","#fb923c","#8b5cf6"][index]} />
                         ))}
                       </Pie>
@@ -601,6 +558,54 @@ const Finances: React.FC = () => {
               </div>
             </div>
 
+
+
+      {/* View Modal */}
+      {viewVoucher && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-bold mb-3">Voucher #{viewVoucher.id}</h3>
+            <div className="text-sm space-y-1">
+              <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
+              <div><span className="text-text-secondary">Amount:</span> Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount>=0? '(In)':'(Out)'}</div>
+              <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
+              <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
+              <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
+              {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
+            </div>
+            <div className="mt-4 text-right">
+              <button onClick={()=>setViewVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editVoucher && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-bold mb-3">Edit Voucher #{editVoucher.id}</h3>
+            <div className="space-y-3">
+              <label className="block text-sm">
+                <span className="text-text-secondary">Status</span>
+                <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
+                  <option>Pending</option>
+                  <option>Approved</option>
+                  <option>Rejected</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                <span className="text-text-secondary">Description</span>
+                <textarea value={editDescription} onChange={(e)=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
+              </label>
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={()=>setEditVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Cancel</button>
+              <button onClick={onSaveEdit} className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
         </div>
       </main>
