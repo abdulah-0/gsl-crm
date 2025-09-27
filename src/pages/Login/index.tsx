@@ -21,7 +21,10 @@ const Login = () => {
         const { supabase } = await import('../../lib/supabaseClient');
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          navigate('/dashboard');
+          const user: any = data.session.user;
+          const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
+          const isSuperAdmin = typeof role === 'string' && role.toLowerCase().includes('super');
+          navigate(isSuperAdmin ? '/super-admin' : '/dashboard');
         }
       } catch {}
     })();
@@ -32,13 +35,14 @@ const Login = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error } = await (await import('../../lib/supabaseClient')).supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { supabase } = await import('../../lib/supabaseClient');
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data.session) {
-        navigate('/dashboard');
+        const user: any = data.session.user;
+        const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
+        const isSuperAdmin = typeof role === 'string' && role.toLowerCase().includes('super');
+        navigate(isSuperAdmin ? '/super-admin' : '/dashboard');
       }
     } catch (e: any) {
       setError(e?.message || 'Sign in failed');

@@ -11,6 +11,8 @@ import EmployeesPage from './pages/Employees';
 import MessengerPage from './pages/Messenger';
 import InfoPortalPage from './pages/InfoPortal';
 import ReportsPage from './pages/Reports';
+import SuperAdminPage from './pages/SuperAdmin';
+
 
 
 // Simple ProtectedRoute using Supabase session
@@ -62,6 +64,8 @@ const AppRoutes = () => {
         <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
+        <Route path="/super-admin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
+
         <Route path="/finances" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
         <Route path="/messenger" element={<ProtectedRoute><MessengerPage /></ProtectedRoute>} />

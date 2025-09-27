@@ -26,6 +26,14 @@ const Sidebar = ({
       isActive: true
     },
     {
+      id: 'super-admin',
+      label: 'Super Admin',
+      icon: '/images/img_icn_sidebar_dashboard_active.svg',
+      href: '/super-admin',
+      isActive: false
+    },
+
+    {
       id: 'cases',
       label: 'On Going Cases',
       icon: '/images/img_icn_sidebar_projects_inactive.svg',
