@@ -60,24 +60,43 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 // Wrapper that renders Super Admin or regular Dashboard based on user role
 const RoleBasedDashboard: React.FC = () => {
   const [isSuper, setIsSuper] = useState<boolean | null>(null);
+
   useEffect(() => {
     let mounted = true;
+
+    const computeIsSuper = (user: any): boolean => {
+      const am = user?.app_metadata ?? {};
+      const um = user?.user_metadata ?? {};
+      const candidates: any[] = [
+        ...(typeof am.role === 'string' ? [am.role] : []),
+        ...(Array.isArray(am.roles) ? am.roles : []),
+        ...(typeof um.role === 'string' ? [um.role] : []),
+        ...(Array.isArray(um.roles) ? um.roles : []),
+      ];
+      return candidates.some((r) => typeof r === 'string' && r.toLowerCase().includes('super'));
+    };
+
     (async () => {
       try {
         const { supabase } = await import('./lib/supabaseClient');
         const { data } = await supabase.auth.getSession();
-        const user: any = data.session?.user;
-        const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
         if (!mounted) return;
-        setIsSuper(typeof role === 'string' && role.toLowerCase().includes('super'));
+        setIsSuper(computeIsSuper(data.session?.user));
+        // react to session updates (sign-in/out or token refresh)
+        supabase.auth.onAuthStateChange((_evt, session) => {
+          if (!mounted) return;
+          setIsSuper(computeIsSuper(session?.user));
+        });
       } catch {
         if (!mounted) return;
         setIsSuper(false);
       }
     })();
+
     return () => { mounted = false; };
   }, []);
-  if (isSuper === null) return null;
+
+  if (isSuper === null) return null; // could render a small loader here
   return isSuper ? <SuperAdminPage /> : <DashboardPage />;
 };
 
