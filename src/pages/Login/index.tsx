@@ -21,10 +21,7 @@ const Login = () => {
         const { supabase } = await import('../../lib/supabaseClient');
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          const user: any = data.session.user;
-          const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
-          const isSuperAdmin = typeof role === 'string' && role.toLowerCase().includes('super');
-          navigate(isSuperAdmin ? '/super-admin' : '/dashboard');
+          navigate('/dashboard');
         }
       } catch {}
     })();
@@ -39,10 +36,7 @@ const Login = () => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data.session) {
-        const user: any = data.session.user;
-        const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
-        const isSuperAdmin = typeof role === 'string' && role.toLowerCase().includes('super');
-        navigate(isSuperAdmin ? '/super-admin' : '/dashboard');
+        navigate('/dashboard');
       }
     } catch (e: any) {
       setError(e?.message || 'Sign in failed');

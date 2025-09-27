@@ -57,14 +57,38 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   return children;
 };
 
+// Wrapper that renders Super Admin or regular Dashboard based on user role
+const RoleBasedDashboard: React.FC = () => {
+  const [isSuper, setIsSuper] = useState<boolean | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { supabase } = await import('./lib/supabaseClient');
+        const { data } = await supabase.auth.getSession();
+        const user: any = data.session?.user;
+        const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? (Array.isArray(user?.app_metadata?.roles) ? user.app_metadata.roles[0] : undefined)) as string | undefined;
+        if (!mounted) return;
+        setIsSuper(typeof role === 'string' && role.toLowerCase().includes('super'));
+      } catch {
+        if (!mounted) return;
+        setIsSuper(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+  if (isSuper === null) return null;
+  return isSuper ? <SuperAdminPage /> : <DashboardPage />;
+};
+
+
 const AppRoutes = () => {
   return (
     <Router>
       <Routes>
-        <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
-        <Route path="/super-admin" element={<ProtectedRoute><SuperAdminPage /></ProtectedRoute>} />
 
         <Route path="/finances" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
