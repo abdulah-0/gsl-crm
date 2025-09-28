@@ -52,7 +52,7 @@ const SuperAdmin: React.FC = () => {
 
   const [cashIn, setCashIn] = useState<number>(0);
   const [cashOut, setCashOut] = useState<number>(0);
-  const netFlow = cashIn - cashOut;
+
 
   const [branchRev, setBranchRev] = useState<{ name: string; pct: number }[]>([]);
 
