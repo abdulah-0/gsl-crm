@@ -3,6 +3,8 @@ import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 
+import { supabase } from '../../lib/supabaseClient';
+
 // Types
 type Level = 'Junior' | 'Middle' | 'Senior';
 
@@ -94,13 +96,72 @@ const seedActivities = (emps: Employee[]): Activity[] => {
 };
 
 const Employees: React.FC = () => {
-  // Data with localStorage persistence
-  const [employees, setEmployees] = useState<Employee[]>(() => {
-    try { const raw = localStorage.getItem('crm_employees'); if (raw) return JSON.parse(raw); } catch {}
-    return seedEmployees();
-  });
-  const [activities, setActivities] = useState<Activity[]>(() => seedActivities(employees));
-  useEffect(()=>{ try { localStorage.setItem('crm_employees', JSON.stringify(employees)); } catch {} }, [employees]);
+  // Realtime employees + activity from Supabase
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, user_id, role_title, joined_on, user:users(name,email)')
+        .order('created_at', { ascending: false });
+      if (!cancelled && data) {
+        const mapped: Employee[] = (data as any[]).map((row: any) => ({
+          id: String(row.id),
+          fullName: row.user?.name || 'Unknown',
+          email: row.user?.email || '-',
+          gender: 'Other',
+          birthday: (row.joined_on ? String(row.joined_on) : '1995-01-01'),
+          position: row.role_title || 'Employee',
+          level: 'Junior',
+          avatar: '/images/img_image.svg',
+        }));
+        setEmployees(mapped);
+      }
+      if (error) console.error('load employees error', error);
+    };
+    load();
+
+    const chan = supabase
+      .channel('public:employees')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => load())
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(chan); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadActs = async () => {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('id, action, detail, created_at')
+        .eq('entity','employee')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (!cancelled && data) {
+        const mapped: Activity[] = (data as any[]).map((row: any) => ({
+          id: String(row.id),
+          employeeId: String(row.detail?.employee_id ?? ''),
+          text: row.action,
+          at: row.created_at,
+        }));
+        setActivities(mapped);
+      }
+      if (error) console.error('load activity error', error);
+    };
+    loadActs();
+
+    const chan = supabase
+      .channel('public:activity_log')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_log' }, (payload) => {
+        const row: any = payload.new;
+        if (row?.entity === 'employee') loadActs();
+      })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(chan); };
+  }, []);
 
   // View/UI state
   const [view, setView] = useState<'list' | 'activity'>('list');
@@ -125,17 +186,96 @@ const Employees: React.FC = () => {
   const [formPosition, setFormPosition] = useState('Admissions Officer');
   const [formLevel, setFormLevel] = useState<Level>('Junior');
 
-  const saveEmployee = (e: React.FormEvent) => {
+  const saveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = formName.trim();
-    if (!name || !formEmail.trim()) return;
-    const id = `emp-${Date.now()}`;
-    const emp: Employee = { id, fullName: name, email: formEmail.trim(), gender: formGender, birthday: formBirthday, position: formPosition, level: formLevel, avatar: '/images/img_image.svg' };
-    setEmployees(prev => [emp, ...prev]);
-    setActivities(prev => [{ id: `act-${Date.now()}`, employeeId: id, text: `${name} was added`, at: new Date().toISOString() }, ...prev]);
+    const email = formEmail.trim();
+    if (!name || !email) return;
+
+    // 1) Create local user via RPC (superadmin-only); fallback to null user_id on failure
+    let userId: number | null = null;
+    try {
+      const tempPass = Math.random().toString(36).slice(2) + 'A1!';
+      const { data: createdUserId, error: rpcErr } = await supabase.rpc('app_create_user_local', {
+        p_name: name,
+        p_email: email,
+        p_password: tempPass,
+        p_role: 'employee'
+      });
+      if (rpcErr) { console.warn('create user rpc failed', rpcErr.message); }
+      if (createdUserId) userId = Number(createdUserId);
+    } catch (err) { console.warn('rpc error', err); }
+
+    // 2) Insert employee row
+    const { data: empRow, error: empErr } = await supabase
+      .from('employees')
+      .insert([{ user_id: userId, role_title: formPosition, joined_on: new Date().toISOString().slice(0,10) }])
+      .select('id')
+      .single();
+    if (empErr) { alert(`Failed to add employee: ${empErr.message}`); return; }
+
+    // 3) Log activity
+    await supabase.from('activity_log').insert([{
+      entity: 'employee',
+      entity_id: empRow?.id,
+      action: `Added employee ${name}`,
+      detail: { employee_id: empRow?.id, name, email, position: formPosition }
+    }]);
+
+    // Reset
     setShowAdd(false);
     setFormName(''); setFormEmail(''); setFormGender('Male'); setFormBirthday('1995-01-01'); setFormPosition('Admissions Officer'); setFormLevel('Junior');
   };
+  // Row actions
+  const [viewEmp, setViewEmp] = useState<Employee | null>(null);
+  const [editEmp, setEditEmp] = useState<Employee | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPosition, setEditPosition] = useState('');
+  const [editJoinedOn, setEditJoinedOn] = useState('');
+
+  const openView = (emp: Employee) => setViewEmp(emp);
+  const openEdit = (emp: Employee) => { setEditEmp(emp); setEditName(emp.fullName); setEditEmail(emp.email); setEditPosition(emp.position); setEditJoinedOn(emp.birthday); };
+  const closeMenus = () => setOpenMenuId(null);
+
+  const removeEmp = async (emp: Employee) => {
+    if (!confirm(`Remove ${emp.fullName}?`)) return;
+    // employees.id is numeric in DB, we stored as string
+    const idNum = Number(emp.id.replace(/^emp-/, '')); // tolerate old seed id format
+    const { error } = await supabase.from('employees').delete().eq('id', isNaN(idNum) ? emp.id : idNum);
+    if (error) alert(`Failed to remove: ${error.message}`);
+    else await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum)? emp.id : idNum, action: `Removed employee ${emp.fullName}`, detail: { employee_id: emp.id, name: emp.fullName, email: emp.email } }]);
+    setOpenMenuId(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editEmp) return;
+    // Update user name/email if possible
+    try {
+      // Find employee row by matching current list index (we don't have employee row id separate)
+      // We'll update by joining on users via email, which is unique in users table.
+      // First, update users.name where email=original email
+      if (editEmp.email) {
+        await supabase.from('users').update({ name: editName }).eq('email', editEmp.email);
+        if (editEmail && editEmail !== editEmp.email) {
+          await supabase.from('users').update({ email: editEmail }).eq('email', editEmp.email);
+        }
+      }
+    } catch (e) { console.warn('user update warn', e); }
+
+    // Update employee role_title / joined_on
+    const idNum = Number(editEmp.id.replace(/^emp-/, ''));
+    const { error } = await supabase
+      .from('employees')
+      .update({ role_title: editPosition, joined_on: editJoinedOn || null })
+      .eq('id', isNaN(idNum) ? editEmp.id : idNum);
+    if (error) { alert(`Failed to update: ${error.message}`); return; }
+
+    await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum)? editEmp.id : idNum, action: `Updated employee ${editName}`, detail: { employee_id: editEmp.id, name: editName, email: editEmail || editEmp.email, position: editPosition } }]);
+
+    setEditEmp(null);
+  };
+
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -221,9 +361,9 @@ const Employees: React.FC = () => {
                           </button>
                           {openMenuId===emp.id && (
                             <div className="absolute right-0 top-8 bg-white border rounded shadow z-10 w-40">
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50">View</button>
-                              <button className="w-full text-left px-3 py-2 hover:bg-gray-50">Edit</button>
-                              <button className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">Remove</button>
+                              <button onClick={()=>{ openView(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">View</button>
+                              <button onClick={()=>{ openEdit(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">Edit</button>
+                              <button onClick={()=>{ removeEmp(emp); }} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">Remove</button>
                             </div>
                           )}
                         </div>
@@ -310,10 +450,79 @@ const Employees: React.FC = () => {
             <div className="mt-5 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAdd(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Employee</button>
+
             </div>
           </form>
         </div>
       )}
+
+      {/* View Employee Modal */}
+      {viewEmp && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Employee Details</h3>
+              <button type="button" onClick={()=>setViewEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-text-secondary">Full Name</div>
+                <div className="font-semibold">{viewEmp.fullName}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Email</div>
+                <div className="font-semibold">{viewEmp.email}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Position</div>
+                <div className="font-semibold">{viewEmp.position}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Joined On</div>
+                <div className="font-semibold">{viewEmp.birthday ? new Date(viewEmp.birthday).toLocaleDateString() : '—'}</div>
+              </div>
+            </div>
+            <div className="mt-5 text-right">
+              <button type="button" onClick={()=>setViewEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {editEmp && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Edit Employee</h3>
+              <button type="button" onClick={()=>setEditEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <label className="text-sm">
+                <span className="text-text-secondary">Full Name</span>
+                <input value={editName} onChange={e=>setEditName(e.target.value)} className="mt-1 w-full border rounded p-2" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Email</span>
+                <input type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Position</span>
+                <input value={editPosition} onChange={e=>setEditPosition(e.target.value)} className="mt-1 w-full border rounded p-2" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Joined On</span>
+                <input type="date" value={editJoinedOn} onChange={e=>setEditJoinedOn(e.target.value)} className="mt-1 w-full border rounded p-2" />
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={()=>setEditEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={saveEdit} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 };
