@@ -595,6 +595,33 @@ CREATE POLICY vch_ins_auth ON vouchers FOR INSERT WITH CHECK (auth.uid() IS NOT 
 CREATE POLICY vch_upd_auth ON vouchers FOR UPDATE USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY vch_del_auth ON vouchers FOR DELETE USING (auth.uid() IS NOT NULL);
 
+-- Dashboard Cases (for realtime dashboards)
+CREATE TABLE IF NOT EXISTS dashboard_cases (
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  case_number  text NOT NULL UNIQUE,
+  title        text NOT NULL,
+  type         text NOT NULL DEFAULT 'Visa' CHECK (type IN ('Visa','Fee','CAS','Completed')),
+  status       text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','In Progress','Completed')),
+  branch       text,
+  employee     text,
+  all_tasks    int  NOT NULL DEFAULT 0,
+  active_tasks int  NOT NULL DEFAULT 0,
+  assignees    jsonb,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE dashboard_cases ENABLE ROW LEVEL SECURITY;
+CREATE POLICY dash_cases_sel_auth ON dashboard_cases FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY dash_cases_ins_auth ON dashboard_cases FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY dash_cases_upd_auth ON dashboard_cases FOR UPDATE USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY dash_cases_del_auth ON dashboard_cases FOR DELETE USING (auth.uid() IS NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_cases_created_at ON dashboard_cases(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dashboard_cases_branch ON dashboard_cases(branch);
+CREATE INDEX IF NOT EXISTS idx_dashboard_cases_status ON dashboard_cases(status);
+CREATE INDEX IF NOT EXISTS idx_dashboard_cases_type ON dashboard_cases(type);
+
+
 
 -- B2B
 CREATE POLICY b2b_sel_superadmin ON b2b_accounts FOR SELECT USING (is_superadmin());

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { supabase } from '../../lib/supabaseClient';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 
@@ -9,38 +10,11 @@ interface EmployeePerf { id: string; name: string; cases: number; successRate: n
 interface Activity { id: string; text: string; at: string; }
 interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: 'Pending' | 'In Progress' | 'Completed'; }
 
-// Mock data
-const STAT_CARDS: StatCard[] = [
-  { label: 'Visa Successes', value: 124, delta: 12 },
-  { label: 'Cases Issued', value: 342, delta: 5 },
-  { label: 'In Progress Cases', value: 87, delta: -3 },
-  { label: 'Revenue', value: 18.6, prefix: '$', suffix: 'k', delta: 9 },
-];
-
-const EMPLOYEES: EmployeePerf[] = [
-  { id: 'e1', name: 'Evan Yates', cases: 58, successRate: 82, active: 9, status: 'Active' },
-  { id: 'e2', name: 'Ayesha Khan', cases: 49, successRate: 76, active: 12, status: 'Active' },
-  { id: 'e3', name: 'John Doe', cases: 32, successRate: 64, active: 7, status: 'Inactive' },
-  { id: 'e4', name: 'Sana Tariq', cases: 61, successRate: 88, active: 10, status: 'Active' },
-  { id: 'e5', name: 'Amir Ali', cases: 27, successRate: 58, active: 3, status: 'Active' },
-];
-
-const ACTIVITIES: Activity[] = [
-  { id: 'a1', text: 'Visa approved for Ahmed Khan (IG Branch)', at: '2025-09-23T10:32:00Z' },
-  { id: 'a2', text: 'CAS submitted for Fatima Ali (PWD Branch)', at: '2025-09-23T09:10:00Z' },
-  { id: 'a3', text: 'Fee payment pending for Usman Raza (DHA Branch)', at: '2025-09-22T16:48:00Z' },
-  { id: 'a4', text: 'New case created for Zara Iqbal (IG Branch)', at: '2025-09-22T13:15:00Z' },
-];
-
-const RECENT_CASES: CaseItem[] = [
-  { id: 'c1', student: 'Ahmed Khan', branch: 'IG Branch', type: 'Visa', employee: 'Evan Yates', status: 'Completed' },
-  { id: 'c2', student: 'Fatima Ali', branch: 'PWD Branch', type: 'CAS', employee: 'Ayesha Khan', status: 'In Progress' },
-  { id: 'c3', student: 'Usman Raza', branch: 'DHA Branch', type: 'Fee', employee: 'John Doe', status: 'Pending' },
-  { id: 'c4', student: 'Zara Iqbal', branch: 'IG Branch', type: 'Visa', employee: 'Sana Tariq', status: 'In Progress' },
-  { id: 'c5', student: 'Bilal Ahmed', branch: 'PWD Branch', type: 'Completed', employee: 'Amir Ali', status: 'Completed' },
-];
-
+// Realtime state (replaces mocks)
 const BRANCHES = ['All Branches', 'IG Branch', 'PWD Branch', 'DHA Branch'] as const;
+
+const fmtMonth = (d: Date) => d.toLocaleString(undefined, { month: 'short' });
+
 
 // Simple number bar for charts
 const Bar = ({ pct, color = '#ffa332', label }: { pct: number; color?: string; label?: string }) => (
@@ -65,29 +39,196 @@ const HBar = ({ pct, color = '#3b82f6', name }: { pct: number; color?: string; n
 const SuperAdmin: React.FC = () => {
   const [branch, setBranch] = useState<typeof BRANCHES[number]>('All Branches');
 
-  const filteredEmployees = useMemo(() => {
-    // For mock, just return all; could filter by branch mapping
-    return EMPLOYEES;
-  }, [branch]);
+  const [employeesPerf, setEmployeesPerf] = useState<EmployeePerf[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [recentCases, setRecentCases] = useState<CaseItem[]>([]);
+  const [statCards, setStatCards] = useState<StatCard[]>([]);
 
-  // Pipeline mock
-  const pipeline = [
-    { name: 'Visa', value: 48, color: '#16a34a' },
-    { name: 'Fee', value: 35, color: '#f59e0b' },
-    { name: 'CAS', value: 29, color: '#3b82f6' },
-    { name: 'Completed', value: 62, color: '#8b5cf6' },
-  ];
-  const maxPipeline = Math.max(...pipeline.map(p => p.value));
+  const [pipeline, setPipeline] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [maxPipeline, setMaxPipeline] = useState<number>(1);
 
-  // Financial overview (monthly revenue in k)
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep'];
-  const revenue = [8, 9.5, 10, 12.2, 11.4, 13.8, 15.2, 17.5, 18.6];
-  const maxRev = Math.max(...revenue);
+  const [months, setMonths] = useState<string[]>([]);
+  const [revenue, setRevenue] = useState<number[]>([]);
 
-  // Cash snapshot
-  const cashIn = 125000; // current month
-  const cashOut = 73000;
+  const [cashIn, setCashIn] = useState<number>(0);
+  const [cashOut, setCashOut] = useState<number>(0);
   const netFlow = cashIn - cashOut;
+
+  const [branchRev, setBranchRev] = useState<{ name: string; pct: number }[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      // Cases (for recent list, pipeline, employees performance, stat cards)
+      const { data: cases, error: casesErr } = await supabase
+        .from('dashboard_cases')
+        .select('id, title, branch, type, employee, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(25);
+      const casesRows = cases ?? [];
+
+      setRecentCases(casesRows.map((c: any) => ({
+        id: String(c.id),
+        student: c.title,
+        branch: c.branch ?? '—',
+        type: c.type ?? 'Visa',
+        employee: c.employee ?? '—',
+        status: c.status ?? 'Pending'
+      })));
+
+      // Employees performance derived from cases
+      const byEmp = new Map<string, { cases: number; completed: number; active: number }>();
+      for (const c of casesRows) {
+        const name = c.employee ?? 'Unassigned';
+        const stat = byEmp.get(name) || { cases: 0, completed: 0, active: 0 };
+        stat.cases += 1;
+        if (c.status === 'Completed') stat.completed += 1;
+        if (c.status === 'In Progress') stat.active += 1;
+        byEmp.set(name, stat);
+      }
+      const empPerf: EmployeePerf[] = Array.from(byEmp.entries()).map(([name, v], idx) => ({
+        id: String(idx + 1),
+        name,
+        cases: v.cases,
+        successRate: v.cases ? Math.round((v.completed / v.cases) * 100) : 0,
+        active: v.active,
+        status: v.active > 0 ? 'Active' : 'Inactive'
+      }));
+      setEmployeesPerf(empPerf);
+
+      // Pipeline by case type
+      const typeColors: Record<string, string> = { Visa: '#16a34a', Fee: '#f59e0b', CAS: '#3b82f6', Completed: '#8b5cf6' };
+      const byType = new Map<string, number>();
+      for (const c of casesRows) {
+        const t = c.type ?? 'Visa';
+        byType.set(t, (byType.get(t) || 0) + 1);
+      }
+      const pipelineArr = Array.from(byType.entries()).map(([name, value]) => ({ name, value, color: typeColors[name] || '#ffa332' }));
+      setPipeline(pipelineArr);
+      setMaxPipeline(Math.max(1, ...pipelineArr.map(p => p.value)));
+
+      // Vouchers for finance-derived stats
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      const { data: vouchers } = await supabase
+        .from('vouchers')
+        .select('amount, vtype, branch, occurred_at')
+        .gte('occurred_at', yearStart.toISOString());
+      const vouchersRows = vouchers ?? [];
+
+      // Revenue series (last 9 months)
+      const now = new Date();
+      const monthsArr: string[] = [];
+      const revenueArr: number[] = [];
+      for (let i = 8; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        monthsArr.push(fmtMonth(d));
+        const monthSum = vouchersRows
+          .filter((v: any) => {
+            const vd = new Date(v.occurred_at);
+            return vd.getFullYear() === d.getFullYear() && vd.getMonth() === d.getMonth();
+          })
+          .filter((v: any) => ['cash_in', 'online', 'bank'].includes(v.vtype))
+          .reduce((acc: number, v: any) => acc + Number(v.amount || 0), 0);
+        revenueArr.push(Number((monthSum / 1000).toFixed(1))); // in k
+      }
+      setMonths(monthsArr);
+      setRevenue(revenueArr);
+
+      // Cash snapshot (current month)
+      const cur = new Date();
+      const inSum = vouchersRows
+        .filter((v: any) => {
+          const vd = new Date(v.occurred_at);
+          return vd.getFullYear() === cur.getFullYear() && vd.getMonth() === cur.getMonth();
+        })
+        .reduce((acc: number, v: any) => acc + (['cash_in','online','bank'].includes(v.vtype) ? Number(v.amount || 0) : 0), 0);
+      const outSum = vouchersRows
+        .filter((v: any) => {
+          const vd = new Date(v.occurred_at);
+          return vd.getFullYear() === cur.getFullYear() && vd.getMonth() === cur.getMonth();
+        })
+        .reduce((acc: number, v: any) => acc + (v.vtype === 'cash_out' ? Number(v.amount || 0) : 0), 0);
+      setCashIn(inSum);
+      setCashOut(outSum);
+
+      // Branch revenue (current month) normalized to % of max
+      const byBranch = new Map<string, number>();
+      for (const v of vouchersRows) {
+        const vd = new Date(v.occurred_at);
+        if (vd.getFullYear() !== cur.getFullYear() || vd.getMonth() !== cur.getMonth()) continue;
+        if (!['cash_in','online','bank'].includes(v.vtype)) continue;
+        const key = v.branch || 'Unknown';
+        byBranch.set(key, (byBranch.get(key) || 0) + Number(v.amount || 0));
+      }
+      const maxBranch = Math.max(1, ...Array.from(byBranch.values()));
+      setBranchRev(Array.from(byBranch.entries()).map(([name, val]) => ({ name, pct: Math.round((val / maxBranch) * 100) })));
+
+      // Activities
+      const { data: acts } = await supabase
+        .from('activity_log')
+        .select('id, action, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      setActivities((acts ?? []).map((a: any) => ({ id: String(a.id), text: a.action, at: a.created_at })));
+
+      // Stat cards
+      const monthIssued = casesRows.filter((c: any) => {
+        const d = new Date(c.created_at);
+        const cur2 = new Date();
+        return d.getFullYear() === cur2.getFullYear() && d.getMonth() === cur2.getMonth();
+      }).length;
+      const inProgress = casesRows.filter((c: any) => c.status === 'In Progress').length;
+      const visaSuccess = casesRows.filter((c: any) => c.type === 'Visa' && c.status === 'Completed').length;
+      const revenueK = Number((inSum / 1000).toFixed(1));
+      setStatCards([
+        { label: 'Visa Successes', value: visaSuccess, delta: 0 },
+        { label: 'Cases Issued', value: monthIssued, delta: 0 },
+        { label: 'In Progress Cases', value: inProgress, delta: 0 },
+        { label: 'Revenue', value: revenueK, prefix: '$', suffix: 'k', delta: 0 },
+      ]);
+    };
+
+    load();
+
+    const cChan = supabase
+      .channel('public:dashboard_cases')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_cases' }, () => load())
+      .subscribe();
+    const vChan = supabase
+      .channel('public:vouchers')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vouchers' }, () => load())
+      .subscribe();
+    const aChan = supabase
+      .channel('public:activity_log')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_log' }, () => load())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(cChan);
+      supabase.removeChannel(vChan);
+      supabase.removeChannel(aChan);
+    };
+  }, []);
+
+  const filteredEmployees = useMemo(() => {
+    if (branch === 'All Branches') return employeesPerf;
+    const namesInBranch = new Set(recentCases.filter(rc => rc.branch === branch).map(rc => rc.employee));
+    return employeesPerf.filter(e => namesInBranch.has(e.name));
+  }, [employeesPerf, recentCases, branch]);
+
+  const netFlow = cashIn - cashOut;
+  const maxRev = Math.max(...revenue, 1);
+
+  const handleNewCase = async () => {
+    const student = window.prompt('Student name');
+    if (!student) return;
+    const branchName = window.prompt('Branch (e.g., IG Branch, PWD Branch, DHA Branch)') || '';
+    const type = window.prompt('Case Type (Visa, Fee, CAS, Completed)') || 'Visa';
+    const employee = window.prompt('Assigned employee name') || '';
+    const caseNumber = `PN${Date.now()}`;
+    await supabase.from('dashboard_cases').insert([
+      { case_number: caseNumber, title: student, branch: branchName, type, employee, status: 'In Progress' }
+    ]);
+  };
 
   return (
     <>
@@ -114,8 +255,7 @@ const SuperAdmin: React.FC = () => {
 
             {/* Top stat cards */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {STAT_CARDS.map((s) => {
-                const isRev = s.label === 'Revenue';
+              {statCards.map((s) => {
                 const positive = (s.delta ?? 0) >= 0;
                 return (
                   <div key={s.label} className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
@@ -191,7 +331,7 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Recent Activities</h2>
                 <div className="space-y-3">
-                  {ACTIVITIES.map(a => (
+                  {activities.map(a => (
                     <div key={a.id} className="text-sm">
                       <div className="font-medium">{a.text}</div>
                       <div className="text-xs text-text-secondary">{new Date(a.at).toLocaleString()}</div>
@@ -238,9 +378,9 @@ const SuperAdmin: React.FC = () => {
               <div className="xl:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary">Accounts Overview</h2>
                 <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash In</div><div className="text-lg font-bold">$125,000</div></div>
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash Out</div><div className="text-lg font-bold">$73,000</div></div>
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Net Flow</div><div className="text-lg font-bold text-emerald-600">+$52,000</div></div>
+                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash In</div><div className="text-lg font-bold">${cashIn.toLocaleString()}</div></div>
+                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash Out</div><div className="text-lg font-bold">${cashOut.toLocaleString()}</div></div>
+                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Net Flow</div><div className={`text-lg font-bold ${netFlow>=0?'text-emerald-600':'text-red-600'}`}>{netFlow>=0?'+':''}${netFlow.toLocaleString()}</div></div>
                 </div>
               </div>
             </div>
@@ -249,7 +389,7 @@ const SuperAdmin: React.FC = () => {
             <div className="mt-8 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
               <div className="p-4 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-text-primary">Recent Cases</h2>
-                <button className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">+ New Case</button>
+                <button onClick={handleNewCase} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">+ New Case</button>
               </div>
               <div className="px-4 pb-4 overflow-x-auto text-sm">
                 <div className="grid grid-cols-12 text-text-secondary px-2 py-2">
@@ -260,7 +400,7 @@ const SuperAdmin: React.FC = () => {
                   <div className="col-span-2">Status</div>
                 </div>
                 <div className="divide-y">
-                  {RECENT_CASES.map(c => (
+                  {recentCases.map(c => (
                     <div key={c.id} className="grid grid-cols-12 items-center px-2 py-3">
                       <div className="col-span-3">{c.student}</div>
                       <div className="col-span-2">{c.branch}</div>
@@ -291,9 +431,9 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Branch Revenue</h2>
                 <div className="space-y-3">
-                  <HBar name="IG Branch" pct={78} color="#22c55e" />
-                  <HBar name="PWD Branch" pct={64} color="#f59e0b" />
-                  <HBar name="DHA Branch" pct={52} color="#3b82f6" />
+                  {branchRev.map((b, idx) => (
+                    <HBar key={b.name + idx} name={b.name} pct={b.pct} color={idx % 3 === 0 ? '#22c55e' : idx % 3 === 1 ? '#f59e0b' : '#3b82f6'} />
+                  ))}
                 </div>
               </div>
             </div>

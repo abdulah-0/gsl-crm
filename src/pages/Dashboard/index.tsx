@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabaseClient';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import DatePicker from '../../components/ui/DatePicker';
@@ -40,105 +42,135 @@ interface ActivityItem {
 
 const Dashboard = () => {
   const [selectedDateRange, setSelectedDateRange] = useState('Nov 16, 2020 - Dec 16, 2020');
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
+  const [activityLimit, setActivityLimit] = useState<number>(5);
+  const [cases, setCases] = useState<CaseData[]>([]);
+  const navigate = useNavigate();
 
-  const tasks: Task[] = [
-    {
-      id: '1',
-      title: 'Presentation of the new department',
-      time: 'Today | 5:00 PM',
-      duration: '4h',
-      priority: 'medium',
-      color: '#ffa332'
-    },
-    {
-      id: '2',
-      title: 'Anna\'s Birthday',
-      time: 'Today | 6:00 PM',
-      duration: '4h',
-      priority: 'low',
-      color: '#de92eb'
-    },
-    {
-      id: '3',
-      title: 'Ray\'s Birthday',
-      time: 'Tomorrow | 2:00 PM',
-      duration: '4h',
-      priority: 'low',
-      color: '#de92eb'
-    }
-  ];
+  useEffect(() => {
+    const priorityColor = (p: 'high'|'medium'|'low') => p === 'high' ? '#ff4757' : p === 'medium' ? '#ffa332' : '#0ac846';
 
-  const cases: CaseData[] = [
-    {
-      id: '1',
-      caseNumber: 'PN0001265',
-      title: 'University Of Dundee',
-      createdDate: 'Created Sep 12, 2020',
-      priority: 'medium',
-      allTasks: 34,
-      activeTasks: 13,
-      assignees: ['/images/img_elm_general_photo.png', '/images/img_elm_general_photo_24x24.png', '/images/img_elm_general_photo_1.png'],
-      icon: '/images/img_image.svg'
-    },
-    {
-      id: '2',
-      caseNumber: 'PN0001221',
-      title: 'University Of Dundee',
-      createdDate: 'Created Sep 10, 2020',
-      priority: 'medium',
-      allTasks: 50,
-      activeTasks: 24,
-      assignees: ['/images/img_elm_general_photo.png', '/images/img_elm_general_photo_2.png', '/images/img_elm_general_photo_3.png'],
-      icon: '/images/img_image_white_a700_01.svg'
-    },
-    {
-      id: '3',
-      caseNumber: 'PN0001290',
-      title: 'University Of Dundee',
-      createdDate: 'Created May 28, 2020',
-      priority: 'low',
-      allTasks: 23,
-      activeTasks: 20,
-      assignees: ['/images/img_elm_general_photo.png', '/images/img_elm_general_photo_24x24.png', '/images/img_elm_general_photo_4.png'],
-      icon: '/images/img_image_white_a700_01_48x48.svg'
-    }
-  ];
+    const loadTasks = async () => {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, priority, deadline')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (!error && data) {
+        const mapped: Task[] = data.map((t: any) => {
+          const deadline = t.deadline ? new Date(t.deadline) : null;
+          const timeLabel = deadline ? `${deadline.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} | ${deadline.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'No deadline';
+          const prio: 'low'|'medium'|'high' = (t.priority as any) ?? 'medium';
+          return {
+            id: String(t.id),
+            title: t.title,
+            time: timeLabel,
+            duration: '—',
+            priority: prio,
+            color: priorityColor(prio)
+          };
+        });
+        setTasks(mapped);
+      }
+    };
 
-  const activityItems: ActivityItem[] = [
-    {
-      id: '1',
-      user: {
-        name: 'Oscar Holloway',
-        role: 'UI/UX Designer',
-        avatar: '/images/img_elm_general_photo_50x50.png'
-      },
-      action: 'Updated the status of Mind Map task to In Progress',
-      time: '2 hours ago',
-      type: 'upload'
-    },
-    {
-      id: '2',
-      user: {
-        name: 'Oscar Holloway',
-        role: 'UI/UX Designer',
-        avatar: '/images/img_elm_general_photo_50x50.png'
-      },
-      action: 'Attached files to the task',
-      time: '3 hours ago',
-      type: 'attach'
-    },
-    {
-      id: '3',
-      user: {
-        name: 'Emily Tyler',
-        role: 'Copywriter',
-        avatar: '/images/img_elm_general_photo_5.png'
-      },
-      action: 'Updated the status of Mind Map task to In Progress',
-      time: '5 hours ago',
-      type: 'upload'
-    }
-  ];
+    const loadActivities = async (limit = activityLimit) => {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('id, action, created_at')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      if (!error && data) {
+        const mapped: ActivityItem[] = data.map((a: any) => ({
+          id: String(a.id),
+          user: { name: 'System', role: 'Activity', avatar: '/images/img_elm_general_photo_50x50.png' },
+          action: a.action,
+          time: new Date(a.created_at).toLocaleString(),
+          type: 'upload'
+        }));
+        setActivityItems(mapped);
+      }
+    };
+
+    const loadCases = async () => {
+      const { data, error } = await supabase
+        .from('dashboard_cases')
+        .select('id, case_number, title, created_at, status, all_tasks, active_tasks, assignees')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (!error && data) {
+        const mapped: CaseData[] = data.map((c: any) => {
+          const status: string = c.status || 'Pending';
+          const prio: 'low'|'medium'|'high' = status === 'In Progress' ? 'medium' : status === 'Pending' ? 'low' : 'low';
+          const created = new Date(c.created_at);
+          return {
+            id: String(c.id),
+            caseNumber: c.case_number,
+            title: c.title,
+            createdDate: `Created ${created.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+            priority: prio,
+            allTasks: c.all_tasks ?? 0,
+            activeTasks: c.active_tasks ?? 0,
+            assignees: Array.isArray(c.assignees) ? c.assignees : [],
+            icon: '/images/img_image.svg'
+          };
+        });
+        setCases(mapped);
+      }
+    };
+
+    loadTasks();
+    loadActivities(activityLimit);
+    loadCases();
+
+    const tasksChannel = supabase
+      .channel('public:tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => loadTasks())
+      .subscribe();
+
+    const actChannel = supabase
+      .channel('public:activity_log')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_log' }, () => loadActivities(activityLimit))
+      .subscribe();
+
+    const casesChannel = supabase
+      .channel('public:dashboard_cases')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_cases' }, () => loadCases())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(tasksChannel);
+      supabase.removeChannel(actChannel);
+      supabase.removeChannel(casesChannel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('activity_log')
+        .select('id, action, created_at')
+        .order('created_at', { ascending: false })
+        .limit(activityLimit);
+      if (!error && data) {
+        const mapped: ActivityItem[] = data.map((a: any) => ({
+          id: String(a.id),
+          user: { name: 'System', role: 'Activity', avatar: '/images/img_elm_general_photo_50x50.png' },
+          action: a.action,
+          time: new Date(a.created_at).toLocaleString(),
+          type: 'upload'
+        }));
+        setActivityItems(mapped);
+      }
+    };
+    load();
+  }, [activityLimit]);
+
+  // Cases are loaded from Supabase (dashboard_cases) in useEffect
+
+  // Activity items are loaded from Supabase (activity_log) in useEffect
 
   const handleSearch = (value: string) => {
     // Handle search functionality
@@ -235,9 +267,9 @@ const Dashboard = () => {
                     padding="10px 14px 10px 52px"
                     onChange={handleDateChange}
                     leftIcon={
-                      <img 
-                        src="/images/img_icn_general_calendar.svg" 
-                        alt="Calendar" 
+                      <img
+                        src="/images/img_icn_general_calendar.svg"
+                        alt="Calendar"
                         className="w-6 h-6"
                       />
                     }
@@ -251,9 +283,9 @@ const Dashboard = () => {
                       Tasks
                     </h2>
                     <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
+                      <button onClick={() => navigate('/cases')} className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
                         View all
-                      </span>
+                      </button>
                       <img src="/images/img_arrow_right.svg" alt="Arrow" className="w-6 h-6" />
                     </div>
                   </div>
@@ -261,7 +293,7 @@ const Dashboard = () => {
                   <div className="space-y-6">
                     {tasks.map((task) => (
                       <div key={task.id} className="flex items-start gap-4">
-                        <div 
+                        <div
                           className="w-1 h-26 rounded-xs flex-shrink-0"
                           style={{ backgroundColor: task.color }}
                         />
@@ -270,9 +302,9 @@ const Dashboard = () => {
                             <h3 className="text-base font-bold leading-lg text-text-primary flex-1 pr-4" style={{ fontFamily: 'Nunito Sans' }}>
                               {task.title}
                             </h3>
-                            <img 
-                              src={getPriorityIcon(task.priority)} 
-                              alt="Priority" 
+                            <img
+                              src={getPriorityIcon(task.priority)}
+                              alt="Priority"
                               className="w-6 h-6 flex-shrink-0"
                             />
                           </div>
@@ -313,9 +345,9 @@ const Dashboard = () => {
                     On Going Cases
                   </h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
+                    <button onClick={() => navigate('/cases')} className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
                       View all
-                    </span>
+                    </button>
                     <img src="/images/img_arrow_right.svg" alt="Arrow" className="w-6 h-6" />
                   </div>
                 </div>
@@ -327,9 +359,9 @@ const Dashboard = () => {
                         {/* Case Info */}
                         <div className="flex-1">
                           <div className="flex items-center gap-[18px] mb-5">
-                            <img 
-                              src={caseItem.icon} 
-                              alt="Case" 
+                            <img
+                              src={caseItem.icon}
+                              alt="Case"
                               className="w-12 h-12 flex-shrink-0"
                             />
                             <div>
@@ -350,14 +382,14 @@ const Dashboard = () => {
                               </span>
                             </div>
                             <div className="flex items-center gap-2 px-9 py-0">
-                              <img 
-                                src={getPriorityIcon(caseItem.priority)} 
-                                alt="Priority" 
+                              <img
+                                src={getPriorityIcon(caseItem.priority)}
+                                alt="Priority"
                                 className="w-6 h-6"
                               />
-                              <span 
+                              <span
                                 className="text-sm font-bold leading-sm capitalize"
-                                style={{ 
+                                style={{
                                   fontFamily: 'Nunito Sans',
                                   color: getPriorityColor(caseItem.priority)
                                 }}
@@ -376,7 +408,7 @@ const Dashboard = () => {
                           <h4 className="text-base font-bold leading-base text-text-primary mb-3" style={{ fontFamily: 'Nunito Sans' }}>
                             Case Data
                           </h4>
-                          
+
                           <div className="space-y-1">
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-normal leading-sm text-text-muted" style={{ fontFamily: 'Nunito Sans' }}>
@@ -389,7 +421,7 @@ const Dashboard = () => {
                                 Assignees
                               </span>
                             </div>
-                            
+
                             <div className="flex items-center justify-between">
                               <span className="text-base font-bold leading-base text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>
                                 {caseItem.allTasks}
@@ -399,10 +431,10 @@ const Dashboard = () => {
                               </span>
                               <div className="flex items-center -space-x-1">
                                 {caseItem.assignees.slice(0, 3).map((avatar, index) => (
-                                  <img 
+                                  <img
                                     key={index}
-                                    src={avatar} 
-                                    alt={`Assignee ${index + 1}`} 
+                                    src={avatar}
+                                    alt={`Assignee ${index + 1}`}
                                     className="w-6 h-6 rounded-full border-2 border-white"
                                   />
                                 ))}
@@ -435,9 +467,9 @@ const Dashboard = () => {
                       <div key={item.id}>
                         {/* User Info */}
                         <div className="flex items-center gap-[18px] mb-4">
-                          <img 
-                            src={item.user.avatar} 
-                            alt={item.user.name} 
+                          <img
+                            src={item.user.avatar}
+                            alt={item.user.name}
                             className="w-[50px] h-[50px] rounded-xl object-cover"
                           />
                           <div>
@@ -452,9 +484,9 @@ const Dashboard = () => {
 
                         {/* Activity */}
                         <div className="bg-secondary-light rounded-lg p-[14px] flex items-start gap-4">
-                          <img 
-                            src={item.type === 'upload' ? '/images/img_icn_general_upload.svg' : '/images/img_icn_general_attach.svg'} 
-                            alt={item.type} 
+                          <img
+                            src={item.type === 'upload' ? '/images/img_icn_general_upload.svg' : '/images/img_icn_general_attach.svg'}
+                            alt={item.type}
                             className="w-6 h-6 flex-shrink-0 mt-1"
                           />
                           <p className="text-base font-normal leading-lg text-text-primary flex-1" style={{ fontFamily: 'Nunito Sans' }}>
@@ -471,9 +503,9 @@ const Dashboard = () => {
 
                   {/* View More */}
                   <div className="flex items-center justify-center gap-2 mt-6">
-                    <span className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
+                    <button onClick={() => setActivityLimit((n) => n + 5)} className="text-base font-semibold text-text-accent cursor-pointer hover:opacity-80" style={{ fontFamily: 'Nunito Sans' }}>
                       View more
-                    </span>
+                    </button>
                     <img src="/images/img_arrow_down.svg" alt="Arrow Down" className="w-6 h-6" />
                   </div>
                 </div>
