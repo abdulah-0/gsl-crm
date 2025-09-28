@@ -21,10 +21,13 @@ type Task = {
 
 type CaseItem = {
   caseId: string; // e.g., PN001245
-  title: string; // e.g., University of ... or Case 1
-  estimateMins?: number;
-  priority?: Priority;
+  title: string; // student/case title
+  status?: 'Pending' | 'In Progress' | 'Completed';
+  branch?: string;
+  type?: string;
+  employee?: string;
   assignees: string[];
+  createdAt?: string;
   active: Task[];
   backlog: Task[];
 };
@@ -63,13 +66,18 @@ const Cases: React.FC = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, created_at')
+        .select('id, case_number, title, assignees, employee, status, branch, type, created_at')
         .order('created_at', { ascending: false });
       if (!error) {
         const mapped: CaseItem[] = (data ?? []).map((row: any) => ({
           caseId: row.case_number || String(row.id),
           title: row.title || 'Untitled',
+          status: row.status || 'In Progress',
+          branch: row.branch || undefined,
+          type: row.type || undefined,
+          employee: row.employee || undefined,
           assignees: Array.isArray(row.assignees) ? row.assignees : (row.employee ? [row.employee] : []),
+          createdAt: row.created_at,
           active: [],
           backlog: [],
         }));
@@ -91,6 +99,10 @@ const Cases: React.FC = () => {
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
 
   // Add Case modal state
+  // Case Details modal
+  const [showCaseDetails, setShowCaseDetails] = useState(false);
+  const [detailsCase, setDetailsCase] = useState<CaseItem | null>(null);
+
   const [showAddCase, setShowAddCase] = useState(false);
   const [formCaseId, setFormCaseId] = useState('');
   const [formTitle, setFormTitle] = useState('');
@@ -179,12 +191,12 @@ const Cases: React.FC = () => {
                             <div className="text-xs text-text-muted">{c.caseId}</div>
                             <div className="font-semibold">{c.title}</div>
                           </div>
-                          <button onClick={()=>setActiveCaseId(c.caseId)} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
+                          <button onClick={()=>{ setActiveCaseId(c.caseId); setDetailsCase(c); setShowCaseDetails(true); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
                             View details &gt;
                           </button>
                         </div>
                         {!active && (
-                          <div className="mt-1 text-xs text-text-secondary">{c.assignees.join(', ') || 'Unassigned'}</div>
+                          <div className="mt-1 text-xs text-text-secondary">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</div>
                         )}
                       </div>
                     );
@@ -294,6 +306,51 @@ const Cases: React.FC = () => {
                 <span className="text-text-secondary">Priority</span>
                 <select value={formPriority} onChange={e=>setFormPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2">
                   <option>Low</option>
+      {/* Case Details Modal */}
+      {showCaseDetails && detailsCase && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-xl rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Case Details</h3>
+              <button type="button" onClick={()=>setShowCaseDetails(false)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div>
+                <div className="text-text-secondary">Case ID</div>
+                <div className="font-semibold">{detailsCase.caseId}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Title</div>
+                <div className="font-semibold">{detailsCase.title}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Branch</div>
+                <div className="font-semibold">{detailsCase.branch || '—'}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Type</div>
+                <div className="font-semibold">{detailsCase.type || '—'}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Assigned To</div>
+                <div className="font-semibold">{(detailsCase.assignees||[]).join(', ') || detailsCase.employee || 'Unassigned'}</div>
+              </div>
+              <div>
+                <div className="text-text-secondary">Status</div>
+                <div className="font-semibold">{detailsCase.status || 'In Progress'}</div>
+              </div>
+              <div className="sm:col-span-2">
+                <div className="text-text-secondary">Created At</div>
+                <div className="font-semibold">{detailsCase.createdAt ? new Date(detailsCase.createdAt).toLocaleString() : '—'}</div>
+              </div>
+            </div>
+            <div className="mt-5 text-right">
+              <button type="button" onClick={()=>setShowCaseDetails(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
                   <option>Medium</option>
                   <option>High</option>
                 </select>
