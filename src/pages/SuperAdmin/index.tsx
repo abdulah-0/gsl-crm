@@ -66,6 +66,10 @@ const SuperAdmin: React.FC = () => {
   const [savingCase, setSavingCase] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Edit Case modal state
+  const [showEditCase, setShowEditCase] = useState(false);
+  const [editCaseId, setEditCaseId] = useState<string | null>(null);
+
   useEffect(() => {
     const load = async () => {
       // Cases (for recent list, pipeline, employees performance, stat cards)
@@ -252,8 +256,51 @@ const SuperAdmin: React.FC = () => {
     if (error) { setFormError(error.message); return; }
     if (data) {
       setRecentCases(prev => [{ id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }, ...prev]);
+      // Log activity (fire-and-forget)
+      await supabase.from('activity_log').insert([{ entity: 'dashboard_case', action: `Created case ${caseNumber} for ${formStudent.trim()} in ${formBranch}`, detail: { case_number: caseNumber, student: formStudent.trim(), branch: formBranch } }]);
     }
     setShowAddCase(false);
+  };
+
+  const openEditCase = (c: CaseItem) => {
+    setFormStudent(c.student);
+    setFormBranch(c.branch || 'IG Branch');
+    setFormType(c.type as any);
+    setFormEmployee(c.employee || '');
+    setFormStatus(c.status as any);
+    setFormError(null);
+    setEditCaseId(c.id);
+    setShowEditCase(true);
+  };
+
+  const saveEditCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCaseId) return;
+    if (!formStudent.trim()) { setFormError('Student name is required'); return; }
+    setSavingCase(true);
+    const { data, error } = await supabase
+      .from('dashboard_cases')
+      .update({ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus })
+      .eq('id', editCaseId)
+      .select('id, title, branch, type, employee, status, created_at')
+      .single();
+    setSavingCase(false);
+    if (error) { setFormError(error.message); return; }
+    if (data) {
+      setRecentCases(prev => prev.map(rc => rc.id === String(data.id)
+        ? { id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }
+        : rc
+      ));
+    }
+    setShowEditCase(false);
+    setEditCaseId(null);
+  };
+
+  const deleteCase = async (c: CaseItem) => {
+    const ok = window.confirm(`Delete case for ${c.student}?`);
+    if (!ok) return;
+    await supabase.from('dashboard_cases').delete().eq('id', c.id);
+    setRecentCases(prev => prev.filter(x => x.id !== c.id));
   };
 
   return (
@@ -432,7 +479,13 @@ const SuperAdmin: React.FC = () => {
                       <div className="col-span-2">{c.branch}</div>
                       <div className="col-span-2">{c.type}</div>
                       <div className="col-span-3">{c.employee}</div>
-                      <div className="col-span-2"><span className={`px-2 py-0.5 text-xs rounded ${c.status==='Completed'?'bg-emerald-100 text-emerald-700': c.status==='In Progress'?'bg-blue-100 text-blue-700':'bg-yellow-100 text-yellow-800'}`}>{c.status}</span></div>
+                      <div className="col-span-2 flex items-center justify-between gap-2">
+                        <span className={`px-2 py-0.5 text-xs rounded ${c.status==='Completed'?'bg-emerald-100 text-emerald-700': c.status==='In Progress'?'bg-blue-100 text-blue-700':'bg-yellow-100 text-yellow-800'}`}>{c.status}</span>
+                        <span className="flex items-center gap-2">
+                          <button onClick={()=>openEditCase(c)} className="text-[11px] text-blue-600 hover:underline">Edit</button>
+                          <button onClick={()=>deleteCase(c)} className="text-[11px] text-red-600 hover:underline">Delete</button>
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -515,6 +568,60 @@ const SuperAdmin: React.FC = () => {
               <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
                 {savingCase ? 'Saving...' : 'Save Case'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Case Modal */}
+      {showEditCase && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={saveEditCase} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Edit Case</h3>
+              <button type="button" onClick={()=>setShowEditCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            {formError && <div className="mt-3 text-red-600 text-sm">{formError}</div>}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="text-text-secondary">Student</span>
+                <input value={formStudent} onChange={e=>setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Branch</span>
+                <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
+                  <option>IG Branch</option>
+                  <option>PWD Branch</option>
+                  <option>DHA Branch</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Type</span>
+                <select value={formType} onChange={e=>setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                  <option>Visa</option>
+                  <option>Fee</option>
+                  <option>CAS</option>
+                  <option>Completed</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Assigned To</span>
+                <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Status</span>
+                <select value={formStatus} onChange={e=>setFormStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                  <option>In Progress</option>
+                  <option>Pending</option>
+                  <option>Completed</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={()=>setShowEditCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
+                {savingCase ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
           </form>
