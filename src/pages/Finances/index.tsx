@@ -147,6 +147,7 @@ const Finances: React.FC = () => {
   const [editStatus, setEditStatus] = useState<VoucherStatus>('Pending');
   const [editDescription, setEditDescription] = useState<string>('');
 
+
   const [vouchers, setVouchers] = useState<VoucherRow[]>([]);
   const [voucherType, setVoucherType] = useState<VoucherType | ''>('');
   const [amount, setAmount] = useState<string>('');
@@ -167,6 +168,13 @@ const Finances: React.FC = () => {
       branch && description.trim().length > 0
     );
   }, [voucherType, amount, branch, description]);
+
+  // Derive branches from data for filters/charts
+  const branchList = useMemo(() => {
+    const s = new Set<string>();
+    vouchers.forEach(v => { if (v.branch) s.add(v.branch); });
+    return Array.from(s);
+  }, [vouchers]);
 
   const handleShortcut = (type: VoucherType) => {
     setVoucherType(type);
@@ -238,15 +246,16 @@ const Finances: React.FC = () => {
   const pageRows = filtered.slice((page-1)*pageSize, page*pageSize);
 
   const branchChartData = useMemo(() => {
+    const branches = branchList.length ? branchList : BRANCHES;
     const map = new Map<string, number>();
-    BRANCHES.forEach(b => map.set(b, 0));
+    branches.forEach(b => map.set(b, 0));
     vouchers.forEach(v => {
       if (v.amount > 0) {
         map.set(v.branch, (map.get(v.branch) || 0) + v.amount);
       }
     });
-    return BRANCHES.map(b => ({ branch: b, revenue: map.get(b) || 0 }));
-  }, [vouchers]);
+    return branches.map(b => ({ branch: b, revenue: map.get(b) || 0 }));
+  }, [vouchers, branchList]);
 
   const methodChartData = useMemo(() => {
     const bank = vouchers.filter(v => v.type === 'Bank' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
@@ -413,7 +422,7 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Branch</label>
                     <select value={branch} onChange={(e)=>setBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
                       <option value="">Select Branch...</option>
-                      {BRANCHES.map(b=> (<option key={b} value={b}>{b}</option>))}
+                      {(branchList.length ? branchList : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
                     </select>
                   </div>
                   <div>
@@ -456,7 +465,7 @@ const Finances: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-3 md:items-center">
                   <select value={branchFilter} onChange={(e)=>{ setBranchFilter(e.target.value); setPage(1); }} className="border rounded-lg p-2">
                     <option>All Branches</option>
-                    {BRANCHES.map(b => (<option key={b}>{b}</option>))}
+                    {(branchList.length ? branchList : BRANCHES).map(b => (<option key={b}>{b}</option>))}
                   </select>
                   <input value={search} onChange={(e)=>{ setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
                   <div className="flex gap-2">
@@ -563,9 +572,12 @@ const Finances: React.FC = () => {
       {/* View Modal */}
       {viewVoucher && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
-            <h3 className="text-lg font-bold mb-3">Voucher #{viewVoucher.id}</h3>
-            <div className="text-sm space-y-1">
+          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Voucher #{viewVoucher.id}</h3>
+              <button type="button" onClick={()=>setViewVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-3 text-sm space-y-1">
               <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
               <div><span className="text-text-secondary">Amount:</span> Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount>=0? '(In)':'(Out)'}</div>
               <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
@@ -574,7 +586,7 @@ const Finances: React.FC = () => {
               {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
             </div>
             <div className="mt-4 text-right">
-              <button onClick={()=>setViewVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Close</button>
+              <button type="button" onClick={()=>setViewVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Close</button>
             </div>
           </div>
         </div>
@@ -583,9 +595,12 @@ const Finances: React.FC = () => {
       {/* Edit Modal */}
       {editVoucher && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-5 w-full max-w-md shadow-xl">
-            <h3 className="text-lg font-bold mb-3">Edit Voucher #{editVoucher.id}</h3>
-            <div className="space-y-3">
+          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Edit Voucher #{editVoucher.id}</h3>
+              <button type="button" onClick={()=>setEditVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-3 space-y-3">
               <label className="block text-sm">
                 <span className="text-text-secondary">Status</span>
                 <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
@@ -600,8 +615,8 @@ const Finances: React.FC = () => {
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={()=>setEditVoucher(null)} className="px-3 py-1 border rounded hover:bg-gray-50">Cancel</button>
-              <button onClick={onSaveEdit} className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+              <button type="button" onClick={()=>setEditVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={onSaveEdit} className="px-3 py-2 rounded bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90">Save</button>
             </div>
           </div>
         </div>
