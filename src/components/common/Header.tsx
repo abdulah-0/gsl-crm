@@ -42,15 +42,15 @@ const Header = ({
   };
 
   return (
-    <header 
+    <header
       className={twMerge(
-        'w-full flex items-center justify-between',
-        'ml-[250px] mt-5', // Offset for sidebar
+        'w-full flex items-center justify-between flex-wrap gap-4',
+        'mt-5',
         className
       )}
     >
       {/* Search Section */}
-      <div className="w-[36%]">
+      <div className="flex-1 min-w-0">
         <SearchView
           placeholder="Search"
           text_font_size="16"
@@ -66,9 +66,9 @@ const Header = ({
           padding="10px 16px 10px 50px"
           onSearch={handleSearch}
           leftIcon={
-            <img 
-              src="/images/img_search.svg" 
-              alt="Search" 
+            <img
+              src="/images/img_search.svg"
+              alt="Search"
               className="w-6 h-6"
             />
           }
@@ -76,22 +76,22 @@ const Header = ({
       </div>
 
       {/* Right Section - Notifications & Profile */}
-      <div className="w-[22%] flex items-center gap-6">
+      <div className="w-full sm:w-auto flex items-center gap-4 flex-wrap justify-end">
         {/* Notification Button */}
         <button
           onClick={handleNotificationClick}
-          className="w-12 h-12 bg-white rounded-lg shadow-[0px_6px_58px_#c3cbd61a] flex items-center justify-center transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-lg shadow-[0px_6px_58px_#c3cbd61a] flex items-center justify-center transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
           aria-label="Notifications"
         >
-          <img 
-            src="/images/img_notifications.svg" 
-            alt="Notifications" 
-            className="w-6 h-6"
+          <img
+            src="/images/img_notifications.svg"
+            alt="Notifications"
+            className="w-5 h-5 sm:w-6 sm:h-6"
           />
         </button>
 
         {/* Profile Dropdown */}
-        <div className="flex-1">
+        <div className="min-w-[180px] max-w-full">
           <Dropdown
             placeholder="Evan Yates"
             text_font_size="16"
@@ -108,16 +108,16 @@ const Header = ({
             options={profileOptions}
             onChange={handleProfileChange}
             leftIcon={
-              <img 
-                src="/images/img_elm_header_photo.png" 
-                alt="Profile" 
+              <img
+                src="/images/img_elm_header_photo.png"
+                alt="Profile"
                 className="w-[30px] h-6 rounded-full object-cover"
               />
             }
             rightIcon={
-              <img 
-                src="/images/img_icn_general_arrow_dark_right.svg" 
-                alt="Arrow" 
+              <img
+                src="/images/img_icn_general_arrow_dark_right.svg"
+                alt="Arrow"
                 className="w-6 h-6"
               />
             }
