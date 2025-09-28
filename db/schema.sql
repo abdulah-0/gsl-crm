@@ -564,6 +564,12 @@ CREATE POLICY employees_ins_superadmin ON employees FOR INSERT WITH CHECK (is_su
 CREATE POLICY employees_upd_superadmin ON employees FOR UPDATE USING (is_superadmin()) WITH CHECK (is_superadmin());
 CREATE POLICY employees_del_superadmin ON employees FOR DELETE USING (is_superadmin());
 
+-- Relaxed employees policies for authenticated users (keep superadmin policies too)
+CREATE POLICY employees_sel_auth ON employees FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY employees_ins_auth ON employees FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+CREATE POLICY employees_upd_auth ON employees FOR UPDATE USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL);
+
+
 CREATE POLICY emp_att_sel_superadmin ON employee_attendance FOR SELECT USING (is_superadmin());
 CREATE POLICY emp_att_ins_superadmin ON employee_attendance FOR INSERT WITH CHECK (is_superadmin());
 CREATE POLICY emp_att_upd_superadmin ON employee_attendance FOR UPDATE USING (is_superadmin()) WITH CHECK (is_superadmin());
@@ -666,6 +672,11 @@ CREATE POLICY ticket_comments_sel_superadmin ON ticket_comments FOR SELECT USING
 CREATE POLICY ticket_comments_ins_superadmin ON ticket_comments FOR INSERT WITH CHECK (is_superadmin());
 CREATE POLICY ticket_comments_upd_superadmin ON ticket_comments FOR UPDATE USING (is_superadmin()) WITH CHECK (is_superadmin());
 CREATE POLICY ticket_comments_del_superadmin ON ticket_comments FOR DELETE USING (is_superadmin());
+
+-- Allow authenticated users to read/insert employee-related activity logs
+CREATE POLICY actlog_sel_auth_employee ON activity_log FOR SELECT USING (auth.uid() IS NOT NULL AND entity = 'employee');
+CREATE POLICY actlog_ins_auth_employee ON activity_log FOR INSERT WITH CHECK (auth.uid() IS NOT NULL AND entity = 'employee');
+
 
 -- Activity log
 CREATE POLICY actlog_sel_superadmin ON activity_log FOR SELECT USING (is_superadmin());
