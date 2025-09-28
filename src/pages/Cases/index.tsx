@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
+import { supabase } from '../../lib/supabaseClient';
 
 // Types
 type Priority = 'Low' | 'Medium' | 'High';
@@ -53,37 +54,37 @@ const STATUS_STYLES: Record<Status, { text: string; bg: string; dot: string }> =
   'Todo': { text: 'text-gray-700', bg: 'bg-gray-100', dot: 'bg-gray-400' },
 };
 
-const DEFAULT_CASES: CaseItem[] = [
-  {
-    caseId: 'PN001245',
-    title: 'Case 1',
-    assignees: ['Evan Yates'],
-    priority: 'Medium',
-    estimateMins: mins(3, 0, 0),
-    active: [
-      { id: 't1', name: 'Visa Filing', estimateMins: mins(2,4,0), spentMins: mins(1,2,0), assignee: { name: 'Evan Yates' }, priority: 'Medium', status: 'Done', description: 'Prepare and file visa documents.' },
-      { id: 't2', name: 'CAS', estimateMins: mins(1,2,0), spentMins: mins(0,4,25), assignee: { name: 'Evan Yates' }, priority: 'Medium', status: 'In Progress', description: 'Collect and verify CAS documentation.' },
-      { id: 't3', name: 'Fee Submission', estimateMins: mins(4,0,0), spentMins: mins(2,2,20), assignee: { name: 'Ayesha Khan' }, priority: 'Low', status: 'In Progress', description: 'Submit tuition fees to university.' },
-    ],
-    backlog: [
-      { id: 't4', name: 'Accommodation', estimateMins: mins(2,0,0), spentMins: mins(0,0,0), assignee: { name: 'John Doe' }, priority: 'Low', status: 'Todo', description: 'Find student accommodation options.' },
-    ],
-  },
-  { caseId: 'PN001246', title: 'Case 2', assignees: ['Ayesha Khan'], priority: 'Low', estimateMins: mins(1,0,0), active: [], backlog: [] },
-  { caseId: 'PN001247', title: 'Case 3', assignees: ['John Doe'], priority: 'Medium', estimateMins: mins(2,0,0), active: [], backlog: [] },
-  { caseId: 'PN001248', title: 'Case 4', assignees: ['Amir Ali'], priority: 'Low', estimateMins: mins(1,0,0), active: [], backlog: [] },
-  { caseId: 'PN001249', title: 'Case 5', assignees: ['Sana Tariq'], priority: 'High', estimateMins: mins(4,0,0), active: [], backlog: [] },
-  { caseId: 'PN001250', title: 'Case 6', assignees: ['Evan Yates'], priority: 'Medium', estimateMins: mins(2,0,0), active: [], backlog: [] },
-];
-
 const Cases: React.FC = () => {
-  // Cases state with localStorage persistence
-  const [cases, setCases] = useState<CaseItem[]>(() => {
-    try { const raw = localStorage.getItem('crm_cases'); if (raw) return JSON.parse(raw); } catch {}
-    return DEFAULT_CASES;
-  });
-  const [activeCaseId, setActiveCaseId] = useState<string>(cases[0]?.caseId || '');
-  useEffect(() => { try { localStorage.setItem('crm_cases', JSON.stringify(cases)); } catch {} }, [cases]);
+  // Realtime cases from Supabase (dashboard_cases)
+  const [cases, setCases] = useState<CaseItem[]>([]);
+  const [activeCaseId, setActiveCaseId] = useState<string>('');
+
+  useEffect(() => {
+    const load = async () => {
+      const { data, error } = await supabase
+        .from('dashboard_cases')
+        .select('id, case_number, title, assignees, employee, status, created_at')
+        .order('created_at', { ascending: false });
+      if (!error) {
+        const mapped: CaseItem[] = (data ?? []).map((row: any) => ({
+          caseId: row.case_number || String(row.id),
+          title: row.title || 'Untitled',
+          assignees: Array.isArray(row.assignees) ? row.assignees : (row.employee ? [row.employee] : []),
+          active: [],
+          backlog: [],
+        }));
+        setCases(mapped);
+        if (!activeCaseId && mapped[0]) setActiveCaseId(mapped[0].caseId);
+      }
+    };
+    load();
+
+    const chan = supabase
+      .channel('public:dashboard_cases')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_cases' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(chan); };
+  }, [activeCaseId]);
 
   // UI state
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
@@ -111,23 +112,22 @@ const Cases: React.FC = () => {
     }));
   };
 
-  const addCase = (e: React.FormEvent) => {
+  const addCase = async (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = formCaseId.trim();
-    if (!trimmed || !formTitle.trim()) return;
-    const item: CaseItem = {
-      caseId: trimmed,
-      title: formTitle.trim(),
-      assignees: formAssignees.split(',').map(s => s.trim()).filter(Boolean),
-      estimateMins: Math.max(0, Number(formEstimate) || 0),
-      priority: formPriority,
-      active: [],
-      backlog: [],
-    };
-    setCases(prev => [item, ...prev]);
-    setActiveCaseId(item.caseId);
-    setShowAddCase(false);
-    setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium');
+    const case_number = formCaseId.trim();
+    const title = formTitle.trim();
+    if (!case_number || !title) return;
+    const assignees = formAssignees.split(',').map(s => s.trim()).filter(Boolean);
+    const { data, error } = await supabase
+      .from('dashboard_cases')
+      .insert([{ case_number, title, assignees, status: 'In Progress' }])
+      .select('case_number')
+      .single();
+    if (!error && data) {
+      setActiveCaseId(data.case_number);
+      setShowAddCase(false);
+      setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium');
+    }
   };
 
   return (

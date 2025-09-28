@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { twMerge } from 'tailwind-merge';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 
 interface SidebarProps {
@@ -14,8 +14,9 @@ const Sidebar = ({
   isCollapsed = false,
   onToggle
 }: SidebarProps) => {
-  const [activeMenuItem, setActiveMenuItem] = useState('Dashboard');
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
 
   const menuItems = [
     {
@@ -76,10 +77,10 @@ const Sidebar = ({
     }
   ];
 
-  const handleMenuClick = (itemLabel: string, href: string) => {
-    setActiveMenuItem(itemLabel);
+  const handleMenuClick = (_itemLabel: string, href: string) => {
     navigate(href);
   };
+
 
   const handleLogout = async () => {
     try {
@@ -124,36 +125,41 @@ const Sidebar = ({
       {/* Navigation Menu */}
       <nav className="flex-1 px-[18px]">
         <div className="flex flex-col gap-2">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleMenuClick(item.label, item.href)}
-              className={twMerge(
-                'flex items-center w-full p-2 rounded-lg transition-all duration-200',
-                'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500',
-                activeMenuItem === item.label ? 'bg-orange-50' : ''
-              )}
-              role="menuitem"
-            >
-              <img
-                src={item.icon}
-                alt={`${item.label} icon`}
-                className="w-6 h-6 flex-shrink-0"
-              />
-              <span
-                className="ml-4 text-base font-semibold text-text-secondary leading-base text-left"
-                style={{
-                  fontFamily: 'Nunito Sans',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  lineHeight: '22px',
-                  color: '#7d8592'
-                }}
+          {menuItems.map((item) => {
+            const isActive = currentPath.startsWith(item.href);
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleMenuClick(item.label, item.href)}
+                className={twMerge(
+                  'flex items-center w-full p-2 rounded-lg transition-all duration-200',
+                  'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-orange-500',
+                  isActive ? 'bg-orange-50' : ''
+                )}
+                role="menuitem"
               >
-                {item.label}
-              </span>
-            </button>
-          ))}
+                <img
+                  src={item.icon}
+                  alt={`${item.label} icon`}
+                  className="w-6 h-6 flex-shrink-0"
+                />
+                <span
+                  className={twMerge(
+                    'ml-4 text-base font-semibold leading-base text-left',
+                    isActive ? 'text-[#ffa332]' : 'text-text-secondary'
+                  )}
+                  style={{
+                    fontFamily: 'Nunito Sans',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    lineHeight: '22px'
+                  }}
+                >
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </nav>
 
