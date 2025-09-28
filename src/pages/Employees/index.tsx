@@ -212,7 +212,10 @@ const Employees: React.FC = () => {
       .insert([{ user_id: userId, role_title: formPosition, joined_on: new Date().toISOString().slice(0,10) }])
       .select('id')
       .single();
-    if (empErr) { alert(`Failed to add employee: ${empErr.message}`); return; }
+    if (empErr) {
+      alert(`Could not add employee. ${empErr.message}\n\nTip: This action may require Super Admin permissions. Please ensure you are logged in as Super Admin or adjust RLS policies for employees.`);
+      return;
+    }
 
     // 3) Log activity
     await supabase.from('activity_log').insert([{
@@ -310,7 +313,6 @@ const Employees: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button onClick={()=>setView('list')} className={`px-3 py-1 rounded ${view==='list'?'bg-gray-100 font-semibold':''}`}>List</button>
                 <button onClick={()=>setView('activity')} className={`px-3 py-1 rounded ${view==='activity'?'bg-gray-100 font-semibold':''}`}>Activity</button>
-                <button className="ml-2 px-2 py-1 rounded hover:bg-gray-100" title="Filter & Sort">\u21C5</button>
               </div>
             </div>
 
