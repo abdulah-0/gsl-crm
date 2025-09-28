@@ -56,6 +56,16 @@ const SuperAdmin: React.FC = () => {
 
   const [branchRev, setBranchRev] = useState<{ name: string; pct: number }[]>([]);
 
+  // New Case modal state
+  const [showAddCase, setShowAddCase] = useState(false);
+  const [formStudent, setFormStudent] = useState('');
+  const [formBranch, setFormBranch] = useState('IG Branch');
+  const [formType, setFormType] = useState<'Visa' | 'Fee' | 'CAS' | 'Completed'>('Visa');
+  const [formEmployee, setFormEmployee] = useState('');
+  const [formStatus, setFormStatus] = useState<'Pending' | 'In Progress' | 'Completed'>('In Progress');
+  const [savingCase, setSavingCase] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   useEffect(() => {
     const load = async () => {
       // Cases (for recent list, pipeline, employees performance, stat cards)
@@ -218,16 +228,32 @@ const SuperAdmin: React.FC = () => {
   const netFlow = cashIn - cashOut;
   const maxRev = Math.max(...revenue, 1);
 
-  const handleNewCase = async () => {
-    const student = window.prompt('Student name');
-    if (!student) return;
-    const branchName = window.prompt('Branch (e.g., IG Branch, PWD Branch, DHA Branch)') || '';
-    const type = window.prompt('Case Type (Visa, Fee, CAS, Completed)') || 'Visa';
-    const employee = window.prompt('Assigned employee name') || '';
+  const handleNewCase = () => {
+    setFormStudent('');
+    setFormBranch('IG Branch');
+    setFormType('Visa');
+    setFormEmployee('');
+    setFormStatus('In Progress');
+    setFormError(null);
+    setShowAddCase(true);
+  };
+
+  const saveNewCase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formStudent.trim()) { setFormError('Student name is required'); return; }
+    setSavingCase(true);
     const caseNumber = `PN${Date.now()}`;
-    await supabase.from('dashboard_cases').insert([
-      { case_number: caseNumber, title: student, branch: branchName, type, employee, status: 'In Progress' }
-    ]);
+    const { data, error } = await supabase
+      .from('dashboard_cases')
+      .insert([{ case_number: caseNumber, title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus }])
+      .select('id, title, branch, type, employee, status, created_at')
+      .single();
+    setSavingCase(false);
+    if (error) { setFormError(error.message); return; }
+    if (data) {
+      setRecentCases(prev => [{ id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }, ...prev]);
+    }
+    setShowAddCase(false);
   };
 
   return (
@@ -418,6 +444,7 @@ const SuperAdmin: React.FC = () => {
               {/* Cash Flow by stage */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow by Case Stage</h2>
+
                 <div className="space-y-3">
                   {pipeline.map(p => (
                     <div key={p.name} className="flex items-center gap-3">
@@ -440,6 +467,60 @@ const SuperAdmin: React.FC = () => {
           </section>
         </div>
       </main>
+      {/* New Case Modal */}
+      {showAddCase && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={saveNewCase} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">New Case</h3>
+              <button type="button" onClick={()=>setShowAddCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            {formError && <div className="mt-3 text-red-600 text-sm">{formError}</div>}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-sm">
+                <span className="text-text-secondary">Student</span>
+                <input value={formStudent} onChange={e=>setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Branch</span>
+                <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
+                  <option>IG Branch</option>
+                  <option>PWD Branch</option>
+                  <option>DHA Branch</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Type</span>
+                <select value={formType} onChange={e=>setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                  <option>Visa</option>
+                  <option>Fee</option>
+                  <option>CAS</option>
+                  <option>Completed</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Assigned To</span>
+                <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Status</span>
+                <select value={formStatus} onChange={e=>setFormStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                  <option>In Progress</option>
+                  <option>Pending</option>
+                  <option>Completed</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
+                {savingCase ? 'Saving...' : 'Save Case'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
     </>
   );
 };
