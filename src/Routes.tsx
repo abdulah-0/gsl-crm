@@ -12,7 +12,7 @@ import MessengerPage from './pages/Messenger';
 import InfoPortalPage from './pages/InfoPortal';
 import ReportsPage from './pages/Reports';
 import SuperAdminPage from './pages/SuperAdmin';
-
+import ConsultantPage from './pages/Consultant';
 
 
 // Simple ProtectedRoute using Supabase session
@@ -59,21 +59,28 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 
 // Wrapper that renders Super Admin or regular Dashboard based on user role
 const RoleBasedDashboard: React.FC = () => {
-  const [isSuper, setIsSuper] = useState<boolean | null>(null);
+  const [role, setRole] = useState<'super' | 'consultant' | 'default' | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    const computeIsSuper = (user: any): boolean => {
+    const extractRoles = (user: any): string[] => {
       const am = user?.app_metadata ?? {};
       const um = user?.user_metadata ?? {};
-      const candidates: any[] = [
+      const list: any[] = [
         ...(typeof am.role === 'string' ? [am.role] : []),
         ...(Array.isArray(am.roles) ? am.roles : []),
         ...(typeof um.role === 'string' ? [um.role] : []),
         ...(Array.isArray(um.roles) ? um.roles : []),
       ];
-      return candidates.some((r) => typeof r === 'string' && r.toLowerCase().includes('super'));
+      return list.filter((r) => typeof r === 'string').map((r: string) => r.toLowerCase());
+    };
+
+    const resolveRole = (user: any): 'super' | 'consultant' | 'default' => {
+      const roles = extractRoles(user);
+      if (roles.some(r => r.includes('super'))) return 'super';
+      if (roles.some(r => r.includes('consult'))) return 'consultant';
+      return 'default';
     };
 
     (async () => {
@@ -81,23 +88,22 @@ const RoleBasedDashboard: React.FC = () => {
         const { supabase } = await import('./lib/supabaseClient');
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
-        setIsSuper(computeIsSuper(data.session?.user));
-        // react to session updates (sign-in/out or token refresh)
+        setRole(resolveRole(data.session?.user));
         supabase.auth.onAuthStateChange((_evt, session) => {
           if (!mounted) return;
-          setIsSuper(computeIsSuper(session?.user));
+          setRole(resolveRole(session?.user));
         });
       } catch {
         if (!mounted) return;
-        setIsSuper(false);
+        setRole('default');
       }
     })();
 
     return () => { mounted = false; };
   }, []);
 
-  if (isSuper === null) return null; // could render a small loader here
-  return isSuper ? <SuperAdminPage /> : <DashboardPage />;
+  if (role === null) return null; // small loader placeholder
+  return role === 'super' ? <SuperAdminPage /> : role === 'consultant' ? <ConsultantPage /> : <DashboardPage />;
 };
 
 
