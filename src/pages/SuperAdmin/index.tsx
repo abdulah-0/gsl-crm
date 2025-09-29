@@ -8,10 +8,10 @@ import Header from '../../components/common/Header';
 interface StatCard { label: string; value: number | string; delta?: number; prefix?: string; suffix?: string; }
 interface EmployeePerf { id: string; name: string; cases: number; successRate: number; active: number; status: 'Active' | 'Inactive'; }
 interface Activity { id: string; text: string; at: string; }
-interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: 'Pending' | 'In Progress' | 'Completed'; }
+interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: 'Pending' | 'In Progress' | 'Completed'; createdAt?: string; email?: string; }
 
 // Realtime state (replaces mocks)
-const BRANCHES = ['All Branches', 'IG Branch', 'PWD Branch', 'DHA Branch'] as const;
+const BRANCHES = ['All Branches', 'F-8 Branch', 'I-8 Branch', 'PWD Branch', 'DHA Branch'] as const;
 
 const fmtMonth = (d: Date) => d.toLocaleString(undefined, { month: 'short' });
 
@@ -26,13 +26,13 @@ const Bar = ({ pct, color = '#ffa332', label }: { pct: number; color?: string; l
   </div>
 );
 
-const HBar = ({ pct, color = '#3b82f6', name }: { pct: number; color?: string; name: string }) => (
+const HBar = ({ pct, color = '#3b82f6', name, label }: { pct: number; color?: string; name: string; label?: string }) => (
   <div className="flex items-center gap-2">
     <span className="w-28 text-sm text-text-secondary truncate">{name}</span>
     <div className="flex-1 bg-gray-100 rounded h-2">
       <div className="h-2 rounded" style={{ width: `${pct}%`, backgroundColor: color }} />
     </div>
-    <span className="text-xs text-text-secondary w-10 text-right">{pct}%</span>
+    <span className="text-xs text-text-secondary w-16 text-right">{label ?? `${pct}%`}</span>
   </div>
 );
 
@@ -86,7 +86,9 @@ const SuperAdmin: React.FC = () => {
         branch: c.branch ?? '—',
         type: c.type ?? 'Visa',
         employee: c.employee ?? '—',
-        status: c.status ?? 'Pending'
+        status: c.status ?? 'Pending',
+        createdAt: c.created_at,
+        email: c.email ?? undefined
       })));
 
       // Employees performance derived from cases
@@ -109,14 +111,21 @@ const SuperAdmin: React.FC = () => {
       }));
       setEmployeesPerf(empPerf);
 
-      // Pipeline by case type
-      const typeColors: Record<string, string> = { Visa: '#16a34a', Fee: '#f59e0b', CAS: '#3b82f6', Completed: '#8b5cf6' };
+      // Pipeline by stage (Initial, CAS, Visa, Completed)
+      const stageColors: Record<string, string> = { Initial: '#f59e0b', CAS: '#3b82f6', Visa: '#16a34a', Completed: '#8b5cf6' };
       const byType = new Map<string, number>();
       for (const c of casesRows) {
         const t = c.type ?? 'Visa';
         byType.set(t, (byType.get(t) || 0) + 1);
       }
-      const pipelineArr = Array.from(byType.entries()).map(([name, value]) => ({ name, value, color: typeColors[name] || '#ffa332' }));
+      const stages = ['Initial','CAS','Visa','Completed'] as const;
+      const stageCounts: Record<string, number> = {
+        Initial: (byType.get('Initial') || 0) + (byType.get('Fee') || 0) + (byType.get('Documentation') || 0),
+        CAS: byType.get('CAS') || 0,
+        Visa: byType.get('Visa') || 0,
+        Completed: byType.get('Completed') || 0,
+      };
+      const pipelineArr = stages.map((name) => ({ name, value: stageCounts[name] || 0, color: stageColors[name] }));
       setPipeline(pipelineArr);
       setMaxPipeline(Math.max(1, ...pipelineArr.map(p => p.value)));
 
@@ -326,35 +335,49 @@ const SuperAdmin: React.FC = () => {
               Super Admin Dashboard
             </h1>
 
-            {/* Top stat cards */}
+            {/* Top Summary Cards (KPIs) */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {statCards.map((s) => {
-                const positive = (s.delta ?? 0) >= 0;
-                return (
-                  <div key={s.label} className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                    <div className="text-sm text-text-secondary">{s.label}</div>
-                    <div className="mt-1 flex items-end gap-2">
-                      <div className="text-2xl font-bold">
-                        {s.prefix || ''}{s.value}{s.suffix || ''}
-                      </div>
-                      {typeof s.delta === 'number' && (
-                        <span className={`text-xs font-semibold ${positive ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {positive ? '▲' : '▼'} {Math.abs(s.delta)}% vs last month
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {/* Visa Success */}
+              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+                <div className="text-sm text-text-secondary">Visa Success</div>
+                <div className="mt-1 flex items-end gap-2">
+                  <div className="text-2xl font-bold text-emerald-600">847</div>
+                  <span className="text-xs font-semibold text-emerald-600">▲ 12% this month</span>
+                </div>
+              </div>
+              {/* CAS Issued */}
+              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+                <div className="text-sm text-text-secondary">CAS Issued</div>
+                <div className="mt-1 flex items-end gap-2">
+                  <div className="text-2xl font-bold">1,234</div>
+                  <span className="text-xs font-semibold text-orange-500">▲ 8% this month</span>
+                </div>
+              </div>
+              {/* In Progress */}
+              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+                <div className="text-sm text-text-secondary">In Progress</div>
+                <div className="mt-1 flex items-end gap-2">
+                  <div className="text-2xl font-bold text-text-primary">567</div>
+                  <span className="text-xs font-semibold text-text-secondary">Active cases</span>
+                </div>
+              </div>
+              {/* Revenue */}
+              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+                <div className="text-sm text-text-secondary">Revenue</div>
+                <div className="mt-1 flex items-end gap-2">
+                  <div className="text-2xl font-bold text-purple-600">£2.4M</div>
+                  <span className="text-xs font-semibold text-purple-600">▲ 15% this month</span>
+                </div>
+              </div>
             </div>
 
-            {/* Branch Performance */}
+            {/* Branch Performance (Tabs + Table) */}
             <div className="mt-8 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
-              <div className="p-4 flex items-center justify-between">
+              <div className="p-4 flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-xl font-bold text-text-primary">Branch Performance</h2>
-                <div className="flex items-center gap-2">
-                  {BRANCHES.map(b => (
-                    <button key={b} onClick={()=>setBranch(b)} className={`px-3 py-1 rounded-full border ${branch===b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {['F-8 Branch','I-8 Branch','PWD Branch','DHA Branch'].map(b => (
+                    <button key={b} onClick={()=>setBranch(b as any)} className={`px-3 py-1 rounded-full border ${branch===b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
                   ))}
                 </div>
               </div>
@@ -363,18 +386,28 @@ const SuperAdmin: React.FC = () => {
                   <thead className="text-text-secondary">
                     <tr className="grid grid-cols-12 px-2 py-2">
                       <th className="col-span-4 text-left font-medium">Employee</th>
-                      <th className="col-span-2 text-left font-medium">Cases</th>
+                      <th className="col-span-2 text-left font-medium">Cases Handled</th>
                       <th className="col-span-2 text-left font-medium">Success Rate</th>
-                      <th className="col-span-2 text-left font-medium">Active Cases</th>
+                      <th className="col-span-2 text-left font-medium">Activities</th>
                       <th className="col-span-2 text-left font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {filteredEmployees.map(e => (
+                    {filteredEmployees.map((e, idx) => (
                       <tr key={e.id} className="grid grid-cols-12 items-center px-2 py-3">
-                        <td className="col-span-4">{e.name}</td>
+                        {/* Employee (avatar + name + role) */}
+                        <td className="col-span-4 flex items-center gap-3">
+                          <img src="/images/img_image.svg" alt="avatar" className="w-8 h-8 rounded-full" />
+                          <div>
+                            <div className="font-medium">{e.name}</div>
+                            <div className="text-xs text-text-secondary">Case Manager</div>
+                          </div>
+                        </td>
                         <td className="col-span-2">{e.cases}</td>
-                        <td className="col-span-2">{e.successRate}%</td>
+                        {/* Success Rate with colored badge */}
+                        <td className="col-span-2">
+                          <span className={`px-2 py-0.5 text-xs rounded ${e.successRate>=70?'bg-emerald-100 text-emerald-700': e.successRate>=40? 'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-700'}`}>{e.successRate}%</span>
+                        </td>
                         <td className="col-span-2">{e.active}</td>
                         <td className="col-span-2">
                           <span className={`px-2 py-0.5 text-xs rounded ${e.status==='Active'?'bg-emerald-100 text-emerald-700':'bg-gray-100 text-gray-700'}`}>{e.status}</span>
@@ -418,42 +451,68 @@ const SuperAdmin: React.FC = () => {
             <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="xl:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-xl font-bold text-text-primary">Financial Overview</h2>
+                  <h2 className="text-xl font-bold text-text-primary">Revenue growth (Jan  Jun)</h2>
                 </div>
-                <div className="grid grid-cols-9 gap-3 items-end" style={{ height: 160 }}>
-                  {revenue.map((v, i) => (
-                    <div key={i} className="flex flex-col items-center gap-2">
-                      <div className="w-6 bg-[#ffa332] rounded" style={{ height: `${(v / maxRev) * 100}%` }} />
-                      <span className="text-xs text-text-secondary">{months[i]}</span>
-                    </div>
-                  ))}
+                <div className="mt-2">
+                  <svg viewBox="0 0 300 120" className="w-full h-36">
+                    <polyline points="0,90 50,80 100,85 150,70 200,55 250,40" stroke="#8b5cf6" strokeWidth="3" fill="none" />
+                    {[[0,90],[50,80],[100,85],[150,70],[200,55],[250,40]].map((p,i)=>(
+                      <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#8b5cf6" />
+                    ))}
+                  </svg>
+                  <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
+                    <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+                  </div>
                 </div>
               </div>
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <h2 className="text-xl font-bold text-text-primary">Cash Balance</h2>
+                <h2 className="text-xl font-bold text-text-primary">Financial Snapshot</h2>
                 <div className="mt-2 space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">${cashIn.toLocaleString()}</span></div>
-                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">${cashOut.toLocaleString()}</span></div>
-                  <div className="flex items-center justify-between"><span>Net Flow</span><span className={`font-semibold ${netFlow>=0?'text-emerald-600':'text-red-600'}`}>{netFlow>=0?'+':''}${netFlow.toLocaleString()}</span></div>
+                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">£ 145,890</span></div>
+                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">£ 89,450</span></div>
+                  <div className="flex items-center justify-between"><span>Net Profit</span><span className="font-semibold text-emerald-600">£ 56,440</span></div>
                 </div>
               </div>
             </div>
 
             {/* Student Communication + Accounts Overview */}
-            <div className="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
+              {/* Student Communication */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary">Student Communication</h2>
-                <div className="mt-3 text-sm space-y-2">
-                  <div className="flex items-center justify-between"><span>Pending updates</span><span className="font-semibold">14</span></div>
-                  <div className="flex items-center justify-between"><span>Emails sent today</span><span className="font-semibold">56</span></div>
+                <div className="mt-3 space-y-3 text-sm">
+                  <div className="flex items-start justify-between p-3 rounded-lg bg-yellow-50">
+                    <div>
+                      <div className="font-semibold text-yellow-700">Pending Updates</div>
+                      <div className="text-yellow-800">12 students need progress emails</div>
+                    </div>
+                    <span className="text-yellow-700 font-semibold">!</span>
+                  </div>
+                  <div className="flex items-start justify-between p-3 rounded-lg bg-emerald-50">
+                    <div>
+                      <div className="font-semibold text-emerald-700">Emails Sent Today</div>
+                      <div className="text-emerald-800">47 student updates, 23 university emails</div>
+                    </div>
+                    <span className="text-emerald-700 font-semibold">✓</span>
+                  </div>
                 </div>
               </div>
-              <div className="xl:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+              {/* Accounts Overview */}
+              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary">Accounts Overview</h2>
-                <div className="mt-3 grid grid-cols-3 gap-4 text-sm">
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash In</div><div className="text-lg font-bold">${cashIn.toLocaleString()}</div></div>
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Cash Out</div><div className="text-lg font-bold">${cashOut.toLocaleString()}</div></div>
-                  <div className="bg-gray-50 rounded p-3"><div className="text-text-secondary">Net Flow</div><div className={`text-lg font-bold ${netFlow>=0?'text-emerald-600':'text-red-600'}`}>{netFlow>=0?'+':''}${netFlow.toLocaleString()}</div></div>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-text-secondary">Cash In (Today)</div>
+                    <div className="text-lg font-bold text-emerald-600">₹2,45,000</div>
+                  </div>
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-text-secondary">Cash Out (Today)</div>
+                    <div className="text-lg font-bold text-red-600">₹85,000</div>
+                  </div>
+                  <div className="bg-gray-50 rounded p-3">
+                    <div className="text-text-secondary">Net Flow</div>
+                    <div className="text-lg font-bold">₹1,60,000</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -468,23 +527,31 @@ const SuperAdmin: React.FC = () => {
                 <div className="grid grid-cols-12 text-text-secondary px-2 py-2">
                   <div className="col-span-3">Student</div>
                   <div className="col-span-2">Branch</div>
-                  <div className="col-span-2">Case Type</div>
-                  <div className="col-span-3">Assigned To</div>
-                  <div className="col-span-2">Status</div>
+                  <div className="col-span-2">Stage</div>
+                  <div className="col-span-2">Assigned To</div>
+                  <div className="col-span-2">Last Update</div>
+                  <div className="col-span-1 text-right">Actions</div>
                 </div>
                 <div className="divide-y">
                   {recentCases.map(c => (
                     <div key={c.id} className="grid grid-cols-12 items-center px-2 py-3">
-                      <div className="col-span-3">{c.student}</div>
+                      {/* Student (avatar + name + email) */}
+                      <div className="col-span-3 flex items-center gap-3">
+                        <img src="/images/img_image.svg" alt="avatar" className="w-8 h-8 rounded-full" />
+                        <div>
+                          <div className="font-medium">{c.student}</div>
+                          <div className="text-xs text-text-secondary">{c.email || 'student@example.com'}</div>
+                        </div>
+                      </div>
                       <div className="col-span-2">{c.branch}</div>
-                      <div className="col-span-2">{c.type}</div>
-                      <div className="col-span-3">{c.employee}</div>
-                      <div className="col-span-2 flex items-center justify-between gap-2">
-                        <span className={`px-2 py-0.5 text-xs rounded ${c.status==='Completed'?'bg-emerald-100 text-emerald-700': c.status==='In Progress'?'bg-blue-100 text-blue-700':'bg-yellow-100 text-yellow-800'}`}>{c.status}</span>
-                        <span className="flex items-center gap-2">
-                          <button onClick={()=>openEditCase(c)} className="text-[11px] text-blue-600 hover:underline">Edit</button>
-                          <button onClick={()=>deleteCase(c)} className="text-[11px] text-red-600 hover:underline">Delete</button>
-                        </span>
+                      <div className="col-span-2">
+                        <span className={`px-2 py-0.5 text-xs rounded ${c.type==='Visa'?'bg-emerald-100 text-emerald-700': c.type==='CAS'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-800'}`}>{c.type}</span>
+                      </div>
+                      <div className="col-span-2">{c.employee}</div>
+                      <div className="col-span-2">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</div>
+                      <div className="col-span-1 flex items-center justify-end gap-2">
+                        <button onClick={()=>openEditCase(c)} className="text-[11px] text-purple-700 hover:underline">View</button>
+                        <button onClick={()=>openEditCase(c)} className="text-[11px] text-blue-600 hover:underline">Edit</button>
                       </div>
                     </div>
                   ))}
@@ -494,15 +561,31 @@ const SuperAdmin: React.FC = () => {
 
             {/* Bottom Charts */}
             <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {/* Cash Flow by stage */}
+              {/* Cash Flow (Jan – Jun) */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow by Case Stage</h2>
-
+                <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow (Jan – Jun)</h2>
                 <div className="space-y-3">
-                  {pipeline.map(p => (
-                    <div key={p.name} className="flex items-center gap-3">
-                      <span className="w-24 text-sm text-text-secondary">{p.name}</span>
-                      <Bar pct={(p.value / maxPipeline) * 100} color={p.color} label={`$${(p.value*1.2).toFixed(1)}k`} />
+                  {[
+                    { m: 'Jan', cin: 120, cout: 80 },
+                    { m: 'Feb', cin: 140, cout: 90 },
+                    { m: 'Mar', cin: 130, cout: 95 },
+                    { m: 'Apr', cin: 160, cout: 110 },
+                    { m: 'May', cin: 180, cout: 120 },
+                    { m: 'Jun', cin: 200, cout: 130 },
+                  ].map(({ m, cin, cout }) => (
+                    <div key={m} className="space-y-1">
+                      <div className="flex items-center gap-3">
+                        <span className="w-12 text-sm text-text-secondary">{m}</span>
+                        <div className="flex-1">
+                          <Bar pct={(cin/200)*100} color="#22c55e" label={`£${cin}k`} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="w-12" />
+                        <div className="flex-1">
+                          <Bar pct={(cout/200)*100} color="#ef4444" label={`£${cout}k`} />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -511,9 +594,9 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Branch Revenue</h2>
                 <div className="space-y-3">
-                  {branchRev.map((b, idx) => (
-                    <HBar key={b.name + idx} name={b.name} pct={b.pct} color={idx % 3 === 0 ? '#22c55e' : idx % 3 === 1 ? '#f59e0b' : '#3b82f6'} />
-                  ))}
+                  <HBar name="F-8 Branch" pct={100} color="#22c55e" label="$18,500" />
+                  <HBar name="I-8 Branch" pct={82} color="#f59e0b" label="$15,200" />
+                  <HBar name="PWD Branch" pct={78} color="#3b82f6" label="$14,500" />
                 </div>
               </div>
             </div>
