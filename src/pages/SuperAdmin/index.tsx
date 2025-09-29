@@ -206,7 +206,7 @@ const SuperAdmin: React.FC = () => {
         { label: 'Visa Successes', value: visaSuccess, delta: 0 },
         { label: 'Cases Issued', value: monthIssued, delta: 0 },
         { label: 'In Progress Cases', value: inProgress, delta: 0 },
-        { label: 'Revenue', value: revenueK, prefix: '$', suffix: 'k', delta: 0 },
+        { label: 'Revenue', value: revenueK, prefix: 'Rs ', suffix: 'k', delta: 0 },
       ]);
     };
 
@@ -365,7 +365,7 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <div className="text-sm text-text-secondary">Revenue</div>
                 <div className="mt-1 flex items-end gap-2">
-                  <div className="text-2xl font-bold text-purple-600">£2.4M</div>
+                  <div className="text-2xl font-bold text-purple-600">Rs 2.4M</div>
                   <span className="text-xs font-semibold text-purple-600">▲ 15% this month</span>
                 </div>
               </div>
@@ -468,9 +468,9 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary">Financial Snapshot</h2>
                 <div className="mt-2 space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">£ 145,890</span></div>
-                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">£ 89,450</span></div>
-                  <div className="flex items-center justify-between"><span>Net Profit</span><span className="font-semibold text-emerald-600">£ 56,440</span></div>
+                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">Rs 145,890</span></div>
+                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">Rs 89,450</span></div>
+                  <div className="flex items-center justify-between"><span>Net Profit</span><span className="font-semibold text-emerald-600">Rs 56,440</span></div>
                 </div>
               </div>
             </div>
@@ -503,15 +503,15 @@ const SuperAdmin: React.FC = () => {
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                   <div className="bg-gray-50 rounded p-3">
                     <div className="text-text-secondary">Cash In (Today)</div>
-                    <div className="text-lg font-bold text-emerald-600">₹2,45,000</div>
+                    <div className="text-lg font-bold text-emerald-600">Rs 2,45,000</div>
                   </div>
                   <div className="bg-gray-50 rounded p-3">
                     <div className="text-text-secondary">Cash Out (Today)</div>
-                    <div className="text-lg font-bold text-red-600">₹85,000</div>
+                    <div className="text-lg font-bold text-red-600">Rs 85,000</div>
                   </div>
                   <div className="bg-gray-50 rounded p-3">
                     <div className="text-text-secondary">Net Flow</div>
-                    <div className="text-lg font-bold">₹1,60,000</div>
+                    <div className="text-lg font-bold">Rs 1,60,000</div>
                   </div>
                 </div>
               </div>
@@ -577,13 +577,13 @@ const SuperAdmin: React.FC = () => {
                       <div className="flex items-center gap-3">
                         <span className="w-12 text-sm text-text-secondary">{m}</span>
                         <div className="flex-1">
-                          <Bar pct={(cin/200)*100} color="#22c55e" label={`£${cin}k`} />
+                          <Bar pct={(cin/200)*100} color="#22c55e" label={`Rs ${cin}k`} />
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="w-12" />
                         <div className="flex-1">
-                          <Bar pct={(cout/200)*100} color="#ef4444" label={`£${cout}k`} />
+                          <Bar pct={(cout/200)*100} color="#ef4444" label={`Rs ${cout}k`} />
                         </div>
                       </div>
                     </div>
@@ -594,9 +594,9 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Branch Revenue</h2>
                 <div className="space-y-3">
-                  <HBar name="F-8 Branch" pct={100} color="#22c55e" label="$18,500" />
-                  <HBar name="I-8 Branch" pct={82} color="#f59e0b" label="$15,200" />
-                  <HBar name="PWD Branch" pct={78} color="#3b82f6" label="$14,500" />
+                  <HBar name="F-8 Branch" pct={100} color="#22c55e" label="Rs 18,500" />
+                  <HBar name="I-8 Branch" pct={82} color="#f59e0b" label="Rs 15,200" />
+                  <HBar name="PWD Branch" pct={78} color="#3b82f6" label="Rs 14,500" />
                 </div>
               </div>
             </div>
