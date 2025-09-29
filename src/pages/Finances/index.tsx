@@ -137,6 +137,42 @@ function downloadCSV(filename: string, rows: VoucherRow[]) {
   URL.revokeObjectURL(url);
 }
 
+// Generate a single Voucher PDF for print
+function generateVoucherPDF(row: VoucherRow) {
+  try {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('GSL Pakistan - Voucher', 14, 18);
+
+    const lines = [
+      ['Voucher ID', row.id],
+      ['Type', row.type],
+      ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount>=0?'(In)':'(Out)'}`],
+      ['Branch', row.branch],
+      ['Date', new Date(row.date).toLocaleString()],
+      ['Status', row.status],
+      ['Description', row.description || '-'],
+    ];
+
+    (autoTable as any)(doc, {
+      head: [['Field', 'Value']],
+      body: lines,
+      startY: 26,
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [255, 163, 50] },
+    });
+
+    const blob = doc.output('blob');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `voucher-${row.id}.pdf`; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    console.error('PDF single voucher error', e);
+    alert('Failed to generate voucher PDF.');
+  }
+}
+
 
 const Finances: React.FC = () => {
 
@@ -176,9 +212,6 @@ const Finances: React.FC = () => {
     return Array.from(s);
   }, [vouchers]);
 
-  const handleShortcut = (type: VoucherType) => {
-    setVoucherType(type);
-  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,6 +239,9 @@ const Finances: React.FC = () => {
       alert(`Failed to create voucher: ${error.message}`);
       return;
     }
+
+    // Generate printable PDF for the created voucher
+    generateVoucherPDF({ id: code, type: rowType, amount: signedAmt, branch, date: occurred_at, status, description });
 
     // reset minimal
     setAmount('');
@@ -250,7 +286,7 @@ const Finances: React.FC = () => {
     const map = new Map<string, number>();
     branches.forEach(b => map.set(b, 0));
     vouchers.forEach(v => {
-      if (v.amount > 0) {
+      if (v.status === 'Approved' && v.amount > 0) {
         map.set(v.branch, (map.get(v.branch) || 0) + v.amount);
       }
     });
@@ -258,9 +294,10 @@ const Finances: React.FC = () => {
   }, [vouchers, branchList]);
 
   const methodChartData = useMemo(() => {
-    const bank = vouchers.filter(v => v.type === 'Bank' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
-    const cash = vouchers.filter(v => v.type === 'Cash In' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
-    const online = vouchers.filter(v => v.type === 'Online' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
+    const approved = vouchers.filter(v => v.status === 'Approved');
+    const bank = approved.filter(v => v.type === 'Bank' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
+    const cash = approved.filter(v => v.type === 'Cash In' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
+    const online = approved.filter(v => v.type === 'Online' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
     const total = bank + cash + online || 1; // avoid NaN
     return [
       { name: 'Cash', value: cash, pct: Math.round((cash/total)*100) },
@@ -268,6 +305,22 @@ const Finances: React.FC = () => {
       { name: 'Bank', value: bank, pct: Math.round((bank/total)*100) },
     ];
   }, [vouchers]);
+  const expensesBranchData = useMemo(() => {
+    const branches = branchList.length ? branchList : BRANCHES;
+    const map = new Map<string, number>();
+    branches.forEach(b => map.set(b, 0));
+    const now = new Date();
+    const m = now.getMonth();
+    const y = now.getFullYear();
+    vouchers.forEach(v => {
+      const d = new Date(v.date);
+      if (v.status === 'Approved' && v.type === 'Cash Out' && d.getMonth()===m && d.getFullYear()===y) {
+        map.set(v.branch, (map.get(v.branch) || 0) + Math.abs(v.amount));
+      }
+    });
+    return branches.map(b => ({ branch: b, expenses: map.get(b) || 0 }));
+  }, [vouchers, branchList]);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +371,7 @@ const Finances: React.FC = () => {
     };
 
     for (const r of vouchers) {
+      if (r.status !== 'Approved') continue; // treat Approved as Paid for stats
       const d = new Date(r.date);
       if (d.getFullYear() === curYear && d.getMonth() === curMonth) add(sum.cur, r);
       else if (d.getFullYear() === prevYear && d.getMonth() === prevMonth) add(sum.prev, r);
@@ -435,26 +489,20 @@ const Finances: React.FC = () => {
                 </div>
               </form>
 
-              {/* Right: Shortcuts */}
+              {/* Right: Expenses Visualization */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Generate Vouchers Shortcuts</h2>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <button onClick={()=>handleShortcut('Cash Receipt')} className="p-3 rounded-lg border hover:bg-orange-50 text-left">
-                    <div className="font-semibold">Cash Voucher</div>
-                    <div className="text-xs text-text-secondary">Cash Receipt</div>
-                  </button>
-                  <button onClick={()=>handleShortcut('Online Payment')} className="p-3 rounded-lg border hover:bg-orange-50 text-left">
-                    <div className="font-semibold">Online Payment</div>
-                    <div className="text-xs text-text-secondary">Gateway/Wallet</div>
-                  </button>
-                  <button onClick={()=>handleShortcut('Bank Deposit')} className="p-3 rounded-lg border hover:bg-orange-50 text-left">
-                    <div className="font-semibold">Bank Deposit</div>
-                    <div className="text-xs text-text-secondary">Deposit Slip</div>
-                  </button>
-                  <button onClick={()=>handleShortcut('Transfer')} className="p-3 rounded-lg border hover:bg-orange-50 text-left">
-                    <div className="font-semibold">Transfer</div>
-                    <div className="text-xs text-text-secondary">Between accounts</div>
-                  </button>
+                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Cash Out (Expenses) by Branch — This Month</h2>
+                <div className="mt-4 h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={expensesBranchData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="branch" />
+                      <YAxis />
+                      <Tooltip formatter={(v:any)=>[`Rs ${Number(v).toLocaleString()}`, 'Expenses']} />
+                      <Legend />
+                      <Bar dataKey="expenses" name="Expenses" fill="#ef4444" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
             </div>
