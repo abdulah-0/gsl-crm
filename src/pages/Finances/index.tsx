@@ -253,14 +253,14 @@ const Finances: React.FC = () => {
   const onEdit = (r: VoucherRow) => { setEditVoucher(r); setEditStatus(r.status); setEditDescription(r.description ?? ''); };
   const onDelete = async (r: VoucherRow) => {
     if (!confirm(`Delete voucher ${r.id}?`)) return;
-    const { error } = await supabase.from('vouchers').delete().or(`code.eq.${r.id},id.eq.${r.id}`);
+    const { error } = await supabase.from('vouchers').delete().eq('code', r.id);
     if (error) alert(`Failed to delete: ${error.message}`);
   };
   const onSaveEdit = async () => {
     if (!editVoucher) return;
     const { error } = await supabase.from('vouchers')
       .update({ status: editStatus, description: editDescription })
-      .or(`code.eq.${editVoucher.id},id.eq.${editVoucher.id}`);
+      .eq('code', editVoucher.id);
     if (error) { alert(`Failed to update: ${error.message}`); return; }
     setEditVoucher(null);
   };
@@ -552,9 +552,9 @@ const Finances: React.FC = () => {
                         </td>
                         <td className="py-2 pr-4">
                           <div className="flex gap-2 text-sm">
-                            <button onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
-                            <button onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>
-                            <button onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>
+                            <button type="button" onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
+                            <button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>
+                            <button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>
                           </div>
                         </td>
                       </tr>
