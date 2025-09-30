@@ -319,7 +319,7 @@ const Cases: React.FC = () => {
                   </div>
                 </div>
 
-                {view !== 'board' ? (
+                {view === 'list' ? (
                   <>
                     {/* Tabs */}
                     <div className="mt-3 flex items-center gap-3 border-b">
@@ -375,6 +375,55 @@ const Cases: React.FC = () => {
                           </button>
                         );
                       })}
+                    </div>
+                  </>
+                ) : view === 'grid' ? (
+                  <>
+                    {/* Tabs */}
+                    <div className="mt-3 flex items-center gap-3 border-b">
+                      {['Active','Backlog'].map(t => (
+                        <button key={t} onClick={()=>setTab(t as any)} className={`px-3 py-2 -mb-px border-b-2 ${tab===t? 'border-[#ffa332] text-[#ffa332] font-semibold':'border-transparent text-text-secondary'}`}>{t} Tasks</button>
+                      ))}
+                    </div>
+
+                    {/* Grid of task cards */}
+                    <div className="mt-3">
+                      {tasks.length === 0 ? (
+                        <div className="py-8 text-center text-text-secondary">No tasks in this list.</div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" style={{ maxHeight: '520px', overflowY: 'auto' }}>
+                          {tasks.map(task => {
+                            const pStyle = PRIORITY_STYLES[task.priority];
+                            const sStyle = STATUS_STYLES[task.status];
+                            return (
+                              <button key={task.id} onClick={()=>setSelectedTask({ caseId: activeCase.caseId, task })} className="text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow transition">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                                    <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
+                                    <span className="font-mono">{task.id}</span>
+                                  </div>
+                                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
+                                    <span>{pStyle.arrow}</span>
+                                    <span>{task.priority}</span>
+                                  </span>
+                                </div>
+                                <div className="mt-1 font-semibold">{task.name}</div>
+                                <div className="mt-2 flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2">
+                                    <img src={task.assignee.avatar || '/images/img_image.svg'} alt="avatar" className="w-5 h-5 rounded-full" />
+                                    <span className="text-text-secondary">{task.assignee.name}</span>
+                                  </div>
+                                  <span className="text-text-secondary">{fmtDur(task.estimateMins)}</span>
+                                </div>
+                                <div className={`mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${sStyle.bg} ${sStyle.text}`}>
+                                  <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
+                                  <span>{task.status}</span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </>
                 ) : (
