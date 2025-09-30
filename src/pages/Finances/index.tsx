@@ -52,6 +52,8 @@ function mapDbToRow(v: DBVoucher): VoucherRow {
 
 
 const BRANCHES = ['Main Branch', 'North Branch', 'South Branch', 'East Branch', 'West Branch'];
+const CASH_OUT_CATEGORIES = ['Salaries','Bills','Rent','Utilities','Maintenance','Marketing','Travel','Other'];
+
 
 const initialVouchers: VoucherRow[] = [
   { id: 'VCH-2024-001', type: 'Cash In', amount: 2450, branch: 'Main Branch', date: '2024-01-15', status: 'Approved' },
@@ -167,6 +169,7 @@ function generateVoucherPDF(row: VoucherRow) {
     const a = document.createElement('a');
     a.href = url; a.download = `voucher-${row.id}.pdf`; a.click();
     URL.revokeObjectURL(url);
+
   } catch (e) {
     console.error('PDF single voucher error', e);
     alert('Failed to generate voucher PDF.');
@@ -211,6 +214,16 @@ const Finances: React.FC = () => {
     vouchers.forEach(v => { if (v.branch) s.add(v.branch); });
     return Array.from(s);
   }, [vouchers]);
+  // Quick Cash Out generator state
+  const [qCategory, setQCategory] = useState<string>('Salaries');
+  const [qAmount, setQAmount] = useState<string>('');
+  const [qBranch, setQBranch] = useState<string>('');
+  const [qDescription, setQDescription] = useState<string>('Salaries');
+  const qValid = useMemo(()=>{
+    const amt = Number(qAmount);
+    return qCategory && !Number.isNaN(amt) && amt>0 && qBranch;
+  }, [qCategory,qAmount,qBranch]);
+
 
 
   const handleGenerate = async (e: React.FormEvent) => {
@@ -237,6 +250,7 @@ const Finances: React.FC = () => {
       // rollback optimistic add if failed
       setVouchers(prev => prev.filter(v => v.id !== code));
       alert(`Failed to create voucher: ${error.message}`);
+
       return;
     }
 
@@ -281,6 +295,41 @@ const Finances: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page-1)*pageSize, page*pageSize);
 
+  // Quick Cash Out submission
+  const handleGenerateCashOut = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!qValid) return;
+
+    const rowType: VoucherRow['type'] = 'Cash Out';
+    const dbType: DBVoucher['vtype'] = 'cash_out';
+    const amt = Number(qAmount);
+    const signedAmt = -Math.abs(amt);
+    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+    const occurred_at = new Date().toISOString();
+
+    const desc = qDescription?.trim() ? qDescription : qCategory;
+
+    setVouchers(prev => ([
+      { id: code, type: rowType, amount: signedAmt, branch: qBranch, date: occurred_at, status, description: desc },
+      ...prev
+    ]));
+
+    const { error } = await supabase.from('vouchers').insert([
+      { code, vtype: dbType, amount: signedAmt, branch: qBranch, occurred_at, status, description: desc }
+    ]);
+    if (error) {
+      setVouchers(prev => prev.filter(v => v.id !== code));
+      alert(`Failed to create voucher: ${error.message}`);
+      return;
+    }
+
+    generateVoucherPDF({ id: code, type: rowType, amount: signedAmt, branch: qBranch, date: occurred_at, status, description: desc });
+
+    setQAmount('');
+    setQBranch('');
+    setQDescription(qCategory);
+  };
+
   const branchChartData = useMemo(() => {
     const branches = branchList.length ? branchList : BRANCHES;
     const map = new Map<string, number>();
@@ -305,22 +354,6 @@ const Finances: React.FC = () => {
       { name: 'Bank', value: bank, pct: Math.round((bank/total)*100) },
     ];
   }, [vouchers]);
-  const expensesBranchData = useMemo(() => {
-    const branches = branchList.length ? branchList : BRANCHES;
-    const map = new Map<string, number>();
-    branches.forEach(b => map.set(b, 0));
-    const now = new Date();
-    const m = now.getMonth();
-    const y = now.getFullYear();
-    vouchers.forEach(v => {
-      const d = new Date(v.date);
-      if (v.status === 'Approved' && v.type === 'Cash Out' && d.getMonth()===m && d.getFullYear()===y) {
-        map.set(v.branch, (map.get(v.branch) || 0) + Math.abs(v.amount));
-      }
-    });
-    return branches.map(b => ({ branch: b, expenses: map.get(b) || 0 }));
-  }, [vouchers, branchList]);
-
 
   useEffect(() => {
     let cancelled = false;
@@ -489,21 +522,41 @@ const Finances: React.FC = () => {
                 </div>
               </form>
 
-              {/* Right: Expenses Visualization */}
+              {/* Right: Cash Out Voucher Generator */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Cash Out (Expenses) by Branch — This Month</h2>
-                <div className="mt-4 h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={expensesBranchData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="branch" />
-                      <YAxis />
-                      <Tooltip formatter={(v:any)=>[`Rs ${Number(v).toLocaleString()}`, 'Expenses']} />
-                      <Legend />
-                      <Bar dataKey="expenses" name="Expenses" fill="#ef4444" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Cash Out Voucher Generator</h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {CASH_OUT_CATEGORIES.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => { setQCategory(cat); setQDescription(cat); }}
+                      className={`px-3 py-1 rounded-full border text-sm ${qCategory===cat ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
                 </div>
+                <form onSubmit={handleGenerateCashOut} className="mt-4 grid grid-cols-1 gap-3">
+                  <div>
+                    <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
+                    <input type="number" min={0} placeholder="0" value={qAmount} onChange={(e)=>setQAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-text-secondary">Branch</label>
+                    <select value={qBranch} onChange={(e)=>setQBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
+                      <option value="">Select Branch...</option>
+                      {(branchList.length ? branchList : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold text-text-secondary">Description</label>
+                    <textarea value={qDescription} onChange={(e)=>setQDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder={`e.g. ${qCategory} for May`} />
+                  </div>
+                  <div className="mt-1">
+                    <button disabled={!qValid} className={`px-4 py-2 rounded-lg font-bold ${qValid ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
+                  </div>
+                </form>
               </div>
             </div>
             {/* Recent Vouchers */}
