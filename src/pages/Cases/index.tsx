@@ -120,6 +120,17 @@ const Cases: React.FC = () => {
   const [formEstimate, setFormEstimate] = useState(0);
   const [formPriority, setFormPriority] = useState<Priority>('Medium');
 
+  // Add Task modal state
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [tfName, setTfName] = useState('');
+  const [tfEstimate, setTfEstimate] = useState(60);
+  const [tfPriority, setTfPriority] = useState<Priority>('Medium');
+  const [tfStatus, setTfStatus] = useState<Status>('Todo');
+  const [tfArea, setTfArea] = useState<'Active'|'Backlog'>('Active');
+  const [tfAssignee, setTfAssignee] = useState('');
+  const [tfAvatar, setTfAvatar] = useState('');
+  const [tfDesc, setTfDesc] = useState('');
+
   // Task Details modal
   const [selectedTask, setSelectedTask] = useState<{ caseId: string; task: Task } | null>(null);
 
@@ -213,6 +224,31 @@ const Cases: React.FC = () => {
     }
   };
 
+  const newTaskId = () => `TS${Date.now().toString().slice(-8)}`;
+
+  const addTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCaseId) return;
+    const id = newTaskId();
+    const task: Task = {
+      id,
+      name: tfName.trim() || 'Untitled Task',
+      estimateMins: Math.max(0, Number(tfEstimate) || 0),
+      spentMins: 0,
+      assignee: { name: tfAssignee.trim() || 'Unassigned', avatar: tfAvatar.trim() || undefined },
+      priority: tfPriority,
+      status: tfArea === 'Backlog' ? 'Todo' : tfStatus,
+      description: tfDesc.trim() || undefined,
+    };
+    setCases(prev => prev.map(c => {
+      if (c.caseId !== activeCaseId) return c;
+      if (tfArea === 'Active') return { ...c, active: [task, ...c.active] };
+      return { ...c, backlog: [task, ...c.backlog] };
+    }));
+    setShowAddTask(false);
+    setTfName(''); setTfEstimate(60); setTfPriority('Medium'); setTfStatus('Todo'); setTfArea('Active'); setTfAssignee(''); setTfAvatar(''); setTfDesc('');
+  };
+
   return (
     <>
       <Helmet>
@@ -234,9 +270,14 @@ const Cases: React.FC = () => {
           <section className="mt-8 lg:mt-12">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>On Going Cases</h1>
-              <button onClick={()=>setShowAddCase(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
-                + Add Case
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={()=>setShowAddTask(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
+                  + Add Task
+                </button>
+                <button onClick={()=>setShowAddCase(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
+                  + Add Case
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -554,6 +595,68 @@ const Cases: React.FC = () => {
             <div className="mt-5 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Case</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Add Task Modal */}
+      {showAddTask && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={addTask} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Add Task</h3>
+              <button type="button" onClick={()=>setShowAddTask(false)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="text-sm sm:col-span-2">
+                <span className="text-text-secondary">Task Name</span>
+                <input value={tfName} onChange={e=>setTfName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Task name" required />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Area</span>
+                <select value={tfArea} onChange={e=>setTfArea(e.target.value as 'Active'|'Backlog')} className="mt-1 w-full border rounded p-2">
+                  <option>Active</option>
+                  <option>Backlog</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Status</span>
+                <select value={tfStatus} onChange={e=>setTfStatus(e.target.value as Status)} className="mt-1 w-full border rounded p-2" disabled={tfArea==='Backlog'}>
+                  <option>Todo</option>
+                  <option>In Progress</option>
+                  <option>In Review</option>
+                  <option>Done</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Estimate (minutes)</span>
+                <input type="number" min={0} value={tfEstimate} onChange={e=>setTfEstimate(Number(e.target.value))} className="mt-1 w-full border rounded p-2" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Priority</span>
+                <select value={tfPriority} onChange={e=>setTfPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2">
+                  <option>Low</option>
+                  <option>Medium</option>
+                  <option>High</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Assignee</span>
+                <input value={tfAssignee} onChange={e=>setTfAssignee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Name (optional)" />
+              </label>
+              <label className="text-sm">
+                <span className="text-text-secondary">Avatar URL</span>
+                <input value={tfAvatar} onChange={e=>setTfAvatar(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="https://... (optional)" />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                <span className="text-text-secondary">Description</span>
+                <textarea value={tfDesc} onChange={e=>setTfDesc(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} placeholder="Optional"></textarea>
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={()=>setShowAddTask(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Task</button>
             </div>
           </form>
         </div>
