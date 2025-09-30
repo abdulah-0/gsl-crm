@@ -267,15 +267,44 @@ const Finances: React.FC = () => {
   const onEdit = (r: VoucherRow) => { setEditVoucher(r); setEditStatus(r.status); setEditDescription(r.description ?? ''); };
   const onDelete = async (r: VoucherRow) => {
     if (!confirm(`Delete voucher ${r.id}?`)) return;
-    const { error } = await supabase.from('vouchers').delete().eq('code', r.id);
-    if (error) alert(`Failed to delete: ${error.message}`);
+    // Try by code first
+    let { data, error } = await supabase.from('vouchers').delete().eq('code', r.id).select('id,code');
+    if (error) { alert(`Failed to delete: ${error.message}`); return; }
+    if (!data || data.length === 0) {
+      // Fallback: try by id (for legacy rows without code)
+      const resp = await supabase.from('vouchers').delete().eq('id', r.id).select('id,code');
+      if (resp.error) { alert(`Failed to delete: ${resp.error.message}`); return; }
+      data = resp.data as any[];
+    }
+    if (!data || data.length === 0) { alert('Voucher not found.'); return; }
+    // Optimistically remove from UI
+    setVouchers(prev => prev.filter(v => v.id !== r.id));
   };
   const onSaveEdit = async () => {
     if (!editVoucher) return;
-    const { error } = await supabase.from('vouchers')
-      .update({ status: editStatus, description: editDescription })
-      .eq('code', editVoucher.id);
+    const payload = { status: editStatus, description: editDescription } as const;
+
+    // Try update by code first
+    let { data, error } = await supabase.from('vouchers')
+      .update(payload)
+      .eq('code', editVoucher.id)
+      .select('id,code,status,description');
+
+    if (!error && (!data || data.length === 0)) {
+      // Fallback by id for legacy rows
+      const resp = await supabase.from('vouchers')
+        .update(payload)
+        .eq('id', editVoucher.id)
+        .select('id,code,status,description');
+      error = resp.error as any;
+      data = resp.data as any[];
+    }
+
     if (error) { alert(`Failed to update: ${error.message}`); return; }
+    if (!data || data.length === 0) { alert('Voucher not found.'); return; }
+
+    // Optimistic UI update
+    setVouchers(prev => prev.map(v => v.id === editVoucher.id ? { ...v, status: editStatus, description: editDescription } : v));
     setEditVoucher(null);
   };
 
