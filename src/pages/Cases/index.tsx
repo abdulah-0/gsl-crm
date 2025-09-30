@@ -99,6 +99,9 @@ const Cases: React.FC = () => {
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
 
+  // Drag-over visual state (drop a case onto Tasks section)
+  const [isCaseDragOver, setIsCaseDragOver] = useState(false);
+
   // Filters
   const [filterBranch, setFilterBranch] = useState<string>('All');
   const [filterStatus, setFilterStatus] = useState<string>('All');
@@ -267,7 +270,13 @@ const Cases: React.FC = () => {
                   {filteredCases.map((c, idx) => {
                     const active = c.caseId === activeCaseId;
                     return (
-                      <div key={c.caseId} className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3`}>
+                      <div
+                        key={c.caseId}
+                        draggable
+                        onDragStart={(e)=>{ e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
+                        className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3`}
+                        title="Drag to Tasks to focus this case"
+                      >
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-xs text-text-muted">{c.caseId}</div>
@@ -287,7 +296,13 @@ const Cases: React.FC = () => {
               </aside>
 
               {/* Tasks Section */}
-              <section className="lg:col-span-8 xl:col-span-9 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+              <section
+                className={`lg:col-span-8 xl:col-span-9 rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 ${isCaseDragOver ? 'border-2 border-dashed border-[#ffa332] bg-orange-50/20' : 'bg-white'}`}
+                onDragOver={(e)=>{ if (e.dataTransfer.types.includes('text/case')) { e.preventDefault(); } }}
+                onDragEnter={(e)=>{ if (e.dataTransfer.types.includes('text/case')) setIsCaseDragOver(true); }}
+                onDragLeave={(e)=>{ setIsCaseDragOver(false); }}
+                onDrop={(e)=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/case'); if (id) { setActiveCaseId(id); } setIsCaseDragOver(false); }}
+              >
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold">Tasks</h3>
                   {/* View toggles + board controls */}
