@@ -99,11 +99,17 @@ const Cases: React.FC = () => {
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
 
-  // Add Case modal state
+  // Filters
+  const [filterBranch, setFilterBranch] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterType, setFilterType] = useState<string>('All');
+  const [search, setSearch] = useState<string>('');
+
   // Case Details modal
   const [showCaseDetails, setShowCaseDetails] = useState(false);
   const [detailsCase, setDetailsCase] = useState<CaseItem | null>(null);
 
+  // Add Case modal state
   const [showAddCase, setShowAddCase] = useState(false);
   const [formCaseId, setFormCaseId] = useState('');
   const [formTitle, setFormTitle] = useState('');
@@ -113,6 +119,21 @@ const Cases: React.FC = () => {
 
   // Task Details modal
   const [selectedTask, setSelectedTask] = useState<{ caseId: string; task: Task } | null>(null);
+
+  // Derived filters
+  const branches = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.branch).filter(Boolean))) as string[]], [cases]);
+  const types = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.type).filter(Boolean))) as string[]], [cases]);
+  const statuses = ['All','Pending','In Progress','Completed'];
+  const filteredCases = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return cases.filter(c => {
+      if (filterBranch !== 'All' && c.branch !== filterBranch) return false;
+      if (filterType !== 'All' && c.type !== filterType) return false;
+      if (filterStatus !== 'All' && (c.status || '') !== filterStatus) return false;
+      if (term && !(`${c.caseId}`.toLowerCase().includes(term) || (c.title||'').toLowerCase().includes(term))) return false;
+      return true;
+    });
+  }, [cases, filterBranch, filterType, filterStatus, search]);
 
   const activeCase = useMemo(() => cases.find(c => c.caseId === activeCaseId) || cases[0], [cases, activeCaseId]);
   const tasks = tab === 'Active' ? activeCase?.active || [] : activeCase?.backlog || [];
@@ -220,16 +241,30 @@ const Cases: React.FC = () => {
               <aside className="lg:col-span-4 xl:col-span-3 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 flex flex-col">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold">All Cases</h3>
-                  <span className="text-sm text-text-secondary">{cases.length} total</span>
+                  <span className="text-sm text-text-secondary">{filteredCases.length} total</span>
                 </div>
-                {/* Dropdown filter (mock) */}
-                <details className="mb-3">
-                  <summary className="cursor-pointer text-sm text-text-secondary select-none">Current Cases</summary>
-                  <div className="mt-2 text-xs text-text-muted">Filters coming soon.</div>
-                </details>
+
+                {/* Filters */}
+                <div className="mb-3 grid grid-cols-1 gap-2">
+                  <input value={search} onChange={e=>setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <select value={filterBranch} onChange={e=>setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
+                      {branches.map(b => <option key={b}>{b}</option>)}
+                    </select>
+                    <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="border rounded p-2 text-sm">
+                      {statuses.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                    <select value={filterType} onChange={e=>setFilterType(e.target.value)} className="border rounded p-2 text-sm">
+                      {types.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                  </div>
+                  <div className="text-right">
+                    <button type="button" onClick={()=>{ setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
+                  </div>
+                </div>
 
                 <div className="-mx-2 px-2 overflow-y-auto" style={{ maxHeight: '520px' }}>
-                  {cases.map((c, idx) => {
+                  {filteredCases.map((c, idx) => {
                     const active = c.caseId === activeCaseId;
                     return (
                       <div key={c.caseId} className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3`}>
@@ -447,6 +482,19 @@ const Cases: React.FC = () => {
                 <span className="text-text-secondary">Priority</span>
                 <select value={formPriority} onChange={e=>setFormPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2">
                   <option>Low</option>
+                  <option>Medium</option>
+                  <option>High</option>
+                </select>
+              </label>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Case</button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Case Details Modal */}
       {showCaseDetails && detailsCase && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -492,19 +540,6 @@ const Cases: React.FC = () => {
         </div>
       )}
 
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-              </label>
-            </div>
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Case</button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Task Details Modal */}
       {selectedTask && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -526,6 +561,7 @@ const Cases: React.FC = () => {
                 <select value={selectedTask.task.status} onChange={(e)=>{ const v = e.target.value as Status; updateTaskStatus(selectedTask.task.id, v); setSelectedTask(s=> s ? { ...s, task: { ...s.task, status: v } } : s); }} className="ml-2 border rounded p-2">
                   <option>Todo</option>
                   <option>In Progress</option>
+                  <option>In Review</option>
                   <option>Done</option>
                 </select>
               </label>
