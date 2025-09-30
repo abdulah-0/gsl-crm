@@ -22,30 +22,65 @@ const timeAgo = (d: string | Date) => {
   return `${days} day${days===1?'':'s'} ago`;
 };
 
-interface CaseRow { id: string; title: string; branch?: string; status?: string; created_at?: string; }
+interface CaseRow { id: string; title: string; branch?: string; status?: string; created_at?: string; employee?: string; }
 interface ActivityRow { id: string; action: string; created_at: string; }
+interface EmployeePerf { name: string; cases: number; successRate: number; }
 
 const ConsultantDashboard: React.FC = () => {
   const [branch, setBranch] = useState<typeof BRANCHES[number]>('All Branches');
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [activities, setActivities] = useState<ActivityRow[]>([]);
+  const [employeesPerf, setEmployeesPerf] = useState<EmployeePerf[]>([]);
+  const [branchRevenue, setBranchRevenue] = useState<Record<string, number>>({});
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const { data: casesData } = await supabase
         .from('dashboard_cases')
-        .select('id, title, branch, status, created_at')
+        .select('id, title, branch, status, created_at, employee')
         .order('created_at', { ascending: false })
-        .limit(10);
-      if (!cancelled && casesData) setCases(casesData as any);
+        .limit(50);
+      if (!cancelled && casesData) {
+        setCases(casesData as any);
+        // derive employee performance
+        const byEmp = new Map<string, { cases: number; completed: number }>();
+        for (const c of casesData as any[]) {
+          const name = c.employee || 'Unassigned';
+          const s = byEmp.get(name) || { cases: 0, completed: 0 };
+          s.cases += 1;
+          if ((c.status || '').toLowerCase().includes('completed')) s.completed += 1;
+          byEmp.set(name, s);
+        }
+        const perf: EmployeePerf[] = Array.from(byEmp.entries()).map(([name, v]) => ({
+          name,
+          cases: v.cases,
+          successRate: v.cases ? Math.round((v.completed / v.cases) * 100) : 0,
+        })).sort((a,b)=> b.cases - a.cases);
+        setEmployeesPerf(perf);
+      }
 
       const { data: actData } = await supabase
         .from('activity_log')
         .select('id, action, created_at')
         .order('created_at', { ascending: false })
-        .limit(7);
+        .limit(10);
       if (!cancelled && actData) setActivities(actData as any);
+
+      // vouchers revenue by branch (this month)
+      const month = new Date();
+      const monthStart = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
+      const { data: vData } = await supabase
+        .from('vouchers')
+        .select('vtype, amount, branch, occurred_at')
+        .gte('occurred_at', monthStart);
+      const byBranch: Record<string, number> = {};
+      for (const v of (vData || []) as any[]) {
+        if (!['cash_in','online','bank'].includes(v.vtype)) continue;
+        const key = v.branch || 'Unknown';
+        byBranch[key] = (byBranch[key] || 0) + Number(v.amount || 0);
+      }
+      if (!cancelled) setBranchRevenue(byBranch);
     };
     load();
     const casesCh = supabase
@@ -56,7 +91,11 @@ const ConsultantDashboard: React.FC = () => {
       .channel('public:activity_log:consultant')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_log' }, load)
       .subscribe();
-    return () => { supabase.removeChannel(casesCh); supabase.removeChannel(actCh); cancelled = true; };
+    const vCh = supabase
+      .channel('public:vouchers:consultant')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vouchers' }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(casesCh); supabase.removeChannel(actCh); supabase.removeChannel(vCh); cancelled = true; };
   }, []);
 
   const filteredCases = useMemo(() => {
@@ -76,19 +115,34 @@ const ConsultantDashboard: React.FC = () => {
     return counts;
   }, [filteredCases]);
 
-  // Employee performance demo data (static – can be wired later)
-  const employees = [
-    { name: 'Ayesha Khan', role: 'Consultant', cases: 34, successRate: 86 },
-    { name: 'Bilal Ahmed', role: 'Consultant', cases: 28, successRate: 72 },
-    { name: 'Sara Iqbal', role: 'Associate', cases: 19, successRate: 65 },
-  ];
+  // KPIs derived from realtime cases
+  const now = new Date();
+  const isThisMonth = (d?: string) => {
+    if (!d) return false;
+    const dt = new Date(d);
+    return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
+  };
+  const totalCases = cases.length;
+  const completedCases = cases.filter(c => (c.status||'').toLowerCase().includes('completed')).length;
+  const visaSuccessPct = totalCases ? Math.round((completedCases / totalCases) * 100) : 0;
+  const casIssued = cases.filter(c => (c.status||'').toLowerCase().includes('cas') && isThisMonth(c.created_at)).length;
+  const inProgress = cases.filter(c => (c.status||'').toLowerCase().includes('progress')).length;
+  const totalStudents = Array.from(new Set(cases.filter(c => isThisMonth(c.created_at)).map(c => c.title))).length;
 
-  // Branch metrics demo data (static per spec)
+  // Employees performance table derived from cases
+  const employees = employeesPerf.map(e => ({ ...e, role: 'Consultant' }));
+
+  // Branch metrics from filtered cases + vouchers
+  const activeCases = filteredCases.length;
+  const completedInBranch = filteredCases.filter(c => (c.status||'').toLowerCase().includes('completed')).length;
+  const successRate = activeCases ? Math.round((completedInBranch / activeCases) * 100) : 0;
+  const revenueForBranch = branch === 'All Branches' ? Object.values(branchRevenue).reduce((a,b)=>a+b,0) : (branchRevenue[branch] || 0);
+  const staffCount = new Set(filteredCases.map(c => c.employee || 'Unassigned')).size;
   const branchMetrics = [
-    { label: 'Active Cases', value: '156' },
-    { label: 'Success Rate', value: '89%' },
-    { label: 'Revenue', value: 'Rs 45K' },
-    { label: 'Staff', value: '12' },
+    { label: 'Active Cases', value: String(activeCases) },
+    { label: 'Success Rate', value: `${successRate}%` },
+    { label: 'Revenue', value: `Rs ${Math.round(revenueForBranch/1000)}K` },
+    { label: 'Staff', value: String(staffCount) },
   ];
 
   return (
@@ -108,34 +162,30 @@ const ConsultantDashboard: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-text-primary">Consultant Dashboard</h1>
           </div>
 
-          {/* KPIs */}
+          {/* KPIs (realtime) */}
           <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
               <div className="text-sm text-text-secondary">Visa Success</div>
               <div className="mt-1 flex items-end gap-2">
-                <div className="text-2xl font-bold text-emerald-600">87%</div>
-                <span className="text-xs font-semibold text-emerald-600">+5% from last month</span>
+                <div className="text-2xl font-bold text-emerald-600">{visaSuccessPct}%</div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-              <div className="text-sm text-text-secondary">CAS Issued</div>
+              <div className="text-sm text-text-secondary">CAS Issued (This Month)</div>
               <div className="mt-1 flex items-end gap-2">
-                <div className="text-2xl font-bold">245</div>
-                <span className="text-xs font-semibold text-orange-500">+12 this week</span>
+                <div className="text-2xl font-bold">{casIssued.toLocaleString()}</div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
               <div className="text-sm text-text-secondary">In Progress</div>
               <div className="mt-1 flex items-end gap-2">
-                <div className="text-2xl font-bold text-text-primary">156</div>
-                <span className="text-xs font-semibold text-orange-500">new cases</span>
+                <div className="text-2xl font-bold text-text-primary">{inProgress.toLocaleString()}</div>
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-              <div className="text-sm text-text-secondary">Total Students</div>
+              <div className="text-sm text-text-secondary">Total Students (This Month)</div>
               <div className="mt-1 flex items-end gap-2">
-                <div className="text-2xl font-bold text-purple-600">50</div>
-                <span className="text-xs font-semibold text-text-secondary">This month</span>
+                <div className="text-2xl font-bold text-purple-600">{totalStudents.toLocaleString()}</div>
               </div>
             </div>
           </div>
@@ -166,7 +216,7 @@ const ConsultantDashboard: React.FC = () => {
                         <img src="/images/img_image.svg" alt="avatar" className="w-8 h-8 rounded-full" />
                         <div>
                           <div className="font-medium">{e.name}</div>
-                          <div className="text-xs text-text-secondary">{e.role}</div>
+                          <div className="text-xs text-text-secondary">Consultant</div>
                         </div>
                       </div>
                       <div className="col-span-3"><span className="px-2 py-0.5 text-xs rounded bg-gray-100">{e.cases}</span></div>

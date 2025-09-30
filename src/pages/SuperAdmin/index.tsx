@@ -49,6 +49,7 @@ const SuperAdmin: React.FC = () => {
 
   const [months, setMonths] = useState<string[]>([]);
   const [revenue, setRevenue] = useState<number[]>([]);
+  const [outflow, setOutflow] = useState<number[]>([]);
 
   const [cashIn, setCashIn] = useState<number>(0);
   const [cashOut, setCashOut] = useState<number>(0);
@@ -137,24 +138,34 @@ const SuperAdmin: React.FC = () => {
         .gte('occurred_at', yearStart.toISOString());
       const vouchersRows = vouchers ?? [];
 
-      // Revenue series (last 9 months)
+      // Cash flow series (last 9 months)
       const now = new Date();
       const monthsArr: string[] = [];
       const revenueArr: number[] = [];
+      const outArr: number[] = [];
       for (let i = 8; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         monthsArr.push(fmtMonth(d));
-        const monthSum = vouchersRows
+        const incomes = vouchersRows
           .filter((v: any) => {
             const vd = new Date(v.occurred_at);
             return vd.getFullYear() === d.getFullYear() && vd.getMonth() === d.getMonth();
           })
           .filter((v: any) => ['cash_in', 'online', 'bank'].includes(v.vtype))
           .reduce((acc: number, v: any) => acc + Number(v.amount || 0), 0);
-        revenueArr.push(Number((monthSum / 1000).toFixed(1))); // in k
+        const outs = vouchersRows
+          .filter((v: any) => {
+            const vd = new Date(v.occurred_at);
+            return vd.getFullYear() === d.getFullYear() && vd.getMonth() === d.getMonth();
+          })
+          .filter((v: any) => v.vtype === 'cash_out')
+          .reduce((acc: number, v: any) => acc + Math.abs(Number(v.amount || 0)), 0);
+        revenueArr.push(Number((incomes / 1000).toFixed(1))); // in k
+        outArr.push(Number((outs / 1000).toFixed(1))); // in k
       }
       setMonths(monthsArr);
       setRevenue(revenueArr);
+      setOutflow(outArr);
 
       // Cash snapshot (current month)
       const cur = new Date();
@@ -169,7 +180,7 @@ const SuperAdmin: React.FC = () => {
           const vd = new Date(v.occurred_at);
           return vd.getFullYear() === cur.getFullYear() && vd.getMonth() === cur.getMonth();
         })
-        .reduce((acc: number, v: any) => acc + (v.vtype === 'cash_out' ? Number(v.amount || 0) : 0), 0);
+        .reduce((acc: number, v: any) => acc + (v.vtype === 'cash_out' ? Math.abs(Number(v.amount || 0)) : 0), 0);
       setCashIn(inSum);
       setCashOut(outSum);
 
@@ -240,6 +251,7 @@ const SuperAdmin: React.FC = () => {
 
   const netFlow = cashIn - cashOut;
   const maxRev = Math.max(...revenue, 1);
+  const maxOut = Math.max(...outflow, 1);
 
   const handleNewCase = () => {
     setFormStudent('');
@@ -337,38 +349,21 @@ const SuperAdmin: React.FC = () => {
 
             {/* Top Summary Cards (KPIs) */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {/* Visa Success */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <div className="text-sm text-text-secondary">Visa Success</div>
-                <div className="mt-1 flex items-end gap-2">
-                  <div className="text-2xl font-bold text-emerald-600">847</div>
-                  <span className="text-xs font-semibold text-emerald-600">▲ 12% this month</span>
+              {statCards.map((s) => (
+                <div key={s.label} className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+                  <div className="text-sm text-text-secondary">{s.label}</div>
+                  <div className="mt-1 flex items-end gap-2">
+                    <div className={`text-2xl font-bold ${s.label.includes('Revenue') ? 'text-purple-600' : s.label.includes('Visa') ? 'text-emerald-600' : ''}`}>
+                      {s.prefix ?? ''}{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}{s.suffix ?? ''}
+                    </div>
+                    {typeof s.delta === 'number' && (
+                      <span className={`text-xs font-semibold ${s.delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {s.delta >= 0 ? '▲' : '▼'} {Math.abs(s.delta)}%
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {/* CAS Issued */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <div className="text-sm text-text-secondary">CAS Issued</div>
-                <div className="mt-1 flex items-end gap-2">
-                  <div className="text-2xl font-bold">1,234</div>
-                  <span className="text-xs font-semibold text-orange-500">▲ 8% this month</span>
-                </div>
-              </div>
-              {/* In Progress */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <div className="text-sm text-text-secondary">In Progress</div>
-                <div className="mt-1 flex items-end gap-2">
-                  <div className="text-2xl font-bold text-text-primary">567</div>
-                  <span className="text-xs font-semibold text-text-secondary">Active cases</span>
-                </div>
-              </div>
-              {/* Revenue */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <div className="text-sm text-text-secondary">Revenue</div>
-                <div className="mt-1 flex items-end gap-2">
-                  <div className="text-2xl font-bold text-purple-600">Rs 2.4M</div>
-                  <span className="text-xs font-semibold text-purple-600">▲ 15% this month</span>
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Branch Performance (Tabs + Table) */}
@@ -466,11 +461,11 @@ const SuperAdmin: React.FC = () => {
                 </div>
               </div>
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <h2 className="text-xl font-bold text-text-primary">Financial Snapshot</h2>
+                <h2 className="text-xl font-bold text-text-primary">Financial Snapshot (This Month)</h2>
                 <div className="mt-2 space-y-2 text-sm">
-                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">Rs 145,890</span></div>
-                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">Rs 89,450</span></div>
-                  <div className="flex items-center justify-between"><span>Net Profit</span><span className="font-semibold text-emerald-600">Rs 56,440</span></div>
+                  <div className="flex items-center justify-between"><span>Cash In</span><span className="font-semibold">Rs {cashIn.toLocaleString()}</span></div>
+                  <div className="flex items-center justify-between"><span>Cash Out</span><span className="font-semibold">Rs {Math.abs(cashOut).toLocaleString()}</span></div>
+                  <div className="flex items-center justify-between"><span>Net Flow</span><span className={`font-semibold ${cashIn - Math.abs(cashOut) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>Rs {(cashIn - Math.abs(cashOut)).toLocaleString()}</span></div>
                 </div>
               </div>
             </div>
@@ -561,29 +556,22 @@ const SuperAdmin: React.FC = () => {
 
             {/* Bottom Charts */}
             <div className="mt-8 grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {/* Cash Flow (Jan – Jun) */}
+              {/* Cash Flow (last 9 months) */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
-                <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow (Jan – Jun)</h2>
+                <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow (Last 9 Months)</h2>
                 <div className="space-y-3">
-                  {[
-                    { m: 'Jan', cin: 120, cout: 80 },
-                    { m: 'Feb', cin: 140, cout: 90 },
-                    { m: 'Mar', cin: 130, cout: 95 },
-                    { m: 'Apr', cin: 160, cout: 110 },
-                    { m: 'May', cin: 180, cout: 120 },
-                    { m: 'Jun', cin: 200, cout: 130 },
-                  ].map(({ m, cin, cout }) => (
-                    <div key={m} className="space-y-1">
+                  {months.map((m, idx) => (
+                    <div key={m+idx} className="space-y-1">
                       <div className="flex items-center gap-3">
                         <span className="w-12 text-sm text-text-secondary">{m}</span>
                         <div className="flex-1">
-                          <Bar pct={(cin/200)*100} color="#22c55e" label={`Rs ${cin}k`} />
+                          <Bar pct={(revenue[idx] / Math.max(maxRev, 1)) * 100} color="#22c55e" label={`Rs ${revenue[idx]}k`} />
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="w-12" />
                         <div className="flex-1">
-                          <Bar pct={(cout/200)*100} color="#ef4444" label={`Rs ${cout}k`} />
+                          <Bar pct={(outflow[idx] / Math.max(maxOut, 1)) * 100} color="#ef4444" label={`Rs ${outflow[idx]}k`} />
                         </div>
                       </div>
                     </div>
@@ -594,9 +582,9 @@ const SuperAdmin: React.FC = () => {
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary mb-3">Branch Revenue</h2>
                 <div className="space-y-3">
-                  <HBar name="F-8 Branch" pct={100} color="#22c55e" label="Rs 18,500" />
-                  <HBar name="I-8 Branch" pct={82} color="#f59e0b" label="Rs 15,200" />
-                  <HBar name="PWD Branch" pct={78} color="#3b82f6" label="Rs 14,500" />
+                  {branchRev.map((b, i) => (
+                    <HBar key={b.name + i} name={b.name} pct={b.pct} color={i===0? '#22c55e' : i===1? '#f59e0b' : '#3b82f6'} label={`${b.pct}%`} />
+                  ))}
                 </div>
               </div>
             </div>
