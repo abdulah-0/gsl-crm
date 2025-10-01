@@ -155,15 +155,58 @@ const Cases: React.FC = () => {
   const BOARD_COLUMNS: Status[] = ['Todo', 'In Progress', 'In Review', 'Done'];
   const displayStatus = (s: Status) => (s === 'Todo' ? 'To Do' : s);
 
-  const updateTaskStatus = (taskId: string, next: Status) => {
+  // Load tasks for active case from Supabase and keep in sync
+  const loadTasksForCase = async (caseId: string) => {
+    const { data, error } = await supabase
+      .from('dashboard_tasks')
+      .select('id, case_number, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, is_backlog, description, created_at')
+      .eq('case_number', caseId)
+      .order('created_at', { ascending: false });
+    if (error) return;
+    const act: Task[] = [];
+    const back: Task[] = [];
+    (data || []).forEach((row: any) => {
+      const t: Task = {
+        id: row.id,
+        name: row.name,
+        estimateMins: row.estimate_mins ?? 0,
+        spentMins: row.spent_mins ?? 0,
+        assignee: { name: row.assignee_name || 'Unassigned', avatar: row.assignee_avatar || undefined },
+        priority: (row.priority || 'Medium') as Priority,
+        status: (row.status || 'Todo') as Status,
+        description: row.description || undefined,
+      };
+      if (row.is_backlog) back.push(t); else act.push(t);
+    });
+    setCases(prev => prev.map(c => c.caseId === caseId ? { ...c, active: act, backlog: back } : c));
+  };
+
+  useEffect(() => {
+    if (!activeCase?.caseId) return;
+    let chan: any;
+    (async () => {
+      await loadTasksForCase(activeCase.caseId);
+      chan = supabase
+        .channel(`public:dashboard_tasks:${activeCase.caseId}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks', filter: `case_number=eq.${activeCase.caseId}` }, () => loadTasksForCase(activeCase.caseId))
+        .subscribe();
+    })();
+    return () => { if (chan) supabase.removeChannel(chan); };
+  }, [activeCase?.caseId]);
+
+  const updateTaskStatus = async (taskId: string, next: Status) => {
+    // Optimistic UI
     setCases(prev => prev.map(c => {
       if (c.caseId !== activeCaseId) return c;
       const mapper = (arr: Task[]) => arr.map(t => t.id === taskId ? { ...t, status: next } : t);
       return { ...c, active: mapper(c.active), backlog: mapper(c.backlog) };
     }));
+    // Persist
+    await supabase.from('dashboard_tasks').update({ status: next }).eq('id', taskId).eq('case_number', activeCaseId || '');
   };
 
-  const moveTask = (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: Status }) => {
+  const moveTask = async (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: Status }) => {
+    // Optimistic UI
     setCases(prev => prev.map(c => {
       if (!activeCase || c.caseId !== activeCase.caseId) return c;
       let active = [...c.active];
@@ -186,6 +229,12 @@ const Cases: React.FC = () => {
       }
       return { ...c, active, backlog };
     }));
+    // Persist
+    if (to.area === 'active') {
+      await supabase.from('dashboard_tasks').update({ is_backlog: false, status: to.status ?? undefined }).eq('id', payload.id).eq('case_number', activeCaseId || '');
+    } else {
+      await supabase.from('dashboard_tasks').update({ is_backlog: true, status: 'Todo' }).eq('id', payload.id).eq('case_number', activeCaseId || '');
+    }
   };
 
   const handleDragStart = (t: Task, from: 'active'|'backlog') => (e: React.DragEvent) => {
@@ -226,25 +275,31 @@ const Cases: React.FC = () => {
 
   const newTaskId = () => `TS${Date.now().toString().slice(-8)}`;
 
-  const addTask = (e: React.FormEvent) => {
+  const addTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeCaseId) return;
     const id = newTaskId();
-    const task: Task = {
-      id,
-      name: tfName.trim() || 'Untitled Task',
-      estimateMins: Math.max(0, Number(tfEstimate) || 0),
-      spentMins: 0,
-      assignee: { name: tfAssignee.trim() || 'Unassigned', avatar: tfAvatar.trim() || undefined },
-      priority: tfPriority,
-      status: tfArea === 'Backlog' ? 'Todo' : tfStatus,
-      description: tfDesc.trim() || undefined,
-    };
+    const name = tfName.trim() || 'Untitled Task';
+    const estimate_mins = Math.max(0, Number(tfEstimate) || 0);
+    const spent_mins = 0;
+    const assignee_name = tfAssignee.trim() || 'Unassigned';
+    const assignee_avatar = tfAvatar.trim() || undefined;
+    const priority = tfPriority;
+    const status = tfArea === 'Backlog' ? 'Todo' : tfStatus;
+    const description = tfDesc.trim() || undefined;
+    const is_backlog = tfArea === 'Backlog';
+
+    // Optimistic UI
+    const task: Task = { id, name, estimateMins: estimate_mins, spentMins: spent_mins, assignee: { name: assignee_name, avatar: assignee_avatar }, priority, status, description };
     setCases(prev => prev.map(c => {
       if (c.caseId !== activeCaseId) return c;
-      if (tfArea === 'Active') return { ...c, active: [task, ...c.active] };
+      if (!is_backlog) return { ...c, active: [task, ...c.active] };
       return { ...c, backlog: [task, ...c.backlog] };
     }));
+
+    // Persist
+    await supabase.from('dashboard_tasks').insert([{ id, case_number: activeCaseId, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, is_backlog, description }]);
+
     setShowAddTask(false);
     setTfName(''); setTfEstimate(60); setTfPriority('Medium'); setTfStatus('Todo'); setTfArea('Active'); setTfAssignee(''); setTfAvatar(''); setTfDesc('');
   };
