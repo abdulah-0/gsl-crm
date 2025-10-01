@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 // Types
 type Priority = 'Low' | 'Medium' | 'High';
@@ -62,6 +63,7 @@ const Cases: React.FC = () => {
   // Realtime cases from Supabase (dashboard_cases)
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [activeCaseId, setActiveCaseId] = useState<string>('');
+  const navigate = useNavigate();
 
   useEffect(() => {
     const load = async () => {
@@ -378,7 +380,7 @@ const Cases: React.FC = () => {
                             <div className="text-xs text-text-muted">{c.caseId}</div>
                             <div className="font-semibold">{c.title}</div>
                           </div>
-                          <button onClick={()=>{ setActiveCaseId(c.caseId); setDetailsCase(c); setShowCaseDetails(true); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
+                          <button onClick={()=>{ setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
                             View details &gt;
                           </button>
                         </div>
@@ -443,7 +445,7 @@ const Cases: React.FC = () => {
                         const pStyle = PRIORITY_STYLES[task.priority];
                         const sStyle = STATUS_STYLES[task.status];
                         return (
-                          <button key={task.id} onClick={()=>setSelectedTask({ caseId: activeCase.caseId, task })} className="w-full text-left py-3 px-2 hover:bg-gray-50">
+                          <button key={task.id} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="w-full text-left py-3 px-2 hover:bg-gray-50">
                             <div className="grid grid-cols-12 items-center gap-2">
                               <div className="col-span-4 flex items-center gap-2">
                                 <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border ${task.status==='Done' ? sStyle.dot : 'border-gray-300'}`}></span>
@@ -492,7 +494,7 @@ const Cases: React.FC = () => {
                             const pStyle = PRIORITY_STYLES[task.priority];
                             const sStyle = STATUS_STYLES[task.status];
                             return (
-                              <button key={task.id} onClick={()=>setSelectedTask({ caseId: activeCase.caseId, task })} className="text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow transition">
+                              <button key={task.id} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow transition">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-2 text-xs text-text-secondary">
                                     <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
@@ -540,7 +542,7 @@ const Cases: React.FC = () => {
                                 {colTasks.map(task => {
                                   const pStyle = PRIORITY_STYLES[task.priority];
                                   return (
-                                    <div key={task.id} draggable onDragStart={handleDragStart(task, 'active')} className="bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
+                                    <div key={task.id} draggable onDragStart={handleDragStart(task, 'active')} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="cursor-pointer bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
                                       <div className="flex items-center justify-between text-xs text-text-secondary">
                                         <span className="font-mono">{task.id}</span>
                                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
@@ -579,7 +581,7 @@ const Cases: React.FC = () => {
                             {(activeCase?.backlog || []).map(task => {
                               const pStyle = PRIORITY_STYLES[task.priority];
                               return (
-                                <div key={task.id} draggable onDragStart={handleDragStart(task, 'backlog')} className="bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
+                                <div key={task.id} draggable onDragStart={handleDragStart(task, 'backlog')} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="cursor-pointer bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
                                   <div className="flex items-center justify-between text-xs text-text-secondary">
                                     <span className="font-mono">{task.id}</span>
                                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>

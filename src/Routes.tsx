@@ -5,6 +5,7 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import DashboardPage from './pages/Dashboard';
 import LoginPage from './pages/Login';
 import CasesPage from './pages/Cases';
+import CaseTaskDetailPage from './pages/Cases/Detail';
 import CalendarPage from './pages/Calendar';
 import FinancesPage from './pages/Finances';
 import EmployeesPage from './pages/Employees';
@@ -113,6 +114,8 @@ const AppRoutes = () => {
       <Routes>
         <Route path="/dashboard" element={<ProtectedRoute><RoleBasedDashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />
+        <Route path="/cases/:caseNumber" element={<ProtectedRoute><CaseTaskDetailPage /></ProtectedRoute>} />
+        <Route path="/cases/:caseNumber/tasks/:taskId" element={<ProtectedRoute><CaseTaskDetailPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
 
         <Route path="/finances" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
