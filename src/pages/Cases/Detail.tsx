@@ -17,6 +17,8 @@ type Task = {
   priority: Priority;
   status: Status;
   description?: string;
+  isBacklog?: boolean;
+  createdAt?: string;
 };
 
 type CaseItem = {
@@ -62,6 +64,7 @@ const CaseTaskDetailPage: React.FC = () => {
   const [caseItem, setCaseItem] = useState<CaseItem | null>(null);
   const [studentCases, setStudentCases] = useState<CaseItem[]>([]);
   const [task, setTask] = useState<Task | null>(null);
+  const [caseTasks, setCaseTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
   const [tfName, setTfName] = useState('');
@@ -72,6 +75,11 @@ const CaseTaskDetailPage: React.FC = () => {
   const [tfAvatar, setTfAvatar] = useState('');
   const [tfDesc, setTfDesc] = useState('');
   const [logMins, setLogMins] = useState(0);
+
+  // Editing states
+  const [editingCaseDesc, setEditingCaseDesc] = useState(false);
+  const [caseDescDraft, setCaseDescDraft] = useState('');
+  const [taskDescDraft, setTaskDescDraft] = useState('');
 
   // Attachments
   const [caseFiles, setCaseFiles] = useState<any[]>([]);
@@ -112,15 +120,15 @@ const CaseTaskDetailPage: React.FC = () => {
   }, [caseNumber]);
 
   const loadTask = useCallback(async () => {
-    if (!caseNumber || !taskId) { setTask(null); return; }
+    if (!caseNumber || !taskId) { setTask(null); setTaskDescDraft(''); return; }
     const { data, error } = await supabase
       .from('dashboard_tasks')
-      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, description, created_at')
+      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, description, created_at, is_backlog')
       .eq('case_number', caseNumber)
       .eq('id', taskId)
       .single();
     if (!error && data) {
-      setTask({
+      const t: Task = {
         id: data.id,
         name: data.name,
         estimateMins: data.estimate_mins ?? 0,
@@ -129,9 +137,35 @@ const CaseTaskDetailPage: React.FC = () => {
         priority: (data.priority || 'Medium') as Priority,
         status: (data.status || 'Todo') as Status,
         description: data.description || '',
-      });
+        createdAt: data.created_at,
+        isBacklog: !!data.is_backlog,
+      };
+      setTask(t);
+      setTaskDescDraft(t.description || '');
     }
   }, [caseNumber, taskId]);
+  const loadCaseTasks = useCallback(async () => {
+    if (!caseNumber) { setCaseTasks([]); return; }
+    const { data } = await supabase
+      .from('dashboard_tasks')
+      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, description, created_at, is_backlog')
+      .eq('case_number', caseNumber)
+      .order('created_at', { ascending: false });
+    const mapped: Task[] = (data||[]).map((r:any)=>({
+      id: r.id,
+      name: r.name,
+      estimateMins: r.estimate_mins ?? 0,
+      spentMins: r.spent_mins ?? 0,
+      assignee: { name: r.assignee_name || 'Unassigned', avatar: r.assignee_avatar || undefined },
+      priority: (r.priority || 'Medium') as Priority,
+      status: (r.status || 'Todo') as Status,
+      description: r.description || '',
+      createdAt: r.created_at,
+      isBacklog: !!r.is_backlog,
+    }));
+    setCaseTasks(mapped);
+  }, [caseNumber]);
+
 
   const listCaseFiles = useCallback(async () => {
     if (!caseNumber) return;
@@ -148,16 +182,31 @@ const CaseTaskDetailPage: React.FC = () => {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      await Promise.all([loadCase(), loadTask(), listCaseFiles(), listTaskFiles()]);
+      await Promise.all([loadCase(), loadTask(), loadCaseTasks(), listCaseFiles(), listTaskFiles()]);
       if (mounted) setLoading(false);
     })();
     // Realtime subscriptions
     const chanTasks = supabase
       .channel(`detail:tasks:${caseNumber}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks', filter: `case_number=eq.${caseNumber}` }, () => { loadTask(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks', filter: `case_number=eq.${caseNumber}` }, () => { loadTask(); loadCaseTasks(); })
       .subscribe();
     return () => { mounted = false; supabase.removeChannel(chanTasks); };
-  }, [caseNumber, taskId, loadCase, loadTask, listCaseFiles, listTaskFiles]);
+  }, [caseNumber, taskId, loadCase, loadTask, loadCaseTasks, listCaseFiles, listTaskFiles]);
+  const saveCaseDescription = async () => {
+    if (!caseNumber) return;
+    await supabase.from('dashboard_cases').update({ description: caseDescDraft }).eq('case_number', caseNumber);
+    await loadCase();
+    await supabase.from('activity_log').insert([{ type: 'case_update', entity: 'case', case_number: caseNumber, message: 'Updated case description' }]).catch(()=>{});
+    setEditingCaseDesc(false);
+  };
+
+  const saveTaskDescription = async () => {
+    if (!caseNumber || !task) return;
+    await supabase.from('dashboard_tasks').update({ description: taskDescDraft }).eq('case_number', caseNumber).eq('id', task.id);
+    setTask({ ...task, description: taskDescDraft });
+    await supabase.from('activity_log').insert([{ type: 'task_update', entity: 'task', case_number: caseNumber, task_id: task.id, message: 'Updated task description' }]).catch(()=>{});
+  };
+
 
   const onUploadCaseFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!caseNumber || !e.target.files || e.target.files.length === 0) return;
@@ -251,8 +300,23 @@ const CaseTaskDetailPage: React.FC = () => {
                 <>
                   <div className="text-sm text-text-secondary">Case Number</div>
                   <div className="font-semibold">{caseItem.caseId}</div>
-                  <div className="mt-3 text-sm text-text-secondary">Case Description</div>
-                  <div className="text-sm">{caseItem.description || '—'}</div>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="text-sm text-text-secondary">Case Description</div>
+                    {!editingCaseDesc && (
+                      <button type="button" onClick={()=>{ setCaseDescDraft(caseItem.description || ''); setEditingCaseDesc(true); }} className="text-xs text-blue-600 hover:underline">Edit</button>
+                    )}
+                  </div>
+                  {!editingCaseDesc ? (
+                    <div className="text-sm">{caseItem.description || '—'}</div>
+                  ) : (
+                    <div className="mt-1">
+                      <textarea value={caseDescDraft} onChange={e=>setCaseDescDraft(e.target.value)} rows={3} className="w-full border rounded p-2 text-sm" />
+                      <div className="mt-2 flex items-center gap-2">
+                        <button onClick={saveCaseDescription} className="px-3 py-1.5 rounded bg-[#ffa332] text-white text-xs font-semibold">Save</button>
+                        <button onClick={()=>setEditingCaseDesc(false)} className="px-3 py-1.5 rounded border text-xs">Cancel</button>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-3 text-sm text-text-secondary">Reporter</div>
                   <div className="text-sm">{caseItem.reporter || '—'}</div>
                   <div className="mt-3 text-sm text-text-secondary">Assigned Team</div>
@@ -301,7 +365,56 @@ const CaseTaskDetailPage: React.FC = () => {
             {/* Center: Task details */}
             <section className="lg:col-span-6 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
               {!taskId && (
-                <div className="text-sm text-text-secondary">Select a task from the list or open from On Going Cases.</div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base sm:text-lg font-semibold">Tasks for this case</h3>
+                    <div className="text-xs text-text-secondary">{caseTasks.length} total</div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-xs text-text-secondary font-semibold uppercase tracking-wide">Active</div>
+                    <div className="mt-2 divide-y border rounded">
+                      {caseTasks.filter(t=>!t.isBacklog).length===0 && (
+                        <div className="text-sm text-text-secondary p-3">No active tasks</div>
+                      )}
+                      {caseTasks.filter(t=>!t.isBacklog).map(t=> (
+                        <button key={t.id} onClick={()=>navigate(`/cases/${caseNumber}/tasks/${t.id}`)} className="w-full text-left p-3 hover:bg-gray-50 flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-text-secondary">{t.id}</div>
+                            <div className="font-semibold">{t.name}</div>
+                            <div className="text-xs text-text-secondary">Assignee: {t.assignee.name} • Estimate: {fmtDur(t.estimateMins)}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-1 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>{t.status}</span>
+                            <span className={`text-xs px-2 py-1 rounded ${PRIORITY_STYLES[t.priority].bg} ${PRIORITY_STYLES[t.priority].text}`}>{t.priority}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <div className="text-xs text-text-secondary font-semibold uppercase tracking-wide">Backlog</div>
+                    <div className="mt-2 divide-y border rounded">
+                      {caseTasks.filter(t=>!!t.isBacklog).length===0 && (
+                        <div className="text-sm text-text-secondary p-3">No backlog tasks</div>
+                      )}
+                      {caseTasks.filter(t=>!!t.isBacklog).map(t=> (
+                        <button key={t.id} onClick={()=>navigate(`/cases/${caseNumber}/tasks/${t.id}`)} className="w-full text-left p-3 hover:bg-gray-50 flex items-center justify-between">
+                          <div>
+                            <div className="text-xs text-text-secondary">{t.id}</div>
+                            <div className="font-semibold">{t.name}</div>
+                            <div className="text-xs text-text-secondary">Assignee: {t.assignee.name} • Estimate: {fmtDur(t.estimateMins)}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-1 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>{t.status}</span>
+                            <span className={`text-xs px-2 py-1 rounded ${PRIORITY_STYLES[t.priority].bg} ${PRIORITY_STYLES[t.priority].text}`}>{t.priority}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
               {task && (
                 <>
@@ -322,8 +435,13 @@ const CaseTaskDetailPage: React.FC = () => {
                   </div>
 
                   <div className="mt-4">
-                    <div className="text-sm font-semibold">Description</div>
-                    <div className="text-sm whitespace-pre-wrap">{task.description || '—'}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold">Description</div>
+                    </div>
+                    <textarea value={taskDescDraft} onChange={e=>setTaskDescDraft(e.target.value)} rows={4} className="mt-1 w-full border rounded p-2 text-sm" placeholder="Add or update task description..." />
+                    <div className="mt-2 text-right">
+                      <button onClick={saveTaskDescription} className="px-3 py-1.5 rounded bg-[#ffa332] text-white text-xs font-semibold">Save Description</button>
+                    </div>
                   </div>
 
                   <div className="mt-6">
