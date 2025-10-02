@@ -3,6 +3,7 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 // Types
 type Student = {
@@ -44,6 +45,8 @@ const defaultStudent: Omit<Student, 'id'> = {
 
 const StudentsPage: React.FC = () => {
   const [tab, setTab] = useState<'add' | 'list'>('add');
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Add form state
   const [s, setS] = useState(defaultStudent);
@@ -53,6 +56,9 @@ const StudentsPage: React.FC = () => {
   const [declTextAgree, setDeclTextAgree] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Services for enrollment
+  const [services, setServices] = useState<Array<{id:string; name:string; type?:string; price?:number; duration_weeks?:number}>>([]);
 
   // List state
   const [items, setItems] = useState<Student[]>([]);
@@ -66,6 +72,17 @@ const StudentsPage: React.FC = () => {
   const [total, setTotal] = useState(0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const [editItem, setEditItem] = useState<Student | null>(null);
+
+  useEffect(()=>{
+    (async()=>{
+      const { data } = await supabase.from('dashboard_services').select('id, name, type, price, duration_weeks').order('name');
+      setServices((data as any)||[]);
+      // prefill from query ?service=NAME
+      const sp = new URLSearchParams(location.search);
+      const svc = sp.get('service');
+      if (svc) setS(prev=>({ ...prev, program_title: svc }));
+    })();
+  }, [location.search]);
 
   const resetForm = () => {
     setS(defaultStudent);
@@ -194,7 +211,12 @@ const StudentsPage: React.FC = () => {
               <div className="lg:col-span-2 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
                 <h3 className="font-bold text-lg">Program Information</h3>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="text-sm"><span className="text-text-secondary">Program Title</span><input value={s.program_title} onChange={e=>setS({...s, program_title:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">Service</span>
+                    <select value={s.program_title} onChange={e=>setS({...s, program_title:e.target.value})} className="mt-1 w-full border rounded p-2" required>
+                      <option value="">Select Service</option>
+                      {services.map(sv => (<option key={sv.id} value={sv.name}>{sv.name}</option>))}
+                    </select>
+                  </label>
                   <label className="text-sm"><span className="text-text-secondary">Batch No.</span><input value={s.batch_no} onChange={e=>setS({...s, batch_no:e.target.value})} className="mt-1 w-full border rounded p-2" placeholder="e.g., 2025-01" required/></label>
                 </div>
 

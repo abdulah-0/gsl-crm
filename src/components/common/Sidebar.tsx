@@ -41,6 +41,13 @@ const Sidebar = ({
       isActive: false
     },
     {
+      id: 'services',
+      label: 'Products & Services',
+      icon: '/images/img_icn_sidebar_projects_inactive.svg',
+      href: '/services',
+      isActive: false
+    },
+    {
       id: 'calendar',
       label: 'Calendar',
       icon: '/images/img_icn_sidebar_calendar_inactive.svg',
