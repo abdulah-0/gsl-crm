@@ -1,6 +1,8 @@
 import React from 'react';
 import { twMerge } from 'tailwind-merge';
 import { useLocation, useNavigate } from 'react-router-dom';
+import logo from '../../assets/logo.png';
+
 
 
 interface SidebarProps {
@@ -116,6 +118,11 @@ const Sidebar = ({
         className
       )}
     >
+
+      {/* Logo */}
+      <div className="flex items-center justify-center mb-4 px-4">
+        <img src={logo} alt="GSL Logo" className="h-12 object-contain" />
+      </div>
 
       {/* Navigation Menu */}
       <nav className="flex-1 px-[18px]">
