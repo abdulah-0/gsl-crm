@@ -121,6 +121,17 @@ const Cases: React.FC = () => {
   const [formAssignees, setFormAssignees] = useState('');
   const [formEstimate, setFormEstimate] = useState(0);
   const [formPriority, setFormPriority] = useState<Priority>('Medium');
+  // Student Information Form (flattened)
+  const [sf, setSf] = useState<any>({
+    basic_name:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'', basic_student_sign:'',
+    ug_olevels:false, ug_olevels_year:'', ug_olevels_grades:'', ug_alevels:false, ug_alevels_year:'', ug_alevels_grades:'', ug_matric:false, ug_matric_year:'', ug_matric_grades:'', ug_hssc:false, ug_hssc_year:'', ug_hssc_grades:'', ug_other:'',
+    pg_bachelors:false, pg_bachelors_university:'', pg_bachelors_course:'', pg_bachelors_year:'', pg_bachelors_grades:'', pg_masters:false, pg_masters_university:'', pg_masters_course:'', pg_masters_year:'', pg_masters_grades:'',
+    eng_ielts:false, eng_toefl:false, eng_pte:false, eng_duolingo:false, eng_other:'', eng_score:'',
+    work_exp:'',
+    coi_uk:false, coi_usa:false, coi_canada:false, coi_malaysia:false, coi_germany:false, coi_australia:false, coi_others:'',
+    add_course_or_uni:'', add_travel_history:'', add_visa_refusal:'', add_asylum_family:'',
+    office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_counsellor_sign:'', office_next_follow_up_date:''
+  });
 
   // Add Task modal state
   const [showAddTask, setShowAddTask] = useState(false);
@@ -260,18 +271,29 @@ const Cases: React.FC = () => {
   const addCase = async (e: React.FormEvent) => {
     e.preventDefault();
     const case_number = formCaseId.trim();
-    const title = formTitle.trim();
+    const title = formTitle.trim() || sf.basic_name || 'New Case';
     if (!case_number || !title) return;
     const assignees = formAssignees.split(',').map(s => s.trim()).filter(Boolean);
+    const payload: any = { case_number, title, assignees, status: 'In Progress', student_info: sf };
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .insert([{ case_number, title, assignees, status: 'In Progress' }])
+      .insert([payload])
       .select('case_number')
       .single();
     if (!error && data) {
       setActiveCaseId(data.case_number);
       setShowAddCase(false);
       setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium');
+      setSf({
+        basic_name:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'', basic_student_sign:'',
+        ug_olevels:false, ug_olevels_year:'', ug_olevels_grades:'', ug_alevels:false, ug_alevels_year:'', ug_alevels_grades:'', ug_matric:false, ug_matric_year:'', ug_matric_grades:'', ug_hssc:false, ug_hssc_year:'', ug_hssc_grades:'', ug_other:'',
+        pg_bachelors:false, pg_bachelors_university:'', pg_bachelors_course:'', pg_bachelors_year:'', pg_bachelors_grades:'', pg_masters:false, pg_masters_university:'', pg_masters_course:'', pg_masters_year:'', pg_masters_grades:'',
+        eng_ielts:false, eng_toefl:false, eng_pte:false, eng_duolingo:false, eng_other:'', eng_score:'',
+        work_exp:'',
+        coi_uk:false, coi_usa:false, coi_canada:false, coi_malaysia:false, coi_germany:false, coi_australia:false, coi_others:'',
+        add_course_or_uni:'', add_travel_history:'', add_visa_refusal:'', add_asylum_family:'',
+        office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_counsellor_sign:'', office_next_follow_up_date:''
+      });
     }
   };
 
@@ -618,38 +640,136 @@ const Cases: React.FC = () => {
       {/* Add Case Modal */}
       {showAddCase && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <form onSubmit={addCase} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+          <form onSubmit={addCase} className="bg-white w-full max-w-4xl rounded-xl p-5 shadow-xl max-h-[80vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Add Case</h3>
               <button type="button" onClick={()=>setShowAddCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="text-sm">
-                <span className="text-text-secondary">Case ID</span>
-                <input value={formCaseId} onChange={e=>setFormCaseId(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="PN001245" required />
-              </label>
-              <label className="text-sm">
-                <span className="text-text-secondary">Case Title</span>
-                <input value={formTitle} onChange={e=>setFormTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Case 7" required />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                <span className="text-text-secondary">Assignee(s)</span>
-                <input value={formAssignees} onChange={e=>setFormAssignees(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Comma separated" />
-              </label>
-              <label className="text-sm">
-                <span className="text-text-secondary">Estimate (minutes)</span>
-                <input type="number" min={0} value={formEstimate} onChange={e=>setFormEstimate(Number(e.target.value))} className="mt-1 w-full border rounded p-2" />
-              </label>
-              <label className="text-sm">
-                <span className="text-text-secondary">Priority</span>
-                <select value={formPriority} onChange={e=>setFormPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2">
-                  <option>Low</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                </select>
-              </label>
+
+            {/* Case Meta */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <label><span className="text-text-secondary">Case ID</span><input value={formCaseId} onChange={e=>setFormCaseId(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="PN001245" required/></label>
+              <label className="sm:col-span-2"><span className="text-text-secondary">Case Title</span><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Case Title (optional)"/></label>
             </div>
-            <div className="mt-5 flex items-center justify-end gap-2">
+
+            {/* Basic Info */}
+            <div className="mt-5">
+              <h4 className="font-semibold">Basic Info</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                <label><span className="text-text-secondary">Name</span><input value={sf.basic_name} onChange={e=>setSf({...sf, basic_name:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={sf.basic_dob} onChange={e=>setSf({...sf, basic_dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Date</span><input type="date" value={sf.basic_date} onChange={e=>setSf({...sf, basic_date:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={sf.basic_address} onChange={e=>setSf({...sf, basic_address:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Email</span><input type="email" value={sf.basic_email} onChange={e=>setSf({...sf, basic_email:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Nationality</span><input value={sf.basic_nationality} onChange={e=>setSf({...sf, basic_nationality:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Phone No</span><input value={sf.basic_phone} onChange={e=>setSf({...sf, basic_phone:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label className="sm:col-span-2 lg:col-span-1"><span className="text-text-secondary">Student Sign</span><input value={sf.basic_student_sign} onChange={e=>setSf({...sf, basic_student_sign:e.target.value})} className="mt-1 w-full border rounded p-2" placeholder="Signature text"/></label>
+              </div>
+            </div>
+
+            {/* Undergrad */}
+            <div className="mt-6">
+              <h4 className="font-semibold">For Undergrad</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.ug_olevels} onChange={e=>setSf({...sf, ug_olevels:e.target.checked})}/>O-Levels</label>
+                <input placeholder="Year" value={sf.ug_olevels_year} onChange={e=>setSf({...sf, ug_olevels_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.ug_olevels_grades} onChange={e=>setSf({...sf, ug_olevels_grades:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.ug_alevels} onChange={e=>setSf({...sf, ug_alevels:e.target.checked})}/>A-Levels</label>
+                <input placeholder="Year" value={sf.ug_alevels_year} onChange={e=>setSf({...sf, ug_alevels_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.ug_alevels_grades} onChange={e=>setSf({...sf, ug_alevels_grades:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.ug_matric} onChange={e=>setSf({...sf, ug_matric:e.target.checked})}/>Matric</label>
+                <input placeholder="Year" value={sf.ug_matric_year} onChange={e=>setSf({...sf, ug_matric_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.ug_matric_grades} onChange={e=>setSf({...sf, ug_matric_grades:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.ug_hssc} onChange={e=>setSf({...sf, ug_hssc:e.target.checked})}/>HSSC</label>
+                <input placeholder="Year" value={sf.ug_hssc_year} onChange={e=>setSf({...sf, ug_hssc_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.ug_hssc_grades} onChange={e=>setSf({...sf, ug_hssc_grades:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <input placeholder="Other Education" value={sf.ug_other} onChange={e=>setSf({...sf, ug_other:e.target.value})} className="border rounded p-2 sm:col-span-2 lg:col-span-4"/>
+              </div>
+            </div>
+
+            {/* Postgrad */}
+            <div className="mt-6">
+              <h4 className="font-semibold">For Postgrad</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.pg_bachelors} onChange={e=>setSf({...sf, pg_bachelors:e.target.checked})}/>Bachelors</label>
+                <input placeholder="University Name" value={sf.pg_bachelors_university} onChange={e=>setSf({...sf, pg_bachelors_university:e.target.value})} className="border rounded p-2 lg:col-span-3"/>
+                <input placeholder="Course Name" value={sf.pg_bachelors_course} onChange={e=>setSf({...sf, pg_bachelors_course:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <input placeholder="Year" value={sf.pg_bachelors_year} onChange={e=>setSf({...sf, pg_bachelors_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.pg_bachelors_grades} onChange={e=>setSf({...sf, pg_bachelors_grades:e.target.value})} className="border rounded p-2"/>
+
+                <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={sf.pg_masters} onChange={e=>setSf({...sf, pg_masters:e.target.checked})}/>Masters</label>
+                <input placeholder="University Name" value={sf.pg_masters_university} onChange={e=>setSf({...sf, pg_masters_university:e.target.value})} className="border rounded p-2 lg:col-span-3"/>
+                <input placeholder="Course Name" value={sf.pg_masters_course} onChange={e=>setSf({...sf, pg_masters_course:e.target.value})} className="border rounded p-2 lg:col-span-2"/>
+                <input placeholder="Year" value={sf.pg_masters_year} onChange={e=>setSf({...sf, pg_masters_year:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Grades" value={sf.pg_masters_grades} onChange={e=>setSf({...sf, pg_masters_grades:e.target.value})} className="border rounded p-2"/>
+              </div>
+            </div>
+
+            {/* English Proficiency */}
+            <div className="mt-6">
+              <h4 className="font-semibold">English Proficiency Test</h4>
+              <div className="mt-2 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.eng_ielts} onChange={e=>setSf({...sf, eng_ielts:e.target.checked})}/>IELTS</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.eng_toefl} onChange={e=>setSf({...sf, eng_toefl:e.target.checked})}/>TOEFL</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.eng_pte} onChange={e=>setSf({...sf, eng_pte:e.target.checked})}/>PTE</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.eng_duolingo} onChange={e=>setSf({...sf, eng_duolingo:e.target.checked})}/>Duolingo</label>
+                <input placeholder="Other" value={sf.eng_other} onChange={e=>setSf({...sf, eng_other:e.target.value})} className="border rounded p-2"/>
+                <input placeholder="Score" value={sf.eng_score} onChange={e=>setSf({...sf, eng_score:e.target.value})} className="border rounded p-2"/>
+              </div>
+            </div>
+
+            {/* Work Experience */}
+            <div className="mt-6">
+              <h4 className="font-semibold">Work Experience</h4>
+              <textarea value={sf.work_exp} onChange={e=>setSf({...sf, work_exp:e.target.value})} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
+            </div>
+
+            {/* Country of Interest */}
+            <div className="mt-6">
+              <h4 className="font-semibold">Country of Interest</h4>
+              <div className="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_uk} onChange={e=>setSf({...sf, coi_uk:e.target.checked})}/>United Kingdom</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_usa} onChange={e=>setSf({...sf, coi_usa:e.target.checked})}/>United States of America</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_canada} onChange={e=>setSf({...sf, coi_canada:e.target.checked})}/>Canada</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_malaysia} onChange={e=>setSf({...sf, coi_malaysia:e.target.checked})}/>Malaysia</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_germany} onChange={e=>setSf({...sf, coi_germany:e.target.checked})}/>Germany</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={sf.coi_australia} onChange={e=>setSf({...sf, coi_australia:e.target.checked})}/>Australia</label>
+                <input placeholder="Others" value={sf.coi_others} onChange={e=>setSf({...sf, coi_others:e.target.value})} className="border rounded p-2"/>
+              </div>
+            </div>
+
+            {/* Additional Info */}
+            <div className="mt-6">
+              <h4 className="font-semibold">Additional Info</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={sf.add_course_or_uni} onChange={e=>setSf({...sf, add_course_or_uni:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={sf.add_travel_history} onChange={e=>setSf({...sf, add_travel_history:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={sf.add_visa_refusal} onChange={e=>setSf({...sf, add_visa_refusal:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Any asylum taken by family</span><input value={sf.add_asylum_family} onChange={e=>setSf({...sf, add_asylum_family:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+              </div>
+            </div>
+
+            {/* For Office Use Only */}
+            <div className="mt-6">
+              <h4 className="font-semibold">For Office Use Only</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                <label><span className="text-text-secondary">Date</span><input type="date" value={sf.office_date} onChange={e=>setSf({...sf, office_date:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Application Started</span><input value={sf.office_application_started} onChange={e=>setSf({...sf, office_application_started:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">University Applied</span><input value={sf.office_university_applied} onChange={e=>setSf({...sf, office_university_applied:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Counsellor Name</span><input value={sf.office_counsellor_name} onChange={e=>setSf({...sf, office_counsellor_name:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                <label><span className="text-text-secondary">Counsellor Sign</span><input value={sf.office_counsellor_sign} onChange={e=>setSf({...sf, office_counsellor_sign:e.target.value})} className="mt-1 w-full border rounded p-2" placeholder="Signature text"/></label>
+                <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" value={sf.office_next_follow_up_date} onChange={e=>setSf({...sf, office_next_follow_up_date:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+              </div>
+            </div>
+
+            {/* Assignees & Controls */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <label className="sm:col-span-2"><span className="text-text-secondary">Assignee(s)</span><input value={formAssignees} onChange={e=>setFormAssignees(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Comma separated"/></label>
+              <label><span className="text-text-secondary">Estimate (minutes)</span><input type="number" min={0} value={formEstimate} onChange={e=>setFormEstimate(Number(e.target.value))} className="mt-1 w-full border rounded p-2"/></label>
+              <label><span className="text-text-secondary">Priority</span><select value={formPriority} onChange={e=>setFormPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2"><option>Low</option><option>Medium</option><option>High</option></select></label>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Case</button>
             </div>

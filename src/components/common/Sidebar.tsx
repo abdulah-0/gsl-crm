@@ -121,7 +121,7 @@ const Sidebar = ({
 
       {/* Logo */}
       <div className="flex items-center justify-center mb-4 px-4">
-        <img src={logo} alt="GSL Logo" className="h-12 object-contain" />
+        <img src={logo} alt="GSL Logo" className="h-16 object-contain" />
       </div>
 
       {/* Navigation Menu */}
