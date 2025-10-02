@@ -109,25 +109,6 @@ const Sidebar = ({
         className
       )}
     >
-      {/* Logo Section */}
-      <div className="flex justify-center items-center mb-8 px-[42px]">
-        <div className="relative w-[114px] h-[114px]">
-          <img
-            src="/images/img_gsl_logo_1.png"
-            alt="GSL Logo"
-            className="w-full h-full object-contain"
-          />
-          <div className="absolute top-[22px] right-[6px] w-[50px] h-[50px] bg-primary-background rounded-xl flex flex-col items-center justify-center p-2">
-            <div className="flex items-start gap-[2px] mb-1">
-              <div className="flex flex-col items-end">
-                <img src="/images/img_fill_2.svg" alt="" className="w-[6px] h-[6px] mb-1" />
-                <img src="/images/img_fill_4.svg" alt="" className="w-[14px] h-[16px]" />
-              </div>
-              <img src="/images/img_fill_3.svg" alt="" className="w-[18px] h-[22px]" />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Navigation Menu */}
       <nav className="flex-1 px-[18px]">
