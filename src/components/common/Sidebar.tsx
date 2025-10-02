@@ -34,6 +34,13 @@ const Sidebar = ({
       isActive: false
     },
     {
+      id: 'students',
+      label: 'Students',
+      icon: '/images/img_icn_sidebar_projects_inactive.svg',
+      href: '/students',
+      isActive: false
+    },
+    {
       id: 'calendar',
       label: 'Calendar',
       icon: '/images/img_icn_sidebar_calendar_inactive.svg',
