@@ -1,14 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
+import { supabase } from '../../lib/supabaseClient';
+import TeacherView from './TeacherView';
+import AdminView from './AdminView';
+import SuperAdminView from './SuperAdminView';
+import CounselorView from './CounselorView';
 
 const Reports: React.FC = () => {
+  const [role, setRole] = useState<'teacher'|'admin'|'super'|'counselor'|'other'|null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: sess } = await supabase.auth.getUser();
+      const em = sess.user?.email || '';
+      const { data: u } = await supabase.from('dashboard_users').select('role,email').eq('email', em).maybeSingle();
+      if (!mounted) return;
+      const r = (u?.role || '').toString().toLowerCase();
+      const ro = r.includes('super') ? 'super' : r.includes('admin') ? 'admin' : r.includes('teach') ? 'teacher' : r.includes('counsel') || r.includes('staff') ? 'counselor' : 'other';
+      setRole(ro as any);
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   return (
     <>
       <Helmet>
-        <title>Reports & Analytics | GSL Pakistan CRM</title>
-        <meta name="description" content="Analytics and KPIs for leads, classes, finance, and performance." />
+        <title>Reports | GSL Pakistan CRM</title>
+        <meta name="description" content="Role-based reporting for Teachers, Admins, Super Admins, and Counselors." />
       </Helmet>
 
       <main className="w-full min-h-screen bg-background-main flex">
@@ -21,19 +42,16 @@ const Reports: React.FC = () => {
 
           <section className="mt-8 lg:mt-12">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary mb-3" style={{ fontFamily: 'Nunito Sans' }}>
-              Reports & Analytics
+              Reports
             </h1>
-            <p className="text-text-secondary" style={{ fontFamily: 'Nunito Sans' }}>
-              Charts and insights will be displayed here.
-            </p>
-
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {[1,2,3,4].map((i) => (
-                <div key={i} className="bg-background-card rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-6 h-48 flex items-center justify-center text-text-muted" style={{ fontFamily: 'Nunito Sans' }}>
-                  Chart placeholder {i}
-                </div>
-              ))}
-            </div>
+            {!role && <p className="text-text-secondary">Loading...</p>}
+            {role==='teacher' && <TeacherView />}
+            {role==='counselor' && <CounselorView />}
+            {role==='admin' && <AdminView />}
+            {role==='super' && <SuperAdminView />}
+            {role==='other' && (
+              <div className="bg-white rounded-xl p-6 shadow">You have access to Reports. Please contact an administrator to assign a role for tailored reporting.</div>
+            )}
           </section>
         </div>
       </main>
@@ -42,4 +60,3 @@ const Reports: React.FC = () => {
 };
 
 export default Reports;
-
