@@ -9,7 +9,7 @@ type AppUser = {
   id: string;
   full_name: string;
   email: string;
-  role: 'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | string;
+  role: 'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | string;
   status: 'Active' | 'Inactive' | string;
   permissions: string[]; // ['dashboard','students','services',...]
   created_at?: string;
@@ -23,6 +23,7 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'finances', label: 'Finances' },
   { id: 'employees', label: 'Employees' },
+  { id: 'teachers', label: 'Teachers' },
   { id: 'messenger', label: 'Messenger' },
   { id: 'info-portal', label: 'Info Portal' },
   { id: 'reports', label: 'Reports' },
@@ -179,11 +180,12 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') setNPerms(ALL_TABS.map(t=>t.id)); }} className="mt-1 w-full border rounded p-2">
+                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { setNPerms(ALL_TABS.map(t=>t.id)); } else if (v==='Teacher') { setNPerms(['teachers']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
                   <option>Staff</option>
+                  <option>Teacher</option>
                   <option>Custom</option>
                 </select>
               </label>
@@ -209,7 +211,7 @@ const UsersPage: React.FC = () => {
                 <h2 className="text-lg font-bold">Users</h2>
                 <div className="flex items-center gap-2 text-sm">
                   <input placeholder="Search" value={q} onChange={e=>setQ(e.target.value)} className="border rounded p-2" />
-                  <select value={roleF} onChange={e=>setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option></select>
+                  <select value={roleF} onChange={e=>setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option></select>
                   <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option></select>
                 </div>
               </div>
@@ -266,11 +268,12 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') setEPerms(ALL_TABS.map(t=>t.id)); }} className="mt-1 w-full border rounded p-2">
+                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { setEPerms(ALL_TABS.map(t=>t.id)); } else if (v==='Teacher') { setEPerms(['teachers']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
                   <option>Staff</option>
+                  <option>Teacher</option>
                   <option>Custom</option>
                 </select>
               </label>

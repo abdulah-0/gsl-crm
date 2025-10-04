@@ -30,13 +30,23 @@ const Sidebar = ({
         if (!email) { setAllowed(null); setIsSuper(false); return; }
         // Check app dashboard_users
         const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
-        const role = (u?.role || sess.user?.app_metadata?.role || sess.user?.user_metadata?.role || '').toString();
-        const superRole = role.toLowerCase().includes('super');
+        const roleStr = (u?.role || (sess.user as any)?.app_metadata?.role || (sess.user as any)?.user_metadata?.role || '').toString();
+        const role = roleStr.toLowerCase();
+        const superRole = role.includes('super');
         setIsSuper(superRole);
+        const ALL = ['dashboard','students','services','cases','calendar','finances','employees','teachers','messenger','info-portal','reports','users'];
+        const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         if (superRole) {
-          setAllowed(['dashboard','students','services','cases','calendar','finances','employees','messenger','info-portal','reports','users']);
+          setAllowed(ALL);
+        } else if (role.includes('admin')) {
+          // Admins see at least Teachers by default
+          const union = Array.from(new Set([...(perms||[]), 'teachers']));
+          setAllowed(union);
+        } else if (role.includes('teacher')) {
+          // Teachers by default only see Teachers unless explicitly granted more
+          setAllowed((perms && perms.length>0) ? perms : ['teachers']);
         } else {
-          setAllowed(Array.isArray(u?.permissions) ? u?.permissions as any : null);
+          setAllowed(perms.length ? perms : null);
         }
       } catch {
         setAllowed(null);
@@ -53,6 +63,7 @@ const Sidebar = ({
     { id: 'calendar', label: 'Calendar', icon: '/images/img_icn_sidebar_calendar_inactive.svg', href: '/calendar' },
     { id: 'finances', label: 'Finances', icon: '/images/img_icn_sidebar_vac.svg', href: '/finances' },
     { id: 'employees', label: 'Employees', icon: '/images/img_icn_sidebar_emp.svg', href: '/employees' },
+    { id: 'teachers', label: 'Teachers', icon: '/images/img_icn_sidebar_emp.svg', href: '/teachers' },
     { id: 'messenger', label: 'Messenger', icon: '/images/img_icn_sidebar_mes.svg', href: '/messenger' },
     { id: 'info-portal', label: 'Info Portal', icon: '/images/img_icn_sidebar_inf.svg', href: '/info-portal' },
     { id: 'reports', label: 'Reports', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/reports' },
@@ -60,10 +71,13 @@ const Sidebar = ({
   ];
 
   const menuItems = useMemo(() => {
-    // If allowed is null, show everything except Users (safe default)
-    const raw = baseMenuItems.filter(mi => (allowed ? allowed.includes(mi.id) : mi.id !== 'users'));
+    // Compute effective permissions
+    const computed = (() => {
+      if (!allowed) return baseMenuItems.filter(mi => mi.id !== 'users');
+      return baseMenuItems.filter(mi => allowed.includes(mi.id));
+    })();
     // Enforce Users tab only for super admins
-    return raw.filter(mi => mi.id !== 'users' || isSuper);
+    return computed.filter(mi => mi.id !== 'users' || isSuper);
   }, [allowed, isSuper]);
 
   const handleMenuClick = (_itemLabel: string, href: string) => {
