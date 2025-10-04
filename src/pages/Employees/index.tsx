@@ -225,6 +225,22 @@ const Employees: React.FC = () => {
       detail: { employee_id: empRow?.id, name, email, position: formPosition }
     }]);
 
+    // 4) If role/position indicates Teacher, ensure RBAC + teacher profile
+    try {
+      if (formPosition.toLowerCase().includes('teacher')) {
+        // dashboard_users upsert
+        await supabase.from('dashboard_users').upsert([
+          { id: `USR${Date.now().toString().slice(-8)}`, full_name: name, email, role: 'Teacher', status: 'Active', permissions: ['teachers'] }
+        ], { onConflict: 'email' } as any);
+        // dashboard_teachers upsert
+        await supabase.from('dashboard_teachers').upsert([
+          { id: `TEA${Date.now().toString().slice(-8)}`, full_name: name, email, status: 'Active' }
+        ], { onConflict: 'email' } as any);
+      }
+    } catch (e) {
+      console.warn('teacher onboarding warn', e);
+    }
+
     // Reset
     setShowAdd(false);
     setFormName(''); setFormEmail(''); setFormGender('Male'); setFormBirthday('1995-01-01'); setFormPosition('Admissions Officer'); setFormLevel('Junior');
