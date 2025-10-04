@@ -15,11 +15,12 @@ const Reports: React.FC = () => {
     let mounted = true;
     (async () => {
       const { data: sess } = await supabase.auth.getUser();
-      const em = sess.user?.email || '';
+      const user = sess.user as any;
+      const em = user?.email || '';
       const { data: u } = await supabase.from('dashboard_users').select('role,email').eq('email', em).maybeSingle();
       if (!mounted) return;
-      const r = (u?.role || '').toString().toLowerCase();
-      const ro = r.includes('super') ? 'super' : r.includes('admin') ? 'admin' : r.includes('teach') ? 'teacher' : r.includes('counsel') || r.includes('staff') ? 'counselor' : 'other';
+      const roleStr = (u?.role || user?.app_metadata?.role || user?.user_metadata?.role || '').toString().toLowerCase();
+      const ro = roleStr.includes('super') ? 'super' : roleStr.includes('admin') ? 'admin' : roleStr.includes('teach') ? 'teacher' : roleStr.includes('counsel') || roleStr.includes('staff') ? 'counselor' : 'other';
       setRole(ro as any);
     })();
     return () => { mounted = false; };
