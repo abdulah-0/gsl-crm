@@ -412,16 +412,26 @@ do $$ begin
 end $$;
 
 -- 11) RPC stub used by Employees page (safe no-op; returns null id)
-create or replace function public.app_create_user_local(
-  p_name text,
-  p_email text,
-  p_password text,
-  p_role text
-) returns int language plpgsql as $$
+do $$
 begin
-  -- In production, implement in a secure backend/Edge Function.
-  return null; -- keep employees.user_id nullable
-end;$$ security definer;
+  -- Create only if not exists; if exists with different signature/return type, keep it.
+  begin
+    create function public.app_create_user_local(
+      p_name text,
+      p_email text,
+      p_password text,
+      p_role text
+    ) returns int language plpgsql as $fn$
+    begin
+      -- In production, implement in a secure backend/Edge Function.
+      return null; -- keep employees.user_id nullable
+    end;
+    $fn$ security definer;
+  exception when duplicate_function then
+    -- leave existing implementation as-is
+    null;
+  end;
+end $$;
 
 commit;
 
