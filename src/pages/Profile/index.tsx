@@ -89,23 +89,45 @@ const ProfilePage: React.FC = () => {
     setSaving(true);
     try {
       let newAvatarUrl = avatarUrl;
+      // Try avatar upload, but don't block profile data if it fails
       if (avatarFile) {
-        const path = `${me.id}/${Date.now()}_${avatarFile.name}`;
-        const { data: up, error: upErr } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
-        if (upErr) throw upErr;
-        const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-        newAvatarUrl = pub.publicUrl || newAvatarUrl;
+        try {
+          const path = `${me.id}/${Date.now()}_${avatarFile.name}`;
+          const { error: upErr } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
+          if (upErr) throw upErr;
+          const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+          newAvatarUrl = pub.publicUrl || newAvatarUrl;
+        } catch (uploadErr: any) {
+          console.warn('Avatar upload failed:', uploadErr?.message || uploadErr);
+          alert('Avatar upload failed. Saving profile without avatar.');
+        }
       }
-      await supabase.from('dashboard_users').update({
+
+      // First attempt: update all profile fields
+      const updatePayload: any = {
         full_name: name.trim(),
         phone: phone || null,
         city: city || null,
         job_title: title || null,
         about: about || null,
         avatar_url: newAvatarUrl || null,
-      }).eq('id', me.id);
-      setAvatarFile(null);
-      alert('Profile updated');
+      };
+      let { error: updErr } = await supabase.from('dashboard_users').update(updatePayload).eq('id', me.id);
+
+      // Fallback: handle environments where new columns aren't present yet
+      if (updErr) {
+        console.warn('Full update failed, retrying minimal fields:', updErr.message);
+        const minimalPayload: any = { full_name: name.trim(), avatar_url: newAvatarUrl || null };
+        const retry = await supabase.from('dashboard_users').update(minimalPayload).eq('id', me.id);
+        updErr = retry.error || null;
+      }
+
+      if (updErr) {
+        alert(`Failed to update profile: ${updErr.message}`);
+      } else {
+        setAvatarFile(null);
+        alert('Profile updated');
+      }
     } catch (err: any) {
       alert(`Failed: ${err.message || err}`);
     } finally { setSaving(false); }
