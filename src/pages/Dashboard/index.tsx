@@ -46,7 +46,28 @@ const Dashboard = () => {
   const [activityItems, setActivityItems] = useState<ActivityItem[]>([]);
   const [activityLimit, setActivityLimit] = useState<number>(5);
   const [cases, setCases] = useState<CaseData[]>([]);
+  const [meName, setMeName] = useState<string>('User');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: sess } = await supabase.auth.getUser();
+      const em = sess.user?.email || '';
+      const { data: u } = await supabase.from('dashboard_users').select('full_name,email').eq('email', em).maybeSingle();
+      if (!mounted) return;
+      setMeName(u?.full_name || em || 'User');
+      const ch = supabase
+        .channel('rt:dashboard_users:me')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
+          const row: any = payload.new;
+          if (row?.email === em) setMeName(row.full_name || em || 'User');
+        })
+        .subscribe();
+      return () => { mounted = false; supabase.removeChannel(ch); };
+    })();
+  }, []);
+
 
   useEffect(() => {
     const priorityColor = (p: 'high'|'medium'|'low') => p === 'high' ? '#ff4757' : p === 'medium' ? '#ffa332' : '#0ac846';
@@ -244,7 +265,7 @@ const Dashboard = () => {
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 lg:mb-12">
               <div className="mb-4 lg:mb-0">
                 <p className="text-base font-normal leading-base text-text-secondary mb-1" style={{ fontFamily: 'Nunito Sans' }}>
-                  Welcome back, Evan!
+                  Welcome back, {meName}!
                 </p>
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>
                   Dashboard

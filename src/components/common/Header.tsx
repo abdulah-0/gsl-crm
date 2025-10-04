@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import SearchView from '../ui/SearchView';
 import Dropdown from '../ui/Dropdown';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabaseClient';
 
 interface HeaderProps {
   className?: string;
@@ -10,14 +12,39 @@ interface HeaderProps {
   onNotificationClick?: () => void;
 }
 
-const Header = ({ 
+const Header = ({
   className,
   onSearch,
   onProfileSelect,
-  onNotificationClick 
+  onNotificationClick
 }: HeaderProps) => {
+  const navigate = useNavigate();
+  const [displayName, setDisplayName] = useState<string>('Loading...');
+  const [email, setEmail] = useState<string>('');
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data: sess } = await supabase.auth.getUser();
+      const em = sess.user?.email || '';
+      if (!mounted) return;
+      setEmail(em);
+      // Try dashboard_users for full name
+      const { data: u } = await supabase.from('dashboard_users').select('full_name,email').eq('email', em).maybeSingle();
+      setDisplayName(u?.full_name || em || 'User');
+      // subscribe to name changes
+      const chan = supabase
+        .channel('rt:header_user')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
+          const row: any = payload.new;
+          if (row?.email === em) setDisplayName(row.full_name || em);
+        })
+        .subscribe();
+      return () => { mounted = false; supabase.removeChannel(chan); };
+    })();
+  }, []);
+
   const profileOptions = [
-    { value: 'evan', label: 'Evan Yates' },
     { value: 'profile', label: 'View Profile' },
     { value: 'settings', label: 'Settings' },
     { value: 'logout', label: 'Logout' },
@@ -29,9 +56,18 @@ const Header = ({
     }
   };
 
-  const handleProfileChange = (value: string) => {
+  const handleProfileChange = async (value: string) => {
     if (onProfileSelect) {
       onProfileSelect(value);
+      return;
+    }
+    if (value === 'profile') {
+      navigate('/profile');
+    } else if (value === 'settings') {
+      navigate('/profile?tab=settings');
+    } else if (value === 'logout') {
+      await supabase.auth.signOut();
+      navigate('/login', { replace: true });
     }
   };
 
@@ -93,7 +129,7 @@ const Header = ({
         {/* Profile Dropdown */}
         <div className="min-w-[180px] max-w-full">
           <Dropdown
-            placeholder="Evan Yates"
+            placeholder={displayName}
             text_font_size="16"
             text_font_family="Nunito Sans"
             text_font_weight="700"
