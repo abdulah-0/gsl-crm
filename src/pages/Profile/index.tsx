@@ -112,12 +112,22 @@ const ProfilePage: React.FC = () => {
         about: about || null,
         avatar_url: newAvatarUrl || null,
       };
-      let { error: updErr } = await supabase.from('dashboard_users').update(updatePayload).eq('id', me.id);
+      let { error: updErr } = await supabase
+        .from('dashboard_users')
+        .update(updatePayload)
+        .eq('id', me.id)
+        .select('id')
+        .single();
 
-      // If updating by id failed, try by email (unique)
+      // If updating by id failed or no row matched, try by email (unique)
       if (updErr) {
         console.warn('Full update by id failed, retrying by email:', updErr.message);
-        const retryByEmail = await supabase.from('dashboard_users').update(updatePayload).eq('email', me.email);
+        const retryByEmail = await supabase
+          .from('dashboard_users')
+          .update(updatePayload)
+          .eq('email', me.email)
+          .select('id')
+          .single();
         updErr = retryByEmail.error || null;
       }
 
@@ -125,10 +135,20 @@ const ProfilePage: React.FC = () => {
       if (updErr) {
         console.warn('Full update still failed, retrying minimal fields:', updErr.message);
         const minimalPayload: any = { full_name: name.trim(), avatar_url: newAvatarUrl || null };
-        let retry = await supabase.from('dashboard_users').update(minimalPayload).eq('id', me.id);
+        let retry = await supabase
+          .from('dashboard_users')
+          .update(minimalPayload)
+          .eq('id', me.id)
+          .select('id')
+          .single();
         if (retry.error) {
           // final fallback by email
-          retry = await supabase.from('dashboard_users').update(minimalPayload).eq('email', me.email);
+          retry = await supabase
+            .from('dashboard_users')
+            .update(minimalPayload)
+            .eq('email', me.email)
+            .select('id')
+            .single();
         }
         updErr = retry.error || null;
       }
