@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/logo.png';
-
-
+import { supabase } from '../../lib/supabaseClient';
 
 interface SidebarProps {
   className?: string;
@@ -20,78 +19,52 @@ const Sidebar = ({
   const location = useLocation();
   const currentPath = location.pathname;
 
-  const menuItems = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: '/images/img_icn_sidebar_dashboard_active.svg',
-      href: '/dashboard',
-      isActive: true
-    },
-    {
-      id: 'cases',
-      label: 'On Going Cases',
-      icon: '/images/img_icn_sidebar_projects_inactive.svg',
-      href: '/cases',
-      isActive: false
-    },
-    {
-      id: 'students',
-      label: 'Students',
-      icon: '/images/img_icn_sidebar_projects_inactive.svg',
-      href: '/students',
-      isActive: false
-    },
-    {
-      id: 'services',
-      label: 'Products & Services',
-      icon: '/images/img_icn_sidebar_projects_inactive.svg',
-      href: '/services',
-      isActive: false
-    },
-    {
-      id: 'calendar',
-      label: 'Calendar',
-      icon: '/images/img_icn_sidebar_calendar_inactive.svg',
-      href: '/calendar',
-      isActive: false
-    },
-    {
-      id: 'finances',
-      label: 'Finances',
-      icon: '/images/img_icn_sidebar_vac.svg',
-      href: '/finances',
-      isActive: false
-    },
-    {
-      id: 'employees',
-      label: 'Employees',
-      icon: '/images/img_icn_sidebar_emp.svg',
-      href: '/employees',
-      isActive: false
-    },
-    {
-      id: 'messenger',
-      label: 'Messenger',
-      icon: '/images/img_icn_sidebar_mes.svg',
-      href: '/messenger',
-      isActive: false
-    },
-    {
-      id: 'info-portal',
-      label: 'Info Portal',
-      icon: '/images/img_icn_sidebar_inf.svg',
-      href: '/info-portal',
-      isActive: false
-    },
-    {
-      id: 'reports',
-      label: 'Reports',
-      icon: '/images/img_icn_sidebar_projects_inactive.svg',
-      href: '/reports',
-      isActive: false
-    }
+  const [allowed, setAllowed] = useState<string[] | null>(null);
+  const [isSuper, setIsSuper] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getUser();
+        const email = sess.user?.email;
+        if (!email) { setAllowed(null); setIsSuper(false); return; }
+        // Check app dashboard_users
+        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+        const role = (u?.role || sess.user?.app_metadata?.role || sess.user?.user_metadata?.role || '').toString();
+        const superRole = role.toLowerCase().includes('super');
+        setIsSuper(superRole);
+        if (superRole) {
+          setAllowed(['dashboard','students','services','cases','calendar','finances','employees','messenger','info-portal','reports','users']);
+        } else {
+          setAllowed(Array.isArray(u?.permissions) ? u?.permissions as any : null);
+        }
+      } catch {
+        setAllowed(null);
+        setIsSuper(false);
+      }
+    })();
+  }, []);
+
+  const baseMenuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: '/images/img_icn_sidebar_dashboard_active.svg', href: '/dashboard' },
+    { id: 'cases', label: 'On Going Cases', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/cases' },
+    { id: 'students', label: 'Students', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/students' },
+    { id: 'services', label: 'Products & Services', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/services' },
+    { id: 'calendar', label: 'Calendar', icon: '/images/img_icn_sidebar_calendar_inactive.svg', href: '/calendar' },
+    { id: 'finances', label: 'Finances', icon: '/images/img_icn_sidebar_vac.svg', href: '/finances' },
+    { id: 'employees', label: 'Employees', icon: '/images/img_icn_sidebar_emp.svg', href: '/employees' },
+    { id: 'messenger', label: 'Messenger', icon: '/images/img_icn_sidebar_mes.svg', href: '/messenger' },
+    { id: 'info-portal', label: 'Info Portal', icon: '/images/img_icn_sidebar_inf.svg', href: '/info-portal' },
+    { id: 'reports', label: 'Reports', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/reports' },
+    { id: 'users', label: 'Users', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/users' },
   ];
+
+  const menuItems = useMemo(() => {
+    // If allowed is null, show everything except Users (safe default)
+    const raw = baseMenuItems.filter(mi => (allowed ? allowed.includes(mi.id) : mi.id !== 'users'));
+    // Enforce Users tab only for super admins
+    return raw.filter(mi => mi.id !== 'users' || isSuper);
+  }, [allowed, isSuper]);
 
   const handleMenuClick = (_itemLabel: string, href: string) => {
     navigate(href);
