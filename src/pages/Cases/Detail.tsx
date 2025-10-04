@@ -89,28 +89,29 @@ const CaseTaskDetailPage: React.FC = () => {
     if (!caseNumber) return;
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .select('case_number, title, description, reporter, assignees, priority, deadline, created_at, student_id')
+      .select('case_number, title, assignees, status, branch, type, created_at, student_info')
       .eq('case_number', caseNumber)
       .single();
     if (!error && data) {
+      const info = (data.student_info || {}) as any;
       const c: CaseItem = {
         caseId: data.case_number,
         title: data.title || 'Untitled',
-        description: data.description || '',
-        reporter: data.reporter || '',
-        assignees: Array.isArray(data.assignees) ? data.assignees : [],
-        priority: (data.priority || 'Medium') as Priority,
-        deadline: data.deadline || undefined,
+        description: info.description || '',
+        reporter: data.employee || '',
+        assignees: Array.isArray(data.assignees) ? data.assignees : (data.employee ? [data.employee] : []),
+        priority: (data.status && String(data.status).includes('Progress')) ? 'Medium' : 'Low',
+        deadline: undefined,
         createdAt: data.created_at,
-        studentId: data.student_id || undefined,
+        studentId: info.student_id || undefined,
       };
       setCaseItem(c);
       // Load other cases by same student if possible
-      if (data.student_id) {
+      if (info.student_id) {
         const { data: sc } = await supabase
           .from('dashboard_cases')
           .select('case_number, title, created_at')
-          .eq('student_id', data.student_id)
+          .filter('student_info->>student_id', 'eq', String(info.student_id))
           .order('created_at', { ascending: false });
         setStudentCases((sc||[]).map((r:any)=>({ caseId: r.case_number, title: r.title, assignees: [] })));
       } else {
@@ -194,9 +195,14 @@ const CaseTaskDetailPage: React.FC = () => {
   }, [caseNumber, taskId, loadCase, loadTask, loadCaseTasks, listCaseFiles, listTaskFiles]);
   const saveCaseDescription = async () => {
     if (!caseNumber) return;
-    await supabase.from('dashboard_cases').update({ description: caseDescDraft }).eq('case_number', caseNumber);
+    // Merge description into student_info JSON instead of non-existent column
+    const { data: row } = await supabase.from('dashboard_cases').select('student_info').eq('case_number', caseNumber).single();
+    const info = (row?.student_info || {}) as any;
+    const nextInfo = { ...info, description: caseDescDraft };
+    await supabase.from('dashboard_cases').update({ student_info: nextInfo }).eq('case_number', caseNumber);
     await loadCase();
-    await supabase.from('activity_log').insert([{ type: 'case_update', entity: 'case', case_number: caseNumber, message: 'Updated case description' }]).catch(()=>{});
+    // Log activity using standardized columns
+    await supabase.from('activity_log').insert([{ entity: 'case', action: 'Updated case description', detail: { case_number: caseNumber } }]).catch(()=>{});
     setEditingCaseDesc(false);
   };
 
@@ -532,20 +538,34 @@ const ActivityList: React.FC<{ caseNumber: string; taskId: string }>=({ caseNumb
   useEffect(()=>{
     let mounted = true;
     (async()=>{
-      const { data } = await supabase.from('activity_log').select('id, type, message, created_at').eq('case_number', caseNumber).eq('task_id', taskId).order('created_at',{ascending:false}).limit(20);
+      const { data } = await supabase
+        .from('activity_log')
+        .select('id, action, detail, created_at')
+        .filter('detail->>case_number','eq', caseNumber)
+        .filter('detail->>task_id','eq', taskId)
+        .order('created_at',{ascending:false})
+        .limit(20);
       if (mounted) setItems(data||[]);
     })();
-    const chan = supabase.channel(`activity:${caseNumber}:${taskId}`).on('postgres_changes', { event:'*', schema:'public', table:'activity_log', filter:`case_number=eq.${caseNumber}` }, async ()=>{
-      const { data } = await supabase.from('activity_log').select('id, type, message, created_at').eq('case_number', caseNumber).eq('task_id', taskId).order('created_at',{ascending:false}).limit(20);
-      setItems(data||[]);
-    }).subscribe();
+    const chan = supabase
+      .channel(`activity:${caseNumber}:${taskId}`)
+      .on('postgres_changes', { event:'*', schema:'public', table:'activity_log' }, async ()=>{
+        const { data } = await supabase
+          .from('activity_log')
+          .select('id, action, detail, created_at')
+          .filter('detail->>case_number','eq', caseNumber)
+          .filter('detail->>task_id','eq', taskId)
+          .order('created_at',{ascending:false})
+          .limit(20);
+        setItems(data||[]);
+      }).subscribe();
     return ()=>{ supabase.removeChannel(chan); };
   },[caseNumber, taskId]);
   if (items.length===0) return <div className="text-xs text-text-secondary">No recent activity</div>;
   return (
     <div className="space-y-2 max-h-40 overflow-auto">
       {items.map((it:any)=> (
-        <div key={it.id} className="text-xs"><span className="text-text-secondary">[{new Date(it.created_at).toLocaleString()}]</span> {it.message}</div>
+        <div key={it.id} className="text-xs"><span className="text-text-secondary">[{new Date(it.created_at).toLocaleString()}]</span> {it.detail?.message || it.action}</div>
       ))}
     </div>
   );
