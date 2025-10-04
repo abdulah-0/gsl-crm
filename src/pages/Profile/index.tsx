@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { useSearchParams } from 'react-router-dom';
 
 // Dashboard user shape
-type AppUser = { id: string; full_name: string; email: string; role: string; status: string; permissions: string[] };
+type AppUser = { id: string; full_name: string; email: string; role: string; status: string; permissions: string[]; avatar_url?: string; phone?: string; city?: string; job_title?: string; about?: string };
 
 type TabKey = 'overview' | 'settings' | 'security' | 'notifications';
 
@@ -18,12 +18,20 @@ const ProfilePage: React.FC = () => {
 
   // Settings form
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState('');
+  const [title, setTitle] = useState('');
+  const [about, setAbout] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Security form
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
-  const canSaveName = useMemo(()=> !!me && name.trim() && name.trim() !== me.full_name, [me, name]);
+  const canSaveName = useMemo(()=> !!me && (
+    name.trim() !== (me.full_name||'') || phone !== (me.phone||'') || city !== (me.city||'') || title !== (me.job_title||'') || about !== (me.about||'') || !!avatarFile
+  ), [me, name, phone, city, title, about, avatarFile]);
   const canSavePass = useMemo(()=> newPass.length >= 8 && newPass === confirmPass, [newPass, confirmPass]);
 
   useEffect(() => {
@@ -38,7 +46,16 @@ const ProfilePage: React.FC = () => {
       const { data: au } = await supabase.auth.getUser();
       const email = au.user?.email || '';
       const { data } = await supabase.from('dashboard_users').select('*').eq('email', email).maybeSingle();
-      if (data) { setMe(data as any); setName((data as any).full_name || ''); }
+      if (data) {
+        const u = data as any;
+        setMe(u);
+        setName(u.full_name || '');
+        setPhone(u.phone || '');
+        setCity(u.city || '');
+        setTitle(u.job_title || '');
+        setAbout(u.about || '');
+        setAvatarUrl(u.avatar_url || '');
+      }
       setLoading(false);
 
       // subscribe to own user row updates
@@ -50,6 +67,11 @@ const ProfilePage: React.FC = () => {
             if (payload.eventType !== 'DELETE') {
               setMe(row);
               setName(row.full_name || '');
+              setPhone(row.phone || '');
+              setCity(row.city || '');
+              setTitle(row.job_title || '');
+              setAbout(row.about || '');
+              setAvatarUrl(row.avatar_url || '');
             }
           }
         })
@@ -66,8 +88,23 @@ const ProfilePage: React.FC = () => {
     if (!canSaveName) return;
     setSaving(true);
     try {
-      await supabase.from('dashboard_users').update({ full_name: name.trim() }).eq('id', me.id);
-      // realtime subscription will refresh UI
+      let newAvatarUrl = avatarUrl;
+      if (avatarFile) {
+        const path = `${me.id}/${Date.now()}_${avatarFile.name}`;
+        const { data: up, error: upErr } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
+        newAvatarUrl = pub.publicUrl || newAvatarUrl;
+      }
+      await supabase.from('dashboard_users').update({
+        full_name: name.trim(),
+        phone: phone || null,
+        city: city || null,
+        job_title: title || null,
+        about: about || null,
+        avatar_url: newAvatarUrl || null,
+      }).eq('id', me.id);
+      setAvatarFile(null);
       alert('Profile updated');
     } catch (err: any) {
       alert(`Failed: ${err.message || err}`);
@@ -100,12 +137,16 @@ const ProfilePage: React.FC = () => {
               <div className="text-text-secondary">Loading...</div>
             ) : me ? (
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-lg">
-                  {me.full_name?.[0] || me.email?.[0] || 'U'}
-                </div>
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="avatar" className="w-12 h-12 rounded-full object-cover"/>
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-lg">
+                    {me.full_name?.[0] || me.email?.[0] || 'U'}
+                  </div>
+                )}
                 <div>
-                  <div className="text-lg font-bold">{me.full_name || me.email}</div>
-                  <div className="text-sm text-text-secondary">{me.email} • {me.role} • {me.status}</div>
+                  <div className="text-lg font-bold">{me.full_name || 'Unnamed User'}</div>
+                  <div className="text-sm text-text-secondary">{me.role} • {me.status}</div>
                 </div>
               </div>
             ) : (
@@ -129,6 +170,9 @@ const ProfilePage: React.FC = () => {
                     <div>Email: {me?.email || '—'}</div>
                     <div>Role: {me?.role || '—'}</div>
                     <div>Status: {me?.status || '—'}</div>
+                    <div>Job Title: {me?.job_title || '2014'}</div>
+                    <div>Phone: {me?.phone || '2014'}</div>
+                    <div>City: {me?.city || '2014'}</div>
                   </div>
                   <div className="border rounded p-3">
                     <div className="font-semibold mb-2">Permissions</div>
@@ -142,19 +186,47 @@ const ProfilePage: React.FC = () => {
 
               {tab==='settings' && (
                 <form onSubmit={saveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div className="border rounded p-3">
-                    <div className="font-semibold mb-2">Profile Settings</div>
-                    <label className="block mb-2">
+                  <div className="border rounded p-3 space-y-2">
+                    <div className="font-semibold">Profile Settings</div>
+                    <label className="block">
                       <span className="text-text-secondary">Full Name</span>
                       <input value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full border rounded p-2"/>
                     </label>
-                    <div className="text-right">
-                      <button disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">Save</button>
-                    </div>
+                    <label className="block">
+                      <span className="text-text-secondary">Job Title</span>
+                      <input value={title} onChange={e=>setTitle(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                    </label>
+                    <label className="block">
+                      <span className="text-text-secondary">Phone</span>
+                      <input value={phone} onChange={e=>setPhone(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                    </label>
+                    <label className="block">
+                      <span className="text-text-secondary">City</span>
+                      <input value={city} onChange={e=>setCity(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                    </label>
+                    <label className="block">
+                      <span className="text-text-secondary">About</span>
+                      <textarea value={about} onChange={e=>setAbout(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3}/>
+                    </label>
                   </div>
-                  <div className="border rounded p-3">
-                    <div className="font-semibold mb-2">Preferences</div>
-                    <div className="text-text-secondary">(Coming soon) Theme, time zone, layout. For now, preferences are stored locally.</div>
+                  <div className="border rounded p-3 space-y-3">
+                    <div className="font-semibold">Avatar</div>
+                    <div className="flex items-center gap-3">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="avatar" className="w-16 h-16 rounded-full object-cover"/>
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center font-bold text-lg">
+                          {name?.[0] || me?.full_name?.[0] || 'U'}
+                        </div>
+                      )}
+                      <div>
+                        <input type="file" accept="image/*" onChange={e=>setAvatarFile((e.target.files&&e.target.files[0])||null)} />
+                        <div className="text-xs text-text-secondary">PNG/JPG up to ~2MB recommended</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <button disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">{saving? 'Saving...' : 'Save Changes'}</button>
+                    </div>
                   </div>
                 </form>
               )}

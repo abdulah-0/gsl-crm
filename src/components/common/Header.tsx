@@ -21,6 +21,7 @@ const Header = ({
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
+  const [avatarUrl, setAvatarUrl] = useState<string>('');
 
   useEffect(() => {
     let mounted = true;
@@ -29,15 +30,19 @@ const Header = ({
       const em = sess.user?.email || '';
       if (!mounted) return;
       setEmail(em);
-      // Try dashboard_users for full name
-      const { data: u } = await supabase.from('dashboard_users').select('full_name,email').eq('email', em).maybeSingle();
+      // Try dashboard_users for full name and avatar
+      const { data: u } = await supabase.from('dashboard_users').select('full_name,email,avatar_url').eq('email', em).maybeSingle();
       setDisplayName(u?.full_name || em || 'User');
-      // subscribe to name changes
+      setAvatarUrl(u?.avatar_url || '');
+      // subscribe to name/avatar changes
       const chan = supabase
         .channel('rt:header_user')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
           const row: any = payload.new;
-          if (row?.email === em) setDisplayName(row.full_name || em);
+          if (row?.email === em) {
+            setDisplayName(row.full_name || em);
+            setAvatarUrl(row.avatar_url || '');
+          }
         })
         .subscribe();
       return () => { mounted = false; supabase.removeChannel(chan); };
@@ -145,7 +150,7 @@ const Header = ({
             onChange={handleProfileChange}
             leftIcon={
               <img
-                src="/images/img_elm_header_photo.png"
+                src={avatarUrl || '/images/img_elm_header_photo.png'}
                 alt="Profile"
                 className="w-[30px] h-6 rounded-full object-cover"
               />
