@@ -114,11 +114,22 @@ const ProfilePage: React.FC = () => {
       };
       let { error: updErr } = await supabase.from('dashboard_users').update(updatePayload).eq('id', me.id);
 
+      // If updating by id failed, try by email (unique)
+      if (updErr) {
+        console.warn('Full update by id failed, retrying by email:', updErr.message);
+        const retryByEmail = await supabase.from('dashboard_users').update(updatePayload).eq('email', me.email);
+        updErr = retryByEmail.error || null;
+      }
+
       // Fallback: handle environments where new columns aren't present yet
       if (updErr) {
-        console.warn('Full update failed, retrying minimal fields:', updErr.message);
+        console.warn('Full update still failed, retrying minimal fields:', updErr.message);
         const minimalPayload: any = { full_name: name.trim(), avatar_url: newAvatarUrl || null };
-        const retry = await supabase.from('dashboard_users').update(minimalPayload).eq('id', me.id);
+        let retry = await supabase.from('dashboard_users').update(minimalPayload).eq('id', me.id);
+        if (retry.error) {
+          // final fallback by email
+          retry = await supabase.from('dashboard_users').update(minimalPayload).eq('email', me.email);
+        }
         updErr = retry.error || null;
       }
 
@@ -247,7 +258,7 @@ const ProfilePage: React.FC = () => {
                       </div>
                     </div>
                     <div className="text-right">
-                      <button disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">{saving? 'Saving...' : 'Save Changes'}</button>
+                      <button type="submit" disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">{saving? 'Saving...' : 'Save Changes'}</button>
                     </div>
                   </div>
                 </form>
