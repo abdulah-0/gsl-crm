@@ -57,6 +57,10 @@ const SuperAdmin: React.FC = () => {
 
   const [branchRev, setBranchRev] = useState<{ name: string; pct: number }[]>([]);
 
+
+  // Student Communication (realtime tasks summary)
+  const [commCounts, setCommCounts] = useState<{ pending: number; completed: number }>({ pending: 0, completed: 0 });
+
   // New Case modal state
   const [showAddCase, setShowAddCase] = useState(false);
   const [formStudent, setFormStudent] = useState('');
@@ -219,6 +223,17 @@ const SuperAdmin: React.FC = () => {
         { label: 'In Progress Cases', value: inProgress, delta: 0 },
         { label: 'Revenue', value: revenueK, prefix: 'Rs ', suffix: 'k', delta: 0 },
       ]);
+
+      // Student Communication counts (tasks across cases)
+      const { count: pending } = await supabase
+        .from('dashboard_tasks')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['Todo','In Progress','In Review']);
+      const { count: completed } = await supabase
+        .from('dashboard_tasks')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'Done');
+      setCommCounts({ pending: pending || 0, completed: completed || 0 });
     };
 
     load();
@@ -235,11 +250,16 @@ const SuperAdmin: React.FC = () => {
       .channel('public:activity_log')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_log' }, () => load())
       .subscribe();
+    const tChan = supabase
+      .channel('public:dashboard_tasks')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks' }, () => load())
+      .subscribe();
 
     return () => {
       supabase.removeChannel(cChan);
       supabase.removeChannel(vChan);
       supabase.removeChannel(aChan);
+      supabase.removeChannel(tChan);
     };
   }, []);
 
@@ -475,22 +495,23 @@ const SuperAdmin: React.FC = () => {
               {/* Student Communication */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
                 <h2 className="text-xl font-bold text-text-primary">Student Communication</h2>
-                <div className="mt-3 space-y-3 text-sm">
-                  <div className="flex items-start justify-between p-3 rounded-lg bg-yellow-50">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded-lg bg-yellow-50 flex items-start justify-between">
                     <div>
-                      <div className="font-semibold text-yellow-700">Pending Updates</div>
-                      <div className="text-yellow-800">12 students need progress emails</div>
+                      <div className="font-semibold text-yellow-700">Pending Tasks</div>
+                      <div className="text-yellow-800">{commCounts.pending} pending across student cases</div>
                     </div>
                     <span className="text-yellow-700 font-semibold">!</span>
                   </div>
-                  <div className="flex items-start justify-between p-3 rounded-lg bg-emerald-50">
+                  <div className="p-3 rounded-lg bg-emerald-50 flex items-start justify-between">
                     <div>
-                      <div className="font-semibold text-emerald-700">Emails Sent Today</div>
-                      <div className="text-emerald-800">47 student updates, 23 university emails</div>
+                      <div className="font-semibold text-emerald-700">Completed Tasks</div>
+                      <div className="text-emerald-800">{commCounts.completed} done</div>
                     </div>
                     <span className="text-emerald-700 font-semibold">✓</span>
                   </div>
                 </div>
+                <div className="mt-3 text-xs text-text-secondary">Realtime: updates as tasks change in Cases.</div>
               </div>
               {/* Accounts Overview */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
