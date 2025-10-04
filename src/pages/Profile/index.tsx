@@ -89,7 +89,8 @@ const ProfilePage: React.FC = () => {
     setSaving(true);
     try {
       let newAvatarUrl = avatarUrl;
-      // Try avatar upload, but don't block profile data if it fails
+
+      // Upload avatar first (optional)
       if (avatarFile) {
         try {
           const path = `${me.id}/${Date.now()}_${avatarFile.name}`;
@@ -103,15 +104,23 @@ const ProfilePage: React.FC = () => {
         }
       }
 
-      // First attempt: update all profile fields
-      const updatePayload: any = {
-        full_name: name.trim(),
-        phone: phone || null,
-        city: city || null,
-        job_title: title || null,
-        about: about || null,
-        avatar_url: newAvatarUrl || null,
-      };
+      // Detect which columns exist to avoid schema drift issues
+      const colsResp = await supabase
+        .from('information_schema.columns' as any)
+        .select('column_name')
+        .eq('table_schema', 'public')
+        .eq('table_name', 'dashboard_users');
+      const existingCols: string[] = (colsResp.data || []).map((r: any) => r.column_name);
+
+      // Build payload only with existing columns
+      const updatePayload: any = { full_name: name.trim() };
+      if (existingCols.includes('phone')) updatePayload.phone = phone || null;
+      if (existingCols.includes('city')) updatePayload.city = city || null;
+      if (existingCols.includes('job_title')) updatePayload.job_title = title || null;
+      if (existingCols.includes('about')) updatePayload.about = about || null;
+      if (existingCols.includes('avatar_url')) updatePayload.avatar_url = newAvatarUrl || null;
+
+      // Update by id -> by email
       let { error: updErr } = await supabase
         .from('dashboard_users')
         .update(updatePayload)
@@ -119,9 +128,8 @@ const ProfilePage: React.FC = () => {
         .select('id')
         .single();
 
-      // If updating by id failed or no row matched, try by email (unique)
       if (updErr) {
-        console.warn('Full update by id failed, retrying by email:', updErr.message);
+        console.warn('Update by id failed, retry by email:', updErr.message);
         const retryByEmail = await supabase
           .from('dashboard_users')
           .update(updatePayload)
@@ -131,28 +139,6 @@ const ProfilePage: React.FC = () => {
         updErr = retryByEmail.error || null;
       }
 
-      // Fallback: handle environments where new columns aren't present yet
-      if (updErr) {
-        console.warn('Full update still failed, retrying minimal fields:', updErr.message);
-        const minimalPayload: any = { full_name: name.trim(), avatar_url: newAvatarUrl || null };
-        let retry = await supabase
-          .from('dashboard_users')
-          .update(minimalPayload)
-          .eq('id', me.id)
-          .select('id')
-          .single();
-        if (retry.error) {
-          // final fallback by email
-          retry = await supabase
-            .from('dashboard_users')
-            .update(minimalPayload)
-            .eq('email', me.email)
-            .select('id')
-            .single();
-        }
-        updErr = retry.error || null;
-      }
-
       if (updErr) {
         alert(`Failed to update profile: ${updErr.message}`);
       } else {
@@ -160,6 +146,7 @@ const ProfilePage: React.FC = () => {
         alert('Profile updated');
       }
     } catch (err: any) {
+      console.error('Save profile error:', err);
       alert(`Failed: ${err.message || err}`);
     } finally { setSaving(false); }
   };
