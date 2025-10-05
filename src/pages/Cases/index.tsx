@@ -250,6 +250,26 @@ const Cases: React.FC = () => {
     }
   };
 
+  // Drag-and-drop: change case status on board
+  const handleCaseCardDragStart = (caseId: string) => (e: React.DragEvent) => {
+    try {
+      e.dataTransfer.setData('text/case', caseId);
+      e.dataTransfer.effectAllowed = 'move';
+    } catch {}
+  };
+  const handleDropCaseToStatus = (next: 'Pending'|'In Progress'|'Completed') => async (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const id = e.dataTransfer.getData('text/case');
+      if (!id) return;
+      // Optimistic UI update
+      setCases(prev => prev.map(c => c.caseId === id ? { ...c, status: next } : c));
+      await supabase.from('dashboard_cases').update({ status: next }).eq('case_number', id);
+    } catch {}
+  };
+
+  };
+
   const handleDragStart = (t: Task, from: 'active'|'backlog') => (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: t.id, from }));
   };
@@ -349,9 +369,6 @@ const Cases: React.FC = () => {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>On Going Cases</h1>
               <div className="flex items-center gap-2">
-                <button onClick={()=>setShowAddTask(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
-                  + Add Task
-                </button>
                 <button onClick={()=>setShowAddCase(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
                   + Add Case
                 </button>
@@ -517,14 +534,14 @@ const Cases: React.FC = () => {
                         {(['Pending','In Progress','Completed'] as const).map((col) => {
                           const colCases = filteredCases.filter(c => (c.status || 'In Progress') === col);
                           return (
-                            <div key={col} className="rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[180px]">
+                            <div key={col} onDragOver={(e)=>e.preventDefault()} onDrop={handleDropCaseToStatus(col)} className="rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[180px]">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="font-semibold">{col}</div>
                                 <span className="text-xs text-text-secondary">{colCases.length}</span>
                               </div>
                               <div className="space-y-2">
                                 {colCases.map(c => (
-                                  <button key={c.caseId} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
+                                  <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
                                     <div className="flex items-center justify-between text-xs text-text-secondary">
                                       <span className="font-mono">{c.caseId}</span>
                                       <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
