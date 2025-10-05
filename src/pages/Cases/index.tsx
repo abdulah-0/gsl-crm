@@ -101,6 +101,8 @@ const Cases: React.FC = () => {
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
 
+  const [boardDropCol, setBoardDropCol] = useState<'Pending'|'In Progress'|'Completed'|null>(null);
+
   // Drag-over visual state (drop a case onto Tasks section)
   const [isCaseDragOver, setIsCaseDragOver] = useState(false);
 
@@ -411,7 +413,7 @@ const Cases: React.FC = () => {
                         draggable
                         onDragStart={(e)=>{ e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
                         className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3`}
-                        title="Drag to Tasks to focus this case"
+                        title="Drag onto a Kanban column to change status"
                       >
                         <div className="flex items-center justify-between">
                           <div>
@@ -534,7 +536,13 @@ const Cases: React.FC = () => {
                         {(['Pending','In Progress','Completed'] as const).map((col) => {
                           const colCases = filteredCases.filter(c => (c.status || 'In Progress') === col);
                           return (
-                            <div key={col} onDragOver={(e)=>e.preventDefault()} onDrop={handleDropCaseToStatus(col)} className="rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[180px]">
+                            <div key={col}
+                              onDragOver={(e)=>e.preventDefault()}
+                              onDragEnter={(e)=>{ if (Array.from(e.dataTransfer.types||[]).includes('text/case')) setBoardDropCol(col); }}
+                              onDragLeave={(e)=>{ setBoardDropCol(prev => prev===col ? null : prev); }}
+                              onDrop={(e)=>{ handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
+                              className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] bg-orange-50/40' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                            >
                               <div className="flex items-center justify-between mb-2">
                                 <div className="font-semibold">{col}</div>
                                 <span className="text-xs text-text-secondary">{colCases.length}</span>
