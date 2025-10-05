@@ -423,7 +423,7 @@ const Cases: React.FC = () => {
                 onDrop={(e)=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/case'); if (id) { setActiveCaseId(id); } setIsCaseDragOver(false); }}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold">Tasks</h3>
+                  <h3 className="font-bold">Cases</h3>
                   {/* View toggles + board controls */}
                   <div className="flex items-center gap-2">
                     {view==='board' && (
@@ -440,54 +440,38 @@ const Cases: React.FC = () => {
 
                 {view === 'list' ? (
                   <>
-                    {/* Tabs */}
-                    <div className="mt-3 flex items-center gap-3 border-b">
-                      {['Active','Backlog'].map(t => (
-                        <button key={t} onClick={()=>setTab(t as any)} className={`px-3 py-2 -mb-px border-b-2 ${tab===t? 'border-[#ffa332] text-[#ffa332] font-semibold':'border-transparent text-text-secondary'}`}>{t} Tasks</button>
-                      ))}
-                    </div>
-
-                    {/* Task list header */}
+                    {/* Cases list header */}
                     <div className="mt-3 grid grid-cols-12 text-xs text-text-secondary px-2">
-                      <div className="col-span-4">Task Name</div>
-                      <div className="col-span-2">Estimate</div>
-                      <div className="col-span-2">Spent</div>
-                      <div className="col-span-2">Assignee</div>
-                      <div className="col-span-1">Priority</div>
+                      <div className="col-span-2">Case ID</div>
+                      <div className="col-span-3">Title</div>
+                      <div className="col-span-2">Branch</div>
+                      <div className="col-span-2">Type</div>
+                      <div className="col-span-2">Assignees</div>
                       <div className="col-span-1 text-right">Status</div>
                     </div>
 
-                    {/* Task list */}
+                    {/* Cases list */}
                     <div className="mt-1 divide-y overflow-y-auto" style={{ maxHeight: '520px' }}>
-                      {tasks.length === 0 && (
-                        <div className="py-8 text-center text-text-secondary">No tasks in this list.</div>
+                      {filteredCases.length === 0 && (
+                        <div className="py-8 text-center text-text-secondary">No cases found.</div>
                       )}
-                      {tasks.map(task => {
-                        const pStyle = PRIORITY_STYLES[task.priority];
-                        const sStyle = STATUS_STYLES[task.status];
+                      {filteredCases.map(c => {
+                        const sStyle = {
+                          'Pending': 'bg-yellow-100 text-yellow-800',
+                          'In Progress': 'bg-blue-100 text-blue-700',
+                          'Completed': 'bg-emerald-100 text-emerald-700',
+                        }[c.status || 'In Progress'] as string;
                         return (
-                          <button key={task.id} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="w-full text-left py-3 px-2 hover:bg-gray-50">
+                          <button key={c.caseId} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left py-3 px-2 hover:bg-gray-50">
                             <div className="grid grid-cols-12 items-center gap-2">
-                              <div className="col-span-4 flex items-center gap-2">
-                                <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full border ${task.status==='Done' ? sStyle.dot : 'border-gray-300'}`}></span>
-                                <span className="font-semibold">{task.name}</span>
-                              </div>
-                              <div className="col-span-2">{fmtDur(task.estimateMins)}</div>
-                              <div className="col-span-2">{fmtDur(task.spentMins)}</div>
-                              <div className="col-span-2 flex items-center gap-2">
-                                <img src={task.assignee.avatar || '/images/img_image.svg'} alt="avatar" className="w-6 h-6 rounded-full" />
-                                <span className="text-sm">{task.assignee.name}</span>
-                              </div>
-                              <div className="col-span-1">
-                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
-                                  <span>{pStyle.arrow}</span>
-                                  <span>{task.priority}</span>
-                                </span>
-                              </div>
+                              <div className="col-span-2 font-mono text-sm text-text-secondary">{c.caseId}</div>
+                              <div className="col-span-3 font-semibold">{c.title}</div>
+                              <div className="col-span-2">{c.branch || '—'}</div>
+                              <div className="col-span-2">{c.type || '—'}</div>
+                              <div className="col-span-2 truncate text-sm">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</div>
                               <div className="col-span-1 text-right">
-                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${sStyle.bg} ${sStyle.text}`}>
-                                  <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
-                                  <span>{task.status}</span>
+                                <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${sStyle}`}>
+                                  <span>{c.status || 'In Progress'}</span>
                                 </span>
                               </div>
                             </div>
@@ -498,138 +482,71 @@ const Cases: React.FC = () => {
                   </>
                 ) : view === 'grid' ? (
                   <>
-                    {/* Tabs */}
-                    <div className="mt-3 flex items-center gap-3 border-b">
-                      {['Active','Backlog'].map(t => (
-                        <button key={t} onClick={()=>setTab(t as any)} className={`px-3 py-2 -mb-px border-b-2 ${tab===t? 'border-[#ffa332] text-[#ffa332] font-semibold':'border-transparent text-text-secondary'}`}>{t} Tasks</button>
-                      ))}
-                    </div>
-
-                    {/* Grid of task cards */}
+                    {/* Grid of case cards */}
                     <div className="mt-3">
-                      {tasks.length === 0 ? (
-                        <div className="py-8 text-center text-text-secondary">No tasks in this list.</div>
+                      {filteredCases.length === 0 ? (
+                        <div className="py-8 text-center text-text-secondary">No cases found.</div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" style={{ maxHeight: '520px', overflowY: 'auto' }}>
-                          {tasks.map(task => {
-                            const pStyle = PRIORITY_STYLES[task.priority];
-                            const sStyle = STATUS_STYLES[task.status];
-                            return (
-                              <button key={task.id} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow transition">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2 text-xs text-text-secondary">
-                                    <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
-                                    <span className="font-mono">{task.id}</span>
-                                  </div>
-                                  <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
-                                    <span>{pStyle.arrow}</span>
-                                    <span>{task.priority}</span>
-                                  </span>
+                          {filteredCases.map(c => (
+                            <button key={c.caseId} onClick={()=>navigate(`/cases/${c.caseId}`)} className="text-left bg-white rounded-lg border p-3 shadow-sm hover:shadow transition">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs text-text-secondary">
+                                  <span className="font-mono">{c.caseId}</span>
                                 </div>
-                                <div className="mt-1 font-semibold">{task.name}</div>
-                                <div className="mt-2 flex items-center justify-between text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <img src={task.assignee.avatar || '/images/img_image.svg'} alt="avatar" className="w-5 h-5 rounded-full" />
-                                    <span className="text-text-secondary">{task.assignee.name}</span>
-                                  </div>
-                                  <span className="text-text-secondary">{fmtDur(task.estimateMins)}</span>
-                                </div>
-                                <div className={`mt-2 inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${sStyle.bg} ${sStyle.text}`}>
-                                  <span className={`w-2 h-2 rounded-full ${sStyle.dot}`}></span>
-                                  <span>{task.status}</span>
-                                </div>
-                              </button>
-                            );
-                          })}
+                                <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${c.status==='Completed'?'bg-emerald-100 text-emerald-700':c.status==='Pending'?'bg-yellow-100 text-yellow-800':'bg-blue-100 text-blue-700'}`}>
+                                  <span>{c.status || 'In Progress'}</span>
+                                </span>
+                              </div>
+                              <div className="mt-1 font-semibold">{c.title}</div>
+                              <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
+                                <span>{c.branch || '\u2014'} • {c.type || '\u2014'}</span>
+                                <span>{(c.assignees||[]).length || (c.employee?1:0)} assignee(s)</span>
+                              </div>
+                            </button>
+                          ))}
                         </div>
                       )}
                     </div>
                   </>
                 ) : (
                   <>
-                    {/* Board View */}
+                    {/* Cases Kanban Board by status */}
                     <div className="mt-3">
-                      <h4 className="text-sm font-semibold text-text-secondary">Active Tasks</h4>
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                        {BOARD_COLUMNS.map(col => {
-                          const colTasks = (activeCase?.active || []).filter(t => t.status === col);
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {(['Pending','In Progress','Completed'] as const).map((col) => {
+                          const colCases = filteredCases.filter(c => (c.status || 'In Progress') === col);
                           return (
-                            <div key={col} onDragOver={(e)=>e.preventDefault()} onDrop={handleDropToStatus(col)} className="rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[180px]">
+                            <div key={col} className="rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[180px]">
                               <div className="flex items-center justify-between mb-2">
-                                <div className="font-semibold">{displayStatus(col)}</div>
-                                <span className="text-xs text-text-secondary">{colTasks.length}</span>
+                                <div className="font-semibold">{col}</div>
+                                <span className="text-xs text-text-secondary">{colCases.length}</span>
                               </div>
                               <div className="space-y-2">
-                                {colTasks.map(task => {
-                                  const pStyle = PRIORITY_STYLES[task.priority];
-                                  return (
-                                    <div key={task.id} draggable onDragStart={handleDragStart(task, 'active')} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="cursor-pointer bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
-                                      <div className="flex items-center justify-between text-xs text-text-secondary">
-                                        <span className="font-mono">{task.id}</span>
-                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
-                                          <span>{pStyle.arrow}</span>
-                                          <span>{task.priority}</span>
-                                        </span>
-                                      </div>
-                                      <div className="mt-1 font-semibold text-sm">{task.name}</div>
-                                      <div className="mt-2 flex items-center justify-between text-xs">
-                                        <div className="flex items-center gap-2">
-                                          <img src={task.assignee.avatar || '/images/img_image.svg'} alt="avatar" className="w-5 h-5 rounded-full" />
-                                          <span className="text-text-secondary">{task.assignee.name}</span>
-                                        </div>
-                                        <span className="text-text-secondary">{fmtDur(task.estimateMins)}</span>
-                                      </div>
+                                {colCases.map(c => (
+                                  <button key={c.caseId} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
+                                    <div className="flex items-center justify-between text-xs text-text-secondary">
+                                      <span className="font-mono">{c.caseId}</span>
+                                      <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
                                     </div>
-                                  );
-                                })}
-                                {colTasks.length===0 && (
-                                  <div className="text-xs text-text-secondary text-center py-4">Drop here</div>
+                                    <div className="mt-1 font-semibold text-sm">{c.title}</div>
+                                    <div className="mt-2 flex items-center justify-between text-xs">
+                                      <span className="text-text-secondary">{c.branch || '\u2014'} • {c.type || '\u2014'}</span>
+                                      <span className="text-text-secondary">{(c.createdAt && new Date(c.createdAt).toLocaleDateString()) || ''}</span>
+                                    </div>
+                                  </button>
+                                ))}
+                                {colCases.length===0 && (
+                                  <div className="text-xs text-text-secondary text-center py-4">No cases</div>
                                 )}
                               </div>
                             </div>
                           );
                         })}
                       </div>
-
-                      {/* Backlog */}
-                      <div className="mt-6">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-semibold text-text-secondary">Backlog</h4>
-                          <span className="text-xs text-text-secondary">{(activeCase?.backlog||[]).length} tasks</span>
-                        </div>
-                        <div onDragOver={(e)=>e.preventDefault()} onDrop={handleDropToBacklog} className="mt-2 rounded-lg border border-dashed border-gray-300 p-2 bg-gray-50/50 min-h-[120px]">
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                            {(activeCase?.backlog || []).map(task => {
-                              const pStyle = PRIORITY_STYLES[task.priority];
-                              return (
-                                <div key={task.id} draggable onDragStart={handleDragStart(task, 'backlog')} onClick={()=>navigate(`/cases/${activeCase.caseId}/tasks/${task.id}`)} className="cursor-pointer bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
-                                  <div className="flex items-center justify-between text-xs text-text-secondary">
-                                    <span className="font-mono">{task.id}</span>
-                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${pStyle.bg} ${pStyle.text} ${pStyle.border?`border ${pStyle.border}`:''}`}>
-                                      <span>{pStyle.arrow}</span>
-                                      <span>{task.priority}</span>
-                                    </span>
-                                  </div>
-                                  <div className="mt-1 font-semibold text-sm">{task.name}</div>
-                                  <div className="mt-2 flex items-center justify-between text-xs">
-                                    <div className="flex items-center gap-2">
-                                      <img src={task.assignee.avatar || '/images/img_image.svg'} alt="avatar" className="w-5 h-5 rounded-full" />
-                                      <span className="text-text-secondary">{task.assignee.name}</span>
-                                    </div>
-                                    <span className="text-text-secondary">{fmtDur(task.estimateMins)}</span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {(activeCase?.backlog||[]).length===0 && (
-                              <div className="text-xs text-text-secondary text-center py-4 col-span-full">No backlog tasks</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </>
-                )}
+                ) }
               </section>
             </div>
           </section>
