@@ -34,19 +34,20 @@ const Sidebar = ({
         const role = roleStr.toLowerCase();
         const superRole = role.includes('super');
         setIsSuper(superRole);
-        const ALL = ['dashboard','students','services','cases','calendar','finances','employees','teachers','messenger','info-portal','reports','users'];
+        const ALL = ['dashboard','students','services','cases','calendar','finances','teachers','messenger','info','reports','users'];
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
+        const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
         if (superRole) {
           setAllowed(ALL);
         } else if (role.includes('admin')) {
           // Admins see at least Teachers by default
-          const union = Array.from(new Set([...(perms||[]), 'teachers']));
+          const union = Array.from(new Set([...normalizedPerms, 'teachers']));
           setAllowed(union);
         } else if (role.includes('teacher')) {
           // Teachers by default only see Teachers unless explicitly granted more
-          setAllowed((perms && perms.length>0) ? perms : ['teachers']);
+          setAllowed((normalizedPerms && normalizedPerms.length>0) ? normalizedPerms : ['teachers']);
         } else {
-          setAllowed(perms.length ? perms : null);
+          setAllowed(normalizedPerms.length ? normalizedPerms : null);
         }
       } catch {
         setAllowed(null);
@@ -65,7 +66,7 @@ const Sidebar = ({
 
     { id: 'teachers', label: 'Teachers', icon: '/images/img_icn_sidebar_emp.svg', href: '/teachers' },
     { id: 'messenger', label: 'Messenger', icon: '/images/img_icn_sidebar_mes.svg', href: '/messenger' },
-    { id: 'info-portal', label: 'Info Portal', icon: '/images/img_icn_sidebar_inf.svg', href: '/info-portal' },
+    { id: 'info', label: 'Info', icon: '/images/img_icn_sidebar_inf.svg', href: '/info' },
     { id: 'reports', label: 'Reports', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/reports' },
     { id: 'users', label: 'Users', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/users' },
   ];

@@ -12,7 +12,7 @@ import CalendarPage from './pages/Calendar';
 import FinancesPage from './pages/Finances';
 
 import MessengerPage from './pages/Messenger';
-import InfoPortalPage from './pages/InfoPortal';
+import InfoPage from './pages/Info';
 import ReportsPage from './pages/Reports';
 import SuperAdminPage from './pages/SuperAdmin';
 import ConsultantPage from './pages/Consultant';
@@ -139,7 +139,7 @@ const AppRoutes = () => {
         <Route path="/finances" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
 
         <Route path="/messenger" element={<ProtectedRoute><MessengerPage /></ProtectedRoute>} />
-        <Route path="/info-portal" element={<ProtectedRoute><InfoPortalPage /></ProtectedRoute>} />
+        <Route path="/info" element={<ProtectedRoute><InfoPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/login" element={<LoginPage />} />
