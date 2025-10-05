@@ -121,24 +121,46 @@ const StudentsPage: React.FC = () => {
     if (err) { alert(err); return; }
     setSaving(true);
     try {
-      const id = `ST${Date.now().toString().slice(-8)}`;
-      let photo_url: string | undefined = undefined;
-      if (photoFile) {
-        const path = `students/${id}/photo_${Date.now()}_${photoFile.name}`;
+      // 1) Create the student to get auto-generated ID
+      const { data: created, error: eCreate } = await supabase
+        .from('dashboard_students')
+        .insert([{
+          program_title: s.program_title,
+          batch_no: s.batch_no,
+          full_name: s.full_name,
+          father_name: s.father_name,
+          phone: s.phone,
+          email: s.email,
+          cnic: s.cnic,
+          dob: s.dob,
+          city: s.city,
+          reference: s.reference || null,
+          status: s.status,
+          archived: false
+        }])
+        .select('id')
+        .single();
+      if (eCreate) throw eCreate;
+      const newId = created?.id as string;
+
+      // 2) Optional photo upload using the generated ID, then update
+      if (photoFile && newId) {
+        const path = `students/${newId}/photo_${Date.now()}_${photoFile.name}`;
         await supabase.storage.from('attachments').upload(path, photoFile);
-        photo_url = fileUrl(path);
+        const photo_url = fileUrl(path);
+        await supabase.from('dashboard_students').update({ photo_url }).eq('id', newId);
       }
-      const payload = { id, program_title: s.program_title, batch_no: s.batch_no, full_name: s.full_name, father_name: s.father_name, phone: s.phone, email: s.email, cnic: s.cnic, dob: s.dob, city: s.city, reference: s.reference || null, status: s.status, photo_url, archived: false };
-      const { error: e1 } = await supabase.from('dashboard_students').insert([payload]);
-      if (e1) throw e1;
-      if (academics.length) {
-        const acadRows = academics.map(a => ({ student_id: id, serial: a.serial, degree_name: a.degree_name, grade: a.grade, year: a.year, institute: a.institute }));
+
+      // 3) Related tables using the generated student_id
+      if (academics.length && newId) {
+        const acadRows = academics.map(a => ({ student_id: newId, serial: a.serial, degree_name: a.degree_name, grade: a.grade, year: a.year, institute: a.institute }));
         await supabase.from('dashboard_student_academics').insert(acadRows);
       }
-      if (experiences.length) {
-        const expRows = experiences.map(w => ({ student_id: id, serial: w.serial, org: w.org, designation: w.designation, period: w.period }));
+      if (experiences.length && newId) {
+        const expRows = experiences.map(w => ({ student_id: newId, serial: w.serial, org: w.org, designation: w.designation, period: w.period }));
         await supabase.from('dashboard_student_experiences').insert(expRows);
       }
+
       resetForm();
       setTab('list');
       await loadList();

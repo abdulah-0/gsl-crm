@@ -270,11 +270,10 @@ const Cases: React.FC = () => {
 
   const addCase = async (e: React.FormEvent) => {
     e.preventDefault();
-    const case_number = formCaseId.trim();
     const title = formTitle.trim() || sf.basic_name || 'New Case';
-    if (!case_number || !title) return;
+    if (!title) return;
     const assignees = formAssignees.split(',').map(s => s.trim()).filter(Boolean);
-    const payload: any = { case_number, title, assignees, status: 'In Progress', student_info: sf };
+    const payload: any = { title, assignees, status: 'In Progress', student_info: sf };
     const { data, error } = await supabase
       .from('dashboard_cases')
       .insert([payload])
@@ -648,7 +647,7 @@ const Cases: React.FC = () => {
 
             {/* Case Meta */}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <label><span className="text-text-secondary">Case ID</span><input value={formCaseId} onChange={e=>setFormCaseId(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="PN001245" required/></label>
+              <label><span className="text-text-secondary">Case ID</span><input value={formCaseId} onChange={e=>setFormCaseId(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Auto-generated" disabled/></label>
               <label className="sm:col-span-2"><span className="text-text-secondary">Case Title</span><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Case Title (optional)"/></label>
             </div>
 

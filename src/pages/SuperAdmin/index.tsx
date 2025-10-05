@@ -287,18 +287,17 @@ const SuperAdmin: React.FC = () => {
     e.preventDefault();
     if (!formStudent.trim()) { setFormError('Student name is required'); return; }
     setSavingCase(true);
-    const caseNumber = `PN${Date.now()}`;
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .insert([{ case_number: caseNumber, title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus }])
-      .select('id, title, branch, type, employee, status, created_at')
+      .insert([{ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus }])
+      .select('id, case_number, title, branch, type, employee, status, created_at')
       .single();
     setSavingCase(false);
     if (error) { setFormError(error.message); return; }
     if (data) {
       setRecentCases(prev => [{ id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }, ...prev]);
       // Log activity (fire-and-forget)
-      await supabase.from('activity_log').insert([{ entity: 'dashboard_case', action: `Created case ${caseNumber} for ${formStudent.trim()} in ${formBranch}`, detail: { case_number: caseNumber, student: formStudent.trim(), branch: formBranch } }]);
+      await supabase.from('activity_log').insert([{ entity: 'dashboard_case', action: `Created case ${data.case_number} for ${formStudent.trim()} in ${formBranch}`, detail: { case_number: data.case_number, student: formStudent.trim(), branch: formBranch } }]);
     }
     setShowAddCase(false);
   };
