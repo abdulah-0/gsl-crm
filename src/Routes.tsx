@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 
+import { useIdleLogout } from './hooks/useIdleLogout';
+
 // Import page components
 import DashboardPage from './pages/Dashboard';
 import LoginPage from './pages/Login';
@@ -21,7 +23,7 @@ import TeachersPanel from './pages/Teachers/Panel';
 import ProfilePage from './pages/Profile';
 
 
-// Simple ProtectedRoute using Supabase session
+// Simple ProtectedRoute using Supabase session + idle logout
 const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const navigate = useNavigate();
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -58,6 +60,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
       mounted = false;
     };
   }, [navigate]);
+
+  // Auto-logout on inactivity after 5 minutes when allowed
+  useIdleLogout({
+    enabled: !!allowed,
+    timeoutMs: 5 * 60 * 1000,
+    onTimeout: () => navigate('/login', { replace: true }),
+  });
 
   if (allowed === null) return null; // or a loader
   return children;
