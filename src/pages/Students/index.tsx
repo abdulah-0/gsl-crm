@@ -183,10 +183,26 @@ const StudentsPage: React.FC = () => {
 
   useEffect(() => { loadList(); }, [loadList]);
 
+  // Realtime updates: reload list when students are inserted/updated/deleted
+  useEffect(() => {
+    const channel = supabase
+      .channel('students-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_students' }, () => {
+        loadList();
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(channel); } catch {} };
+  }, [loadList]);
+
   // Distincts for filters
   const programs = useMemo(() => Array.from(new Set(items.map(i => i.program_title))).filter(Boolean), [items]);
   const batches = useMemo(() => Array.from(new Set(items.map(i => i.batch_no))).filter(Boolean), [items]);
   const cities = useMemo(() => Array.from(new Set(items.map(i => i.city))).filter(Boolean), [items]);
+
+  // Counts per status (based on current filters)
+  const countActive = useMemo(() => items.filter(i => i.status === 'Active').length, [items]);
+  const countCompleted = useMemo(() => items.filter(i => i.status === 'Completed').length, [items]);
+  const countWithdrawn = useMemo(() => items.filter(i => i.status === 'Withdrawn').length, [items]);
 
   const archiveStudent = async (id: string) => {
     if (!confirm('Archive this student?')) return;
@@ -339,7 +355,7 @@ const StudentsPage: React.FC = () => {
               <div className="mt-4 space-y-8">
                 {/* Currently Enrolled */}
                 <div>
-                  <div className="text-lg font-bold mb-2">Currently Enrolled</div>
+                  <div className="text-lg font-bold mb-2">Currently Enrolled ({countActive})</div>
                   <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
@@ -380,7 +396,7 @@ const StudentsPage: React.FC = () => {
 
                 {/* Completed */}
                 <div>
-                  <div className="text-lg font-bold mb-2">Completed</div>
+                  <div className="text-lg font-bold mb-2">Completed ({countCompleted})</div>
                   <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
@@ -421,7 +437,7 @@ const StudentsPage: React.FC = () => {
 
                 {/* Withdrawn */}
                 <div>
-                  <div className="text-lg font-bold mb-2">Withdrawn</div>
+                  <div className="text-lg font-bold mb-2">Withdrawn ({countWithdrawn})</div>
                   <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
