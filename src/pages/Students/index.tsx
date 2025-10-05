@@ -44,7 +44,7 @@ const defaultStudent: Omit<Student, 'id'> = {
 };
 
 const StudentsPage: React.FC = () => {
-  const [tab, setTab] = useState<'add' | 'list'>('add');
+  const [tab, setTab] = useState<'add' | 'list'>('list');
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -66,11 +66,6 @@ const StudentsPage: React.FC = () => {
   const [fProgram, setFProgram] = useState('All');
   const [fBatch, setFBatch] = useState('All');
   const [fCity, setFCity] = useState('All');
-  const [fStatus, setFStatus] = useState('All');
-  const [page, setPage] = useState(1);
-  const pageSize = 10;
-  const [total, setTotal] = useState(0);
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const [editItem, setEditItem] = useState<Student | null>(null);
 
   useEffect(()=>{
@@ -172,11 +167,9 @@ const StudentsPage: React.FC = () => {
     }
   };
 
-  // List loading
+  // List loading (no pagination; fetch all filtered students)
   const loadList = useCallback(async () => {
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-    let query = supabase.from('dashboard_students').select('*', { count: 'exact' }).eq('archived', false);
+    let query = supabase.from('dashboard_students').select('*').eq('archived', false);
     if (search) {
       // search by name, cnic, program, batch
       query = query.or(`full_name.ilike.%${search}%,cnic.ilike.%${search}%,program_title.ilike.%${search}%,batch_no.ilike.%${search}%`);
@@ -184,11 +177,9 @@ const StudentsPage: React.FC = () => {
     if (fProgram !== 'All') query = query.eq('program_title', fProgram);
     if (fBatch !== 'All') query = query.eq('batch_no', fBatch);
     if (fCity !== 'All') query = query.eq('city', fCity);
-    if (fStatus !== 'All') query = query.eq('status', fStatus);
-    const { data, count } = await query.order('created_at', { ascending: false }).range(from, to);
+    const { data } = await query.order('created_at', { ascending: false });
     setItems((data as any as Student[]) || []);
-    setTotal(count || 0);
-  }, [page, search, fProgram, fBatch, fCity, fStatus]);
+  }, [search, fProgram, fBatch, fCity]);
 
   useEffect(() => { loadList(); }, [loadList]);
 
@@ -224,7 +215,7 @@ const StudentsPage: React.FC = () => {
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Students</h1>
             <div className="bg-white rounded-full p-1 shadow flex">
               <button onClick={()=>setTab('add')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Add New Student</button>
-              <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Currently Enrolled</button>
+              <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>All Students</button>
             </div>
           </div>
 
@@ -339,57 +330,134 @@ const StudentsPage: React.FC = () => {
           {tab==='list' && (
             <div className="mt-6">
               <div className="flex flex-wrap items-center gap-2">
-                <input placeholder="Search name, CNIC, program, batch" value={search} onChange={e=>{ setSearch(e.target.value); setPage(1); }} className="w-full sm:w-64 border rounded p-2 text-sm" />
-                <select value={fProgram} onChange={e=>{ setFProgram(e.target.value); setPage(1); }} className="border rounded p-2 text-sm"><option>All</option>{programs.map(p=><option key={p}>{p}</option>)}</select>
-                <select value={fBatch} onChange={e=>{ setFBatch(e.target.value); setPage(1); }} className="border rounded p-2 text-sm"><option>All</option>{batches.map(b=><option key={b}>{b}</option>)}</select>
-                <select value={fCity} onChange={e=>{ setFCity(e.target.value); setPage(1); }} className="border rounded p-2 text-sm"><option>All</option>{cities.map(c=><option key={c}>{c}</option>)}</select>
-                <select value={fStatus} onChange={e=>{ setFStatus(e.target.value); setPage(1); }} className="border rounded p-2 text-sm"><option>All</option><option>Active</option><option>Completed</option><option>Withdrawn</option></select>
+                <input placeholder="Search name, CNIC, program, batch" value={search} onChange={e=>{ setSearch(e.target.value); }} className="w-full sm:w-64 border rounded p-2 text-sm" />
+                <select value={fProgram} onChange={e=>{ setFProgram(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{programs.map(p=><option key={p}>{p}</option>)}</select>
+                <select value={fBatch} onChange={e=>{ setFBatch(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{batches.map(b=><option key={b}>{b}</option>)}</select>
+                <select value={fCity} onChange={e=>{ setFCity(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{cities.map(c=><option key={c}>{c}</option>)}</select>
               </div>
 
-              <div className="mt-4 overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="text-left p-2">Student ID</th>
-                      <th className="text-left p-2">Full Name</th>
-                      <th className="text-left p-2">Program Title</th>
-                      <th className="text-left p-2">Batch No.</th>
-                      <th className="text-left p-2">Phone</th>
-                      <th className="text-left p-2">Email</th>
-                      <th className="text-left p-2">City</th>
-                      <th className="text-left p-2">Status</th>
-                      <th className="text-right p-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {items.map(st => (
-                      <tr key={st.id} className="border-t">
-                        <td className="p-2">{st.id}</td>
-                        <td className="p-2">{st.full_name}</td>
-                        <td className="p-2">{st.program_title}</td>
-                        <td className="p-2">{st.batch_no}</td>
-                        <td className="p-2">{st.phone}</td>
-                        <td className="p-2">{st.email}</td>
-                        <td className="p-2">{st.city}</td>
-                        <td className="p-2">{st.status}</td>
-                        <td className="p-2 text-right">
-                          <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                          <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {items.length===0 && (
-                      <tr><td className="p-3 text-text-secondary" colSpan={9}>No students found</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <div className="mt-4 space-y-8">
+                {/* Currently Enrolled */}
+                <div>
+                  <div className="text-lg font-bold mb-2">Currently Enrolled</div>
+                  <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left p-2">Student ID</th>
+                          <th className="text-left p-2">Full Name</th>
+                          <th className="text-left p-2">Program Title</th>
+                          <th className="text-left p-2">Batch No.</th>
+                          <th className="text-left p-2">Phone</th>
+                          <th className="text-left p-2">Email</th>
+                          <th className="text-left p-2">City</th>
+                          <th className="text-right p-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.filter(st=>st.status==='Active').map(st => (
+                          <tr key={st.id} className="border-t">
+                            <td className="p-2">{st.id}</td>
+                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">{st.program_title}</td>
+                            <td className="p-2">{st.batch_no}</td>
+                            <td className="p-2">{st.phone}</td>
+                            <td className="p-2">{st.email}</td>
+                            <td className="p-2">{st.city}</td>
+                            <td className="p-2 text-right">
+                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {items.filter(st=>st.status==='Active').length===0 && (
+                          <tr><td className="p-3 text-text-secondary" colSpan={8}>No students in this section</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-              <div className="mt-3 flex items-center justify-between text-sm">
-                <div>Page {page} of {totalPages}</div>
-                <div className="flex items-center gap-2">
-                  <button onClick={()=> setPage(p=> Math.max(1, p-1))} className="px-3 py-1.5 border rounded" disabled={page<=1}>Prev</button>
-                  <button onClick={()=> setPage(p=> Math.min(totalPages, p+1))} className="px-3 py-1.5 border rounded" disabled={page>=totalPages}>Next</button>
+                {/* Completed */}
+                <div>
+                  <div className="text-lg font-bold mb-2">Completed</div>
+                  <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left p-2">Student ID</th>
+                          <th className="text-left p-2">Full Name</th>
+                          <th className="text-left p-2">Program Title</th>
+                          <th className="text-left p-2">Batch No.</th>
+                          <th className="text-left p-2">Phone</th>
+                          <th className="text-left p-2">Email</th>
+                          <th className="text-left p-2">City</th>
+                          <th className="text-right p-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.filter(st=>st.status==='Completed').map(st => (
+                          <tr key={st.id} className="border-t">
+                            <td className="p-2">{st.id}</td>
+                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">{st.program_title}</td>
+                            <td className="p-2">{st.batch_no}</td>
+                            <td className="p-2">{st.phone}</td>
+                            <td className="p-2">{st.email}</td>
+                            <td className="p-2">{st.city}</td>
+                            <td className="p-2 text-right">
+                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {items.filter(st=>st.status==='Completed').length===0 && (
+                          <tr><td className="p-3 text-text-secondary" colSpan={8}>No students in this section</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Withdrawn */}
+                <div>
+                  <div className="text-lg font-bold mb-2">Withdrawn</div>
+                  <div className="overflow-auto bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left p-2">Student ID</th>
+                          <th className="text-left p-2">Full Name</th>
+                          <th className="text-left p-2">Program Title</th>
+                          <th className="text-left p-2">Batch No.</th>
+                          <th className="text-left p-2">Phone</th>
+                          <th className="text-left p-2">Email</th>
+                          <th className="text-left p-2">City</th>
+                          <th className="text-right p-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.filter(st=>st.status==='Withdrawn').map(st => (
+                          <tr key={st.id} className="border-t">
+                            <td className="p-2">{st.id}</td>
+                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">{st.program_title}</td>
+                            <td className="p-2">{st.batch_no}</td>
+                            <td className="p-2">{st.phone}</td>
+                            <td className="p-2">{st.email}</td>
+                            <td className="p-2">{st.city}</td>
+                            <td className="p-2 text-right">
+                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {items.filter(st=>st.status==='Withdrawn').length===0 && (
+                          <tr><td className="p-3 text-text-secondary" colSpan={8}>No students in this section</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
