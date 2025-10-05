@@ -103,6 +103,13 @@ const Cases: React.FC = () => {
 
   const [boardDropCol, setBoardDropCol] = useState<'Pending'|'In Progress'|'Completed'|null>(null);
 
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2200);
+  };
+  const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
+
   // Drag-over visual state (drop a case onto Tasks section)
   const [isCaseDragOver, setIsCaseDragOver] = useState(false);
 
@@ -264,13 +271,30 @@ const Cases: React.FC = () => {
     try {
       const id = e.dataTransfer.getData('text/case');
       if (!id) return;
-      // Optimistic UI update
-      setCases(prev => prev.map(c => c.caseId === id ? { ...c, status: next } : c));
-      await supabase.from('dashboard_cases').update({ status: next }).eq('case_number', id);
-    } catch {}
+      let prevStatus: 'Pending'|'In Progress'|'Completed'|undefined;
+      // Optimistic UI update and capture previous
+      setCases(prev => prev.map(c => {
+        if (c.caseId === id) {
+          prevStatus = (c.status || 'In Progress') as any;
+          return { ...c, status: next };
+        }
+        return c;
+      }));
+      const { error } = await supabase.from('dashboard_cases').update({ status: next }).eq('case_number', id);
+      if (error) {
+        // revert
+        setCases(prev => prev.map(c => c.caseId === id ? { ...c, status: prevStatus } : c));
+        showToast('Failed to update status', 'error');
+      } else {
+        setJustDroppedId(id);
+        setTimeout(() => setJustDroppedId(null), 500);
+        showToast(`Moved case ${id} to ${next}`);
+      }
+    } catch {
+      showToast('Failed to update status', 'error');
+    }
   };
 
-  };
 
   const handleDragStart = (t: Task, from: 'active'|'backlog') => (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: t.id, from }));
@@ -355,6 +379,9 @@ const Cases: React.FC = () => {
         <title>On Going Cases | GSL Pakistan CRM</title>
         <meta name="description" content="Manage and track ongoing cases, tasks, and assignees." />
       </Helmet>
+
+      {/* Toast placeholder for build test */}
+      {false && <div />}
 
       <main className="w-full min-h-screen bg-background-main flex">
         {/* App Sidebar (global) */}
@@ -541,7 +568,7 @@ const Cases: React.FC = () => {
                               onDragEnter={(e)=>{ if (Array.from(e.dataTransfer.types||[]).includes('text/case')) setBoardDropCol(col); }}
                               onDragLeave={(e)=>{ setBoardDropCol(prev => prev===col ? null : prev); }}
                               onDrop={(e)=>{ handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
-                              className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] bg-orange-50/40' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                              className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
                             >
                               <div className="flex items-center justify-between mb-2">
                                 <div className="font-semibold">{col}</div>
@@ -549,7 +576,7 @@ const Cases: React.FC = () => {
                               </div>
                               <div className="space-y-2">
                                 {colCases.map(c => (
-                                  <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition">
+                                  <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className={`w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition ${justDroppedId===c.caseId ? 'ring-2 ring-[#ffa332] animate-pulse' : ''}`}>
                                     <div className="flex items-center justify-between text-xs text-text-secondary">
                                       <span className="font-mono">{c.caseId}</span>
                                       <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
@@ -832,6 +859,8 @@ const Cases: React.FC = () => {
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">{selectedTask.task.name}</h3>
               <button type="button" onClick={()=>setSelectedTask(null)} className="text-text-secondary hover:opacity-70">✕</button>
+
+
             </div>
             <div className="mt-3 text-sm text-text-secondary">
               <div><strong>Case:</strong> {selectedTask.caseId}</div>
@@ -857,8 +886,12 @@ const Cases: React.FC = () => {
           </div>
         </div>
       )}
+
+
     </>
   );
 };
 
 export default Cases;
+
+
