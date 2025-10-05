@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import Sidebar from '../../components/common/Sidebar';
+import Header from '../../components/common/Header';
+import { Helmet } from 'react-helmet';
+
 
 // Types
 type PostType = 'image' | 'video' | 'text';
@@ -169,157 +173,174 @@ const InfoPage: React.FC = () => {
   };
 
   return (
-    <main className="p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Info</h1>
-        {isEditor && (
-          <button onClick={()=>{ setFormOpen(v=>!v); if (!formOpen) resetForm(); }} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">
-            {formOpen ? 'Close' : 'Create New Post'}
-          </button>
-        )}
-      </div>
+    <>
+      <Helmet>
+        <title>Info - GSL Pakistan CRM</title>
+      </Helmet>
+      <main className="w-full min-h-screen bg-background-main flex">
+        {/* App Sidebar (global) */}
+        <div className="w-[14%] min-w-[200px] hidden lg:block">
+          <Sidebar />
+        </div>
+        {/* Page content */}
+        <div className="flex-1 flex flex-col px-4 sm:px-6 lg:px-8">
+          <Header />
 
-      {/* Editor form */}
-      {isEditor && formOpen && (
-        <form onSubmit={onSubmit} className="mt-4 border rounded-lg p-4 space-y-3 bg-white shadow-sm">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-semibold">Title</label>
-              <input className="mt-1 w-full border rounded px-2 py-1" value={title} onChange={e=>setTitle(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-sm font-semibold">Type</label>
-              <select className="mt-1 w-full border rounded px-2 py-1" value={type} onChange={e=>setType(e.target.value as PostType)}>
-                <option value="image">Image / Poster</option>
-                <option value="video">Video</option>
-                <option value="text">Text / Notice</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-semibold">Description (optional)</label>
-            <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={description} onChange={e=>setDescription(e.target.value)} />
-          </div>
-
-          {type !== 'text' ? (
-            <div>
-              <label className="text-sm font-semibold">Upload file ({type === 'image' ? 'image/poster' : 'video'})</label>
-              <input ref={fileRef} type="file" accept={type==='image'? 'image/*' : 'video/*'} className="mt-1 w-full" />
-              <p className="text-xs text-text-secondary mt-1">Uploads go to Supabase Storage bucket: info</p>
-            </div>
-          ) : (
-            <div>
-              <label className="text-sm font-semibold">Notice Content</label>
-              <textarea className="mt-1 w-full border rounded px-2 py-1" rows={8} value={textContent} onChange={e=>setTextContent(e.target.value)} placeholder="Write announcement with basic formatting..." />
-            </div>
-          )}
-
-          {/* Preview */}
-          <div className="border rounded p-3 bg-gray-50">
-            <div className="text-sm font-semibold mb-2">Preview</div>
-            <div className="space-y-1">
-              <div className="font-bold">{title || 'Title'}</div>
-              {description && <div className="text-sm text-text-secondary">{description}</div>}
-              {type==='text' ? (
-                <div className="whitespace-pre-wrap text-sm">{textContent || '...'}</div>
-              ) : (
-                <div className="text-sm text-text-secondary">{fileRef.current?.files?.[0]?.name || 'No file selected'}</div>
+          <section className="mt-8 lg:mt-12">
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Info</h1>
+              {isEditor && (
+                <button onClick={()=>{ setFormOpen(v=>!v); if (!formOpen) resetForm(); }} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">
+                  {formOpen ? 'Close' : 'Create New Post'}
+                </button>
               )}
             </div>
-          </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <button type="button" onClick={()=>{ resetForm(); setFormOpen(false); }} className="px-3 py-2 rounded border">Cancel</button>
-            <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{editingId? 'Update' : 'Publish'}</button>
-          </div>
-        </form>
-      )}
+            {/* Editor form */}
+            {isEditor && formOpen && (
+              <form onSubmit={onSubmit} className="mt-4 border rounded-lg p-4 space-y-3 bg-white shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-semibold">Title</label>
+                    <input className="mt-1 w-full border rounded px-2 py-1" value={title} onChange={e=>setTitle(e.target.value)} required />
+                  </div>
+                  <div>
+                    <label className="text-sm font-semibold">Type</label>
+                    <select className="mt-1 w-full border rounded px-2 py-1" value={type} onChange={e=>setType(e.target.value as PostType)}>
+                      <option value="image">Image / Poster</option>
+                      <option value="video">Video</option>
+                      <option value="text">Text / Notice</option>
+                    </select>
+                  </div>
+                </div>
 
-      {/* Filters/Search */}
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <select className="border rounded px-2 py-1" value={filterType} onChange={e=>setFilterType(e.target.value as any)}>
-          <option value="all">All</option>
-          <option value="image">Images</option>
-          <option value="video">Videos</option>
-          <option value="text">Text</option>
-        </select>
-        <input className="border rounded px-2 py-1" placeholder="Search by title/description" value={search} onChange={e=>setSearch(e.target.value)} />
-      </div>
+                <div>
+                  <label className="text-sm font-semibold">Description (optional)</label>
+                  <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={description} onChange={e=>setDescription(e.target.value)} />
+                </div>
 
-      {/* Editor list view */}
-      {isEditor ? (
-        <div className="mt-4">
-          <div className="text-sm text-text-secondary">{loading ? 'Loading...' : `${filtered.length} posts`}</div>
-          <div className="mt-2 overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="text-left text-text-secondary">
-                  <th className="p-2">Pinned</th>
-                  <th className="p-2">Title</th>
-                  <th className="p-2">Type</th>
-                  <th className="p-2">Upload Date</th>
-                  <th className="p-2">Uploaded By</th>
-                  <th className="p-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
+                {type !== 'text' ? (
+                  <div>
+                    <label className="text-sm font-semibold">Upload file ({type === 'image' ? 'image/poster' : 'video'})</label>
+                    <input ref={fileRef} type="file" accept={type==='image'? 'image/*' : 'video/*'} className="mt-1 w-full" />
+                    <p className="text-xs text-text-secondary mt-1">Uploads go to Supabase Storage bucket: info</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-semibold">Notice Content</label>
+                    <textarea className="mt-1 w-full border rounded px-2 py-1" rows={8} value={textContent} onChange={e=>setTextContent(e.target.value)} placeholder="Write announcement with basic formatting..." />
+                  </div>
+                )}
+
+                {/* Preview */}
+                <div className="border rounded p-3 bg-gray-50">
+                  <div className="text-sm font-semibold mb-2">Preview</div>
+                  <div className="space-y-1">
+                    <div className="font-bold">{title || 'Title'}</div>
+                    {description && <div className="text-sm text-text-secondary">{description}</div>}
+                    {type==='text' ? (
+                      <div className="whitespace-pre-wrap text-sm">{textContent || '...'}</div>
+                    ) : (
+                      <div className="text-sm text-text-secondary">{fileRef.current?.files?.[0]?.name || 'No file selected'}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <button type="button" onClick={()=>{ resetForm(); setFormOpen(false); }} className="px-3 py-2 rounded border">Cancel</button>
+                  <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{editingId? 'Update' : 'Publish'}</button>
+                </div>
+              </form>
+            )}
+
+            {/* Filters/Search */}
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <select className="border rounded px-2 py-1" value={filterType} onChange={e=>setFilterType(e.target.value as any)}>
+                <option value="all">All</option>
+                <option value="image">Images</option>
+                <option value="video">Videos</option>
+                <option value="text">Text</option>
+              </select>
+              <input className="border rounded px-2 py-1" placeholder="Search by title/description" value={search} onChange={e=>setSearch(e.target.value)} />
+            </div>
+
+            {/* Editor list view */}
+            {isEditor ? (
+              <div className="mt-4">
+                <div className="text-sm text-text-secondary">{loading ? 'Loading...' : `${filtered.length} posts`}</div>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-text-secondary">
+                        <th className="p-2">Pinned</th>
+                        <th className="p-2">Title</th>
+                        <th className="p-2">Type</th>
+                        <th className="p-2">Upload Date</th>
+                        <th className="p-2">Uploaded By</th>
+                        <th className="p-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {filtered.map(p => (
+                        <tr key={p.id}>
+                          <td className="p-2"><button className={`text-xs px-2 py-1 rounded ${p.pinned? 'bg-amber-100 text-amber-800' : 'bg-gray-100'}`} onClick={()=>togglePin(p)}>{p.pinned? 'Pinned' : 'Pin'}</button></td>
+                          <td className="p-2 font-semibold">{p.title}</td>
+                          <td className="p-2 capitalize">{p.type}</td>
+                          <td className="p-2">{p.created_at ? new Date(p.created_at).toLocaleString() : ''}</td>
+                          <td className="p-2">{p.created_by || ''}</td>
+                          <td className="p-2 text-right space-x-2">
+                            <button className="text-blue-600 hover:underline" onClick={()=>window.open(`/info#${p.id}`, '_self')}>View</button>
+                            <button className="text-amber-600 hover:underline" onClick={()=>handleEdit(p)}>Edit</button>
+                            <button className="text-red-600 hover:underline" onClick={()=>handleDelete(p)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {filtered.length===0 && (
+                        <tr><td colSpan={6} className="p-4 text-center text-text-secondary">No posts</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              // Viewer feed
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {filtered.map(p => (
-                  <tr key={p.id}>
-                    <td className="p-2"><button className={`text-xs px-2 py-1 rounded ${p.pinned? 'bg-amber-100 text-amber-800' : 'bg-gray-100'}`} onClick={()=>togglePin(p)}>{p.pinned? 'Pinned' : 'Pin'}</button></td>
-                    <td className="p-2 font-semibold">{p.title}</td>
-                    <td className="p-2 capitalize">{p.type}</td>
-                    <td className="p-2">{p.created_at ? new Date(p.created_at).toLocaleString() : ''}</td>
-                    <td className="p-2">{p.created_by || ''}</td>
-                    <td className="p-2 text-right space-x-2">
-                      <button className="text-blue-600 hover:underline" onClick={()=>window.open(`/info#${p.id}`, '_self')}>View</button>
-                      <button className="text-amber-600 hover:underline" onClick={()=>handleEdit(p)}>Edit</button>
-                      <button className="text-red-600 hover:underline" onClick={()=>handleDelete(p)}>Delete</button>
-                    </td>
-                  </tr>
+                  <article key={p.id} id={p.id} className="bg-white rounded-lg border shadow-sm p-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold">{p.title}</h3>
+                      {p.pinned && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800">Pinned</span>}
+                    </div>
+                    {p.description && <p className="mt-1 text-sm text-text-secondary">{p.description}</p>}
+                    <div className="mt-2">
+                      {p.type==='image' && p.file_url && (
+                        <img src={p.file_url} alt={p.title} className="w-full h-48 object-cover rounded" />
+                      )}
+                      {p.type==='video' && p.file_url && (
+                        <video controls className="w-full rounded">
+                          <source src={p.file_url} />
+                        </video>
+                      )}
+                      {p.type==='text' && (
+                        <div className="whitespace-pre-wrap text-sm">{p.text_content}</div>
+                      )}
+                    </div>
+                    <div className="mt-2 text-xs text-text-secondary flex items-center justify-between">
+                      <span>{p.created_at ? new Date(p.created_at).toLocaleString() : ''}</span>
+                      <span>{p.created_by || ''}</span>
+                    </div>
+                  </article>
                 ))}
                 {filtered.length===0 && (
-                  <tr><td colSpan={6} className="p-4 text-center text-text-secondary">No posts</td></tr>
+                  <div className="col-span-full text-center text-text-secondary">No posts</div>
                 )}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            )}
+
+          </section>
         </div>
-      ) : (
-        // Viewer feed
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map(p => (
-            <article key={p.id} id={p.id} className="bg-white rounded-lg border shadow-sm p-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold">{p.title}</h3>
-                {p.pinned && <span className="text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800">Pinned</span>}
-              </div>
-              {p.description && <p className="mt-1 text-sm text-text-secondary">{p.description}</p>}
-              <div className="mt-2">
-                {p.type==='image' && p.file_url && (
-                  <img src={p.file_url} alt={p.title} className="w-full h-48 object-cover rounded" />
-                )}
-                {p.type==='video' && p.file_url && (
-                  <video controls className="w-full rounded">
-                    <source src={p.file_url} />
-                  </video>
-                )}
-                {p.type==='text' && (
-                  <div className="whitespace-pre-wrap text-sm">{p.text_content}</div>
-                )}
-              </div>
-              <div className="mt-2 text-xs text-text-secondary flex items-center justify-between">
-                <span>{p.created_at ? new Date(p.created_at).toLocaleString() : ''}</span>
-                <span>{p.created_by || ''}</span>
-              </div>
-            </article>
-          ))}
-          {filtered.length===0 && (
-            <div className="col-span-full text-center text-text-secondary">No posts</div>
-          )}
-        </div>
-      )}
-    </main>
+      </main>
+    </>
   );
 };
 
