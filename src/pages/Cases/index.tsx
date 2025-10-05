@@ -100,6 +100,7 @@ const Cases: React.FC = () => {
   // UI state
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
+  const [contentMode, setContentMode] = useState<'cases' | 'tasks'>('cases');
 
   const [boardDropCol, setBoardDropCol] = useState<'Pending'|'In Progress'|'Completed'|null>(null);
 
@@ -438,16 +439,17 @@ const Cases: React.FC = () => {
                       <div
                         key={c.caseId}
                         draggable
+                        onClick={()=>{ setActiveCaseId(c.caseId); setContentMode('tasks'); }}
                         onDragStart={(e)=>{ e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
-                        className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3`}
-                        title="Drag onto a Kanban column to change status"
+                        className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3 cursor-pointer`}
+                        title="Click to view tasks • Drag onto a Kanban column to change status"
                       >
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-xs text-text-muted">{c.caseId}</div>
                             <div className="font-semibold">{c.title}</div>
                           </div>
-                          <button onClick={()=>{ setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
+                          <button onClick={(e)=>{ e.stopPropagation(); setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
                             View details &gt;
                           </button>
                         </div>
@@ -469,7 +471,12 @@ const Cases: React.FC = () => {
                 onDrop={(e)=>{ e.preventDefault(); const id = e.dataTransfer.getData('text/case'); if (id) { setActiveCaseId(id); } setIsCaseDragOver(false); }}
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold">Cases</h3>
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-bold">{contentMode==='cases' ? 'Cases' : `Tasks for ${activeCaseId}`}</h3>
+                    {contentMode==='tasks' && (
+                      <button onClick={()=>setContentMode('cases')} className="text-xs text-blue-600 hover:underline">Show all cases</button>
+                    )}
+                  </div>
                   {/* View toggles + board controls */}
                   <div className="flex items-center gap-2">
                     {view==='board' && (
@@ -483,8 +490,100 @@ const Cases: React.FC = () => {
                     <button onClick={()=>setView('board')} className={`px-2 py-1 rounded ${view==='board'?'bg-gray-100':''}`} aria-label="Board view">▤</button>
                   </div>
                 </div>
+                {contentMode==='tasks' && (
+                  <>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button onClick={()=>setTab('Active')} className={`px-3 py-1.5 rounded text-sm font-semibold ${tab==='Active'?'bg-gray-100':'hover:bg-gray-50'}`}>Active</button>
+                      <button onClick={()=>setTab('Backlog')} className={`px-3 py-1.5 rounded text-sm font-semibold ${tab==='Backlog'?'bg-gray-100':'hover:bg-gray-50'}`}>Backlog</button>
+                    </div>
 
-                {view === 'list' ? (
+                    {view==='list' ? (
+                      <>
+                        <div className="mt-3 grid grid-cols-12 text-xs text-text-secondary px-2">
+                          <div className="col-span-5">Task</div>
+                          <div className="col-span-3">Assignee</div>
+                          <div className="col-span-2">Estimate</div>
+                          <div className="col-span-2 text-right">Status</div>
+                        </div>
+                        <div className="mt-1 divide-y overflow-y-auto" style={{ maxHeight: '520px' }}>
+                          {(tasks||[]).length===0 && <div className="py-8 text-center text-text-secondary">No tasks</div>}
+                          {(tasks||[]).map(t => (
+                            <div key={t.id} className="w-full text-left py-3 px-2">
+                              <div className="grid grid-cols-12 items-center gap-2">
+                                <div className="col-span-5 font-semibold truncate">{t.name}</div>
+                                <div className="col-span-3 text-sm">{t.assignee.name}</div>
+                                <div className="col-span-2 text-sm">{fmtDur(t.estimateMins)}</div>
+                                <div className="col-span-2 text-right">
+                                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>
+                                    <span>{displayStatus(t.status)}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : view==='grid' ? (
+                      <>
+                        <div className="mt-3">
+                          {(tasks||[]).length===0 ? (
+                            <div className="py-8 text-center text-text-secondary">No tasks</div>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" style={{ maxHeight: '520px', overflowY: 'auto' }}>
+                              {(tasks||[]).map(t => (
+                                <div key={t.id} className="text-left bg-white rounded-lg border p-3 shadow-sm">
+                                  <div className="flex items-center justify-between">
+                                    <div className="text-xs text-text-secondary">{t.assignee.name}</div>
+                                    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>
+                                      <span>{displayStatus(t.status)}</span>
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 font-semibold truncate">{t.name}</div>
+                                  <div className="mt-2 text-xs text-text-secondary">Est: {fmtDur(t.estimateMins)}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-3">
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                            {BOARD_COLUMNS.map(col => {
+                              const colTasks = (tab==='Active' ? (activeCase?.active||[]) : (activeCase?.backlog||[])).filter(t => t.status===col);
+                              return (
+                                <div key={col} onDragOver={(e)=>e.preventDefault()} onDrop={handleDropToStatus(col)} className="rounded-lg border p-2 min-h-[180px] border-dashed border-gray-300 bg-gray-50/50">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="font-semibold">{displayStatus(col)}</div>
+                                    <span className="text-xs text-text-secondary">{colTasks.length}</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    {colTasks.map(t => (
+                                      <div key={t.id} className="w-full text-left bg-white rounded-md border p-2 shadow-sm">
+                                        <div className="flex items-center justify-between text-xs text-text-secondary">
+                                          <span className="truncate">{t.assignee.name}</span>
+                                          <span>{fmtDur(t.estimateMins)}</span>
+                                        </div>
+                                        <div className="mt-1 font-semibold text-sm truncate">{t.name}</div>
+                                      </div>
+                                    ))}
+                                    {colTasks.length===0 && (
+                                      <div className="text-xs text-text-secondary text-center py-4">No tasks</div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+
+
+                {contentMode==='cases' && (view === 'list' ? (
                   <>
                     {/* Cases list header */}
                     <div className="mt-3 grid grid-cols-12 text-xs text-text-secondary px-2">
@@ -598,7 +697,7 @@ const Cases: React.FC = () => {
                       </div>
                     </div>
                   </>
-                ) }
+                ) ) }
               </section>
             </div>
           </section>
