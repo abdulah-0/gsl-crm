@@ -62,7 +62,7 @@ const Sidebar = ({
     { id: 'services', label: 'Products & Services', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/services' },
     { id: 'calendar', label: 'Calendar', icon: '/images/img_icn_sidebar_calendar_inactive.svg', href: '/calendar' },
     { id: 'finances', label: 'Finances', icon: '/images/img_icn_sidebar_vac.svg', href: '/finances' },
-    { id: 'employees', label: 'Employees', icon: '/images/img_icn_sidebar_emp.svg', href: '/employees' },
+
     { id: 'teachers', label: 'Teachers', icon: '/images/img_icn_sidebar_emp.svg', href: '/teachers' },
     { id: 'messenger', label: 'Messenger', icon: '/images/img_icn_sidebar_mes.svg', href: '/messenger' },
     { id: 'info-portal', label: 'Info Portal', icon: '/images/img_icn_sidebar_inf.svg', href: '/info-portal' },
