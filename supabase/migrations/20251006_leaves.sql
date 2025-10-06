@@ -1,3 +1,4 @@
+
 -- Leaves table for employee leave requests and tracking
 create table if not exists public.leaves (
   id uuid primary key default gen_random_uuid(),
@@ -60,4 +61,5 @@ create policy leaves_delete_admin on public.leaves
         )
     )
   );
+
 
