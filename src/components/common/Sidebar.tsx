@@ -34,7 +34,7 @@ const Sidebar = ({
         const role = roleStr.toLowerCase();
         const superRole = role.includes('super');
         setIsSuper(superRole);
-        const ALL = ['dashboard','students','services','cases','calendar','finances','teachers','messenger','info','reports','users'];
+        const ALL = ['dashboard','students','services','cases','calendar','finances','teachers','leaves','messenger','info','reports','users'];
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
         if (superRole) {
@@ -65,6 +65,7 @@ const Sidebar = ({
     { id: 'finances', label: 'Finances', icon: '/images/img_icn_sidebar_vac.svg', href: '/finances' },
 
     { id: 'teachers', label: 'Teachers', icon: '/images/img_icn_sidebar_emp.svg', href: '/teachers' },
+    { id: 'leaves', label: 'Leaves', icon: '/images/img_icn_sidebar_calendar_inactive.svg', href: '/leaves' },
     { id: 'messenger', label: 'Messenger', icon: '/images/img_icn_sidebar_mes.svg', href: '/messenger' },
     { id: 'info', label: 'Info', icon: '/images/img_icn_sidebar_inf.svg', href: '/info' },
     { id: 'reports', label: 'Reports', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/reports' },
