@@ -167,21 +167,30 @@ import { supabase } from '../../lib/supabaseClient';
       const { data: auth } = await supabase.auth.getUser();
       const me = auth.user?.email || '';
       const target = isAdmin && reqForEmail ? reqForEmail : me;
-      const payload = {
+      const basePayload = {
         employee_email: target,
         type: reqType,
         start_date: reqStart,
         end_date: reqEnd,
         status: 'Pending' as LeaveStatus,
         reason: reqReason || null,
-        created_by: me,
       };
-      const { error } = await supabase.from('leaves').insert(payload);
+      // First try with created_by for auditing
+      let { error } = await supabase.from('leaves').insert({ ...basePayload, created_by: me });
+      // Fallback: if column is missing in DB (older schema), retry without created_by
+      if (error && (String(error.message||'').toLowerCase().includes('created_by') || (error as any).code === '42703')) {
+        // eslint-disable-next-line no-console
+        console.warn('Retrying leave insert without created_by due to schema mismatch');
+        const res2 = await supabase.from('leaves').insert(basePayload as any);
+        error = res2.error;
+      }
       if (error) throw error;
       setRequestOpen(false);
       setReqStart(''); setReqEnd(''); setReqReason(''); setReqForEmail(''); setReqType('Sick');
       await loadLeaves();
     } catch (err:any) {
+      // eslint-disable-next-line no-console
+      console.error('Leave request insert failed', err);
       alert(err?.message || 'Failed to submit request');
     } finally {
       setSubmitting(false);
