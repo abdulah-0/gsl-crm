@@ -14,6 +14,27 @@ create table if not exists public.leaves (
 
 alter table public.leaves enable row level security;
 
+
+-- Ensure employee_email column exists even if table pre-existed without it
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leaves' AND column_name = 'employee_email'
+  ) THEN
+    ALTER TABLE public.leaves ADD COLUMN employee_email text;
+  END IF;
+  -- Set NOT NULL only if no NULLs present to avoid migration failure
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leaves' AND column_name = 'employee_email'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM public.leaves WHERE employee_email IS NULL
+  ) THEN
+    ALTER TABLE public.leaves ALTER COLUMN employee_email SET NOT NULL;
+  END IF;
+END$$;
+
 -- Everyone authenticated can read
 drop policy if exists leaves_select on public.leaves;
 create policy leaves_select on public.leaves
