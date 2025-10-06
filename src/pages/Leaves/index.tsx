@@ -206,11 +206,11 @@ import { supabase } from '../../lib/supabaseClient';
 
           {/* Header */}
           <section className="mt-8 lg:mt-12">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Leaves</h1>
               <div className="flex items-center gap-2">
                 <button onClick={prevMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">◀</button>
-                <div className="font-semibold w-40 text-center">{new Date(year, month, 1).toLocaleString(undefined,{ month:'long', year:'numeric'})}</div>
+                <div className="font-semibold min-w-[8rem] sm:w-40 text-center px-2">{new Date(year, month, 1).toLocaleString(undefined,{ month:'long', year:'numeric'})}</div>
                 <button onClick={nextMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">▶</button>
                 <button onClick={()=>setRequestOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Request</button>
               </div>
@@ -272,35 +272,37 @@ import { supabase } from '../../lib/supabaseClient';
 
             {/* Calendar view */}
             {tab==='calendar' && (
-              <div className="mt-4 border rounded-lg bg-white shadow-sm">
-                <div className="grid" style={{ gridTemplateColumns: `240px repeat(${daysInMonth}, minmax(28px,1fr))` }}>
-                  {/* Header row */}
-                  <div className="sticky left-0 z-10 bg-white border-b p-2 font-semibold">Employee</div>
-                  {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(d => (
-                    <div key={`h${d}`} className="border-b text-center text-xs p-1 text-text-secondary">{d}</div>
-                  ))}
-                  {/* Rows */}
-                  {filteredEmployees.map(emp => {
-                    const empLeaves = leavesByEmployee[emp.email] || [];
-                    return (
-                      <React.Fragment key={emp.email}>
-                        <div className="sticky left-0 z-10 bg-white border-r p-2 text-sm font-semibold">{emp.full_name || emp.email}</div>
-                        {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(day => {
-                          const date = new Date(year, month, day).toISOString().slice(0,10);
-                          const lv = empLeaves.find(l => l.start_date <= date && l.end_date >= date);
-                          if (!lv) return <div key={day} className="border h-7" />;
-                          const typ = COLORS[lv.type];
-                          const cls = lv.status==='Approved' ? `${typ.fill}` : `border ${typ.outline}`;
-                          return <div key={day} className={`border h-7 flex items-center justify-center`}>
-                            <div title={`${lv.type} (${lv.status})`} className={`h-4 w-4 rounded ${cls}`} />
-                          </div>;
-                        })}
-                      </React.Fragment>
-                    );
-                  })}
-                  {filteredEmployees.length===0 && (
-                    <div className="col-span-full p-4 text-center text-text-secondary">No employees</div>
-                  )}
+              <div className="mt-4 border rounded-lg bg-white shadow-sm overflow-x-auto">
+                <div className="min-w-[900px]">
+                  <div className="grid" style={{ gridTemplateColumns: `240px repeat(${daysInMonth}, minmax(28px,1fr))` }}>
+                    {/* Header row */}
+                    <div className="sticky left-0 z-10 bg-white border-b p-2 font-semibold">Employee</div>
+                    {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(d => (
+                      <div key={`h${d}`} className="border-b text-center text-[10px] sm:text-xs p-1 text-text-secondary">{d}</div>
+                    ))}
+                    {/* Rows */}
+                    {filteredEmployees.map(emp => {
+                      const empLeaves = leavesByEmployee[emp.email] || [];
+                      return (
+                        <React.Fragment key={emp.email}>
+                          <div className="sticky left-0 z-10 bg-white border-r p-2 text-sm font-semibold">{emp.full_name || emp.email}</div>
+                          {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(day => {
+                            const date = new Date(year, month, day).toISOString().slice(0,10);
+                            const lv = empLeaves.find(l => l.start_date <= date && l.end_date >= date);
+                            if (!lv) return <div key={day} className="border h-7 sm:h-8" />;
+                            const typ = COLORS[lv.type];
+                            const cls = lv.status==='Approved' ? `${typ.fill}` : `border ${typ.outline}`;
+                            return <div key={day} className={`border h-7 sm:h-8 flex items-center justify-center`}>
+                              <div title={`${lv.type} (${lv.status})`} className={`h-3 w-3 sm:h-4 sm:w-4 rounded ${cls}`} />
+                            </div>;
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                    {filteredEmployees.length===0 && (
+                      <div className="col-span-full p-4 text-center text-text-secondary">No employees</div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
