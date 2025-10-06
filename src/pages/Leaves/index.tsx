@@ -209,63 +209,70 @@ import { supabase } from '../../lib/supabaseClient';
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Leaves</h1>
               <div className="flex items-center gap-2">
-                <button onClick={prevMonth} className="px-2 py-1 border rounded">◀</button>
+                <button onClick={prevMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">◀</button>
                 <div className="font-semibold w-40 text-center">{new Date(year, month, 1).toLocaleString(undefined,{ month:'long', year:'numeric'})}</div>
-                <button onClick={nextMonth} className="px-2 py-1 border rounded">▶</button>
+                <button onClick={nextMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">▶</button>
                 <button onClick={()=>setRequestOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Request</button>
               </div>
             </div>
 
             {/* Tabs */}
-            <div className="mt-4 flex gap-2">
-              <button onClick={()=>setTab('summary')} className={`px-3 py-1 rounded ${tab==='summary'?'bg-[#ffa332] text-white':'bg-white border'}`}>Employees’ Leaves</button>
-              <button onClick={()=>setTab('calendar')} className={`px-3 py-1 rounded ${tab==='calendar'?'bg-[#ffa332] text-white':'bg-white border'}`}>Calendar</button>
+            <div className="mt-4 inline-flex bg-white border rounded-lg p-1">
+              <button onClick={()=>setTab('summary')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab==='summary'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Employees’ Leaves</button>
+              <button onClick={()=>setTab('calendar')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='calendar'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Calendar</button>
             </div>
 
             {/* Search */}
             <div className="mt-4">
-              <input className="border rounded px-3 py-2 w-full md:w-96" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
+              <div className="bg-white border rounded-lg shadow-sm p-3">
+                <input className="border rounded px-3 py-2 w-full md:w-96" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
+              </div>
             </div>
 
             {/* Summary view */}
             {tab==='summary' && (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-text-secondary">
-                      <th className="p-2">Employee</th>
-                      <th className="p-2">Sick Leaves</th>
-                      <th className="p-2">Work Remotely</th>
-                      <th className="p-2">Vacation</th>
-                      <th className="p-2 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {filteredEmployees.map(emp => {
-                      const t = totalsByEmployee[emp.email] || { Sick: 0, Remote: 0, Vacation: 0 };
-                      return (
-                        <tr key={emp.email}>
-                          <td className="p-2 font-semibold">{emp.full_name || emp.email}</td>
-                          <td className="p-2">{t.Sick}</td>
-                          <td className="p-2">{t.Remote}</td>
-                          <td className="p-2">{t.Vacation}</td>
-                          <td className="p-2 text-right">
-                            <button onClick={()=>setManageEmail(emp.email)} className="text-blue-600 hover:underline">Manage</button>
-                          </td>
+              <div className="mt-6 bg-white border rounded-lg shadow-sm">
+                <div className="p-4">
+                  <div className="text-sm text-text-secondary">{filteredEmployees.length} employees</div>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr className="text-left text-text-secondary">
+                          <th className="p-2">Employee</th>
+                          <th className="p-2">Sick Leaves</th>
+                          <th className="p-2">Work Remotely</th>
+                          <th className="p-2">Vacation</th>
+                          <th className="p-2 text-right">Actions</th>
                         </tr>
-                      );
-                    })}
-                    {filteredEmployees.length===0 && (
-                      <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No employees</td></tr>
-                    )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody className="divide-y">
+                        {filteredEmployees.map(emp => {
+                          const t = totalsByEmployee[emp.email] || { Sick: 0, Remote: 0, Vacation: 0 };
+                          return (
+                            <tr key={emp.email}>
+                              <td className="p-2 font-semibold text-text-primary">{emp.full_name || emp.email}</td>
+                              <td className="p-2">{t.Sick}</td>
+                              <td className="p-2">{t.Remote}</td>
+                              <td className="p-2">{t.Vacation}</td>
+                              <td className="p-2 text-right">
+                                <button onClick={()=>setManageEmail(emp.email)} className="text-blue-600 hover:underline">Manage</button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {filteredEmployees.length===0 && (
+                          <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No employees</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Calendar view */}
             {tab==='calendar' && (
-              <div className="mt-4 border rounded-lg bg-white">
+              <div className="mt-4 border rounded-lg bg-white shadow-sm">
                 <div className="grid" style={{ gridTemplateColumns: `240px repeat(${daysInMonth}, minmax(28px,1fr))` }}>
                   {/* Header row */}
                   <div className="sticky left-0 z-10 bg-white border-b p-2 font-semibold">Employee</div>
@@ -305,7 +312,7 @@ import { supabase } from '../../lib/supabaseClient';
       {/* Request Modal */}
       {requestOpen && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={onSubmitRequest} className="bg-white rounded-lg p-4 w-[92%] max-w-lg space-y-3">
+          <form onSubmit={onSubmitRequest} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-lg space-y-3">
             <div className="text-lg font-semibold">New Leave Request</div>
             {isAdmin && (
               <div>
@@ -346,7 +353,7 @@ import { supabase } from '../../lib/supabaseClient';
       {/* Manage Modal */}
       {manageEmail && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>setManageEmail(null)}>
-          <div className="bg-white rounded-lg p-4 w-[92%] max-w-2xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="text-lg font-semibold">Manage Leaves — {manageEmail}</div>
               <button onClick={()=>setManageEmail(null)} className="text-sm">✕</button>
