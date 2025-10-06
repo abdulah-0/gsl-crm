@@ -14,12 +14,14 @@ create table if not exists public.leaves (
 alter table public.leaves enable row level security;
 
 -- Everyone authenticated can read
-create policy if not exists leaves_select on public.leaves
+drop policy if exists leaves_select on public.leaves;
+create policy leaves_select on public.leaves
   for select
   using ( auth.role() = 'authenticated' );
 
 -- Insert: Admin/Super can insert for anyone; Others can only insert for themselves
-create policy if not exists leaves_insert_admin on public.leaves
+drop policy if exists leaves_insert_admin on public.leaves;
+create policy leaves_insert_admin on public.leaves
   for insert
   with check (
     exists (
@@ -33,7 +35,8 @@ create policy if not exists leaves_insert_admin on public.leaves
   );
 
 -- Update/Delete: Only Admin/Super
-create policy if not exists leaves_update_admin on public.leaves
+drop policy if exists leaves_update_admin on public.leaves;
+create policy leaves_update_admin on public.leaves
   for update
   using (
     exists (
@@ -45,7 +48,8 @@ create policy if not exists leaves_update_admin on public.leaves
     )
   );
 
-create policy if not exists leaves_delete_admin on public.leaves
+drop policy if exists leaves_delete_admin on public.leaves;
+create policy leaves_delete_admin on public.leaves
   for delete
   using (
     exists (
