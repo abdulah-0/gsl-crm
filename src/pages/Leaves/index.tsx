@@ -176,12 +176,12 @@ import { supabase } from '../../lib/supabaseClient';
         reason: reqReason || null,
       };
       // First try with created_by for auditing
-      let { error } = await supabase.from('leaves').insert({ ...basePayload, created_by: me });
+      let { error } = await supabase.from('leaves').insert({ ...basePayload, created_by: me }, { returning: 'minimal' });
       // Fallback: if column is missing in DB (older schema), retry without created_by
       if (error && (String(error.message||'').toLowerCase().includes('created_by') || (error as any).code === '42703')) {
         // eslint-disable-next-line no-console
         console.warn('Retrying leave insert without created_by due to schema mismatch');
-        const res2 = await supabase.from('leaves').insert(basePayload as any);
+        const res2 = await supabase.from('leaves').insert(basePayload as any, { returning: 'minimal' });
         error = res2.error;
       }
       if (error) throw error;
@@ -190,7 +190,7 @@ import { supabase } from '../../lib/supabaseClient';
       await loadLeaves();
     } catch (err:any) {
       // eslint-disable-next-line no-console
-      console.error('Leave request insert failed', err);
+      console.error('Leave request insert failed', { message: err?.message, code: (err as any)?.code, details: (err as any)?.details, hint: (err as any)?.hint });
       alert(err?.message || 'Failed to submit request');
     } finally {
       setSubmitting(false);
