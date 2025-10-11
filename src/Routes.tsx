@@ -9,7 +9,9 @@ import LoginPage from './pages/Login';
 import CasesPage from './pages/Cases';
 import CaseTaskDetailPage from './pages/Cases/Detail';
 import CalendarPage from './pages/Calendar';
-import FinancesPage from './pages/Finances';
+import FinancesPage from './pages/Finances'; // will be routed under /accounts for naming consistency
+import HRMPage from './pages/HRM';
+import { Navigate } from 'react-router-dom';
 
 import MessengerPage from './pages/Messenger';
 import InfoPage from './pages/Info';
@@ -137,7 +139,11 @@ const AppRoutes = () => {
         <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
         <Route path="/teachers" element={<ProtectedRoute><TeachersPanel /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
-        <Route path="/finances" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
+        {/* Renamed Finances -> Accounts; keep legacy redirect */}
+        <Route path="/finances" element={<ProtectedRoute><Navigate to="/accounts" replace /></ProtectedRoute>} />
+        <Route path="/accounts" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
+
+        <Route path="/hrm" element={<ProtectedRoute><HRMPage /></ProtectedRoute>} />
 
         <Route path="/messenger" element={<ProtectedRoute><MessengerPage /></ProtectedRoute>} />
         <Route path="/info" element={<ProtectedRoute><InfoPage /></ProtectedRoute>} />
