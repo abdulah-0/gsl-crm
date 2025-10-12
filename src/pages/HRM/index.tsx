@@ -17,20 +17,62 @@ interface EmpRow {
   designation?: string | null;
   joining_date?: string | null; // ISO date
   status?: string | null; // Active/Inactive, etc
+  branch?: string | null;
 }
 
 const HRMPage: React.FC = () => {
   const [role, setRole] = useState<Role>('other');
+  const [myBranch, setMyBranch] = useState<string | null>(null);
   const isAdmin = role === 'super' || role === 'admin';
 
   // Sub-tabs
-  const [tab, setTab] = useState<'employees' | 'leaves' | 'timerecord' | 'payroll' | 'allowances'>('employees');
+  const [tab, setTab] = useState<'employees' | 'leaves' | 'timerecord' | 'payroll'>('employees');
 
   // Employees state
   const [rows, setRows] = useState<EmpRow[]>([]);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // HRM -> Leaves management state
+  interface LeaveRow {
+    id: number;
+    employee_email: string;
+    type: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    status: string | null;
+    reason?: string | null;
+    branch?: string | null;
+    created_at?: string | null;
+  }
+  const [leaves, setLeaves] = useState<LeaveRow[]>([]);
+  const [lEmail, setLEmail] = useState('');
+  const [lType, setLType] = useState('');
+  const [lStatus, setLStatus] = useState('');
+  const [lFrom, setLFrom] = useState('');
+  const [lTo, setLTo] = useState('');
+
+  const loadLeaves = async () => {
+    let q = supabase
+      .from('leaves')
+      .select('id, employee_email, type, start_date, end_date, status, reason, branch, created_at')
+      .order('created_at', { ascending: false });
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    if (lEmail) q = q.ilike('employee_email', `%${lEmail}%`);
+    if (lType) q = q.eq('type', lType);
+    if (lStatus) q = q.eq('status', lStatus);
+    if (lFrom) q = q.gte('start_date', lFrom);
+    if (lTo) q = q.lte('end_date', lTo);
+    const { data } = await q;
+    setLeaves((data as any) || []);
+  };
+  useEffect(() => { if (tab==='leaves' && (role==='super' || myBranch!==null)) loadLeaves(); }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
+
+  const updateLeaveStatus = async (id: number, status: 'Approved' | 'Rejected') => {
+    const { error } = await supabase.from('leaves').update({ status }).eq('id', id);
+    if (error) alert(error.message); else loadLeaves();
+  };
+
 
   // Load role
   useEffect(() => {
@@ -39,11 +81,12 @@ const HRMPage: React.FC = () => {
       try {
         const { data } = await supabase.auth.getUser();
         const email = data.user?.email || '';
-        const { data: u } = await supabase.from('dashboard_users').select('role').eq('email', email).maybeSingle();
+        const { data: u } = await supabase.from('dashboard_users').select('role, branch').eq('email', email).maybeSingle();
         const r = (u?.role || (data.user as any)?.app_metadata?.role || (data.user as any)?.user_metadata?.role || '').toString().toLowerCase();
         if (r.includes('super')) mounted && setRole('super');
         else if (r.includes('admin')) mounted && setRole('admin');
         else mounted && setRole('other');
+        mounted && setMyBranch(u?.branch || null);
       } catch {
         mounted && setRole('other');
       }
@@ -53,13 +96,17 @@ const HRMPage: React.FC = () => {
 
   // Load employees list
   const loadEmployees = async () => {
-    const { data } = await supabase
+    let query = supabase
       .from('dashboard_users')
-      .select('email, full_name, role, department, designation, joining_date, status')
+      .select('email, full_name, role, department, designation, joining_date, status, branch')
       .order('full_name', { ascending: true });
+    if (role !== 'super') {
+      query = query.eq('branch', myBranch);
+    }
+    const { data } = await query;
     setRows((data as any) || []);
   };
-  useEffect(() => { loadEmployees(); }, []);
+  useEffect(() => { if (role==='super' || myBranch!==null) loadEmployees(); }, [role, myBranch]);
 
   const filtered = useMemo(() => {
     const s = search.toLowerCase();
@@ -74,10 +121,11 @@ const HRMPage: React.FC = () => {
   const [showEmpModal, setShowEmpModal] = useState(false);
   const [editRow, setEditRow] = useState<EmpRow | null>(null);
 
-  const openAdd = () => { setEditRow({ email: '', full_name: '', role: 'Employee', status: 'Active' }); setShowEmpModal(true); };
+  const openAdd = () => { setEditRow({ email: '', full_name: '', role: 'Employee', status: 'Active', branch: myBranch||'' }); setShowEmpModal(true); };
   const openEdit = (r: EmpRow) => { setEditRow(r); setShowEmpModal(true); };
   const onSave = async () => {
     if (!isAdmin || !editRow) { setShowEmpModal(false); return; }
+    const branchVal = role==='super' ? (editRow.branch || null) : (myBranch || null);
     const payload = {
       email: editRow.email,
       full_name: editRow.full_name,
@@ -86,9 +134,10 @@ const HRMPage: React.FC = () => {
       designation: editRow.designation,
       joining_date: editRow.joining_date,
       status: editRow.status,
-    };
+      branch: branchVal,
+    } as any;
     // Upsert basic employee profile (does not create auth account)
-    const { error } = await supabase.from('dashboard_users').upsert(payload, { onConflict: 'email' });
+    const { error } = await supabase.from('dashboard_users').upsert(payload, { onConflict: 'email' } as any);
     if (!error) { setShowEmpModal(false); setEditRow(null); await loadEmployees(); } else { alert(error.message); }
   };
   const onDelete = async (email: string) => {
@@ -119,7 +168,6 @@ const HRMPage: React.FC = () => {
               <button onClick={()=>setTab('leaves')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='leaves'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Leaves</button>
               <button onClick={()=>setTab('timerecord')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='timerecord'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Time Record</button>
               <button onClick={()=>setTab('payroll')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='payroll'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Payroll</button>
-              <button onClick={()=>setTab('allowances')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='allowances'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Allowances & Deductions</button>
             </div>
 
             {/* Employees tab */}
@@ -142,6 +190,9 @@ const HRMPage: React.FC = () => {
                   </select>
                   {isAdmin && (
                     <button onClick={openAdd} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Employee</button>
+                  )}
+                  {!isAdmin && myBranch && (
+                    <div className="ml-auto text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
                   )}
                 </div>
 
@@ -190,15 +241,70 @@ const HRMPage: React.FC = () => {
               </div>
             )}
 
-            {/* Leaves tab: link to full leaves page for now */}
+            {/* Leaves tab: branch-scoped approvals with filters */}
             {tab==='leaves' && (
-              <div className="mt-6 bg-white border rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-lg font-semibold">Leave Management</div>
-                    <div className="text-sm text-text-secondary">Use the full-featured Leaves manager with summary and calendar view.</div>
-                  </div>
-                  <button onClick={()=>window.location.assign('/leaves')} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Open Leaves</button>
+              <div className="mt-6 space-y-3">
+                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
+                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={lEmail} onChange={e=>setLEmail(e.target.value)} />
+                  <select className="border rounded px-2 py-2" value={lType} onChange={e=>setLType(e.target.value)}>
+                    <option value="">All Types</option>
+                    <option value="Sick">Sick</option>
+                    <option value="Remote">Remote</option>
+                    <option value="Vacation">Vacation</option>
+                  </select>
+                  <select className="border rounded px-2 py-2" value={lStatus} onChange={e=>setLStatus(e.target.value)}>
+                    <option value="">All Status</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                  <input type="date" className="border rounded px-2 py-2" value={lFrom} onChange={e=>setLFrom(e.target.value)} />
+                  <span className="text-text-secondary">to</span>
+                  <input type="date" className="border rounded px-2 py-2" value={lTo} onChange={e=>setLTo(e.target.value)} />
+                  <button onClick={loadLeaves} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Apply</button>
+                </div>
+
+                <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-text-secondary">
+                        <th className="p-2">Employee</th>
+                        <th className="p-2">Type</th>
+                        <th className="p-2">Start</th>
+                        <th className="p-2">End</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Reason</th>
+                        {role==='super' && <th className="p-2">Branch</th>}
+                        <th className="p-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {leaves.map(l => (
+                        <tr key={l.id}>
+                          <td className="p-2 font-semibold text-text-primary">{l.employee_email}</td>
+                          <td className="p-2">{l.type || '-'}</td>
+                          <td className="p-2">{l.start_date || '-'}</td>
+                          <td className="p-2">{l.end_date || '-'}</td>
+                          <td className="p-2">{l.status || '-'}</td>
+                          <td className="p-2">{l.reason || '-'}</td>
+                          {role==='super' && <td className="p-2">{l.branch || '-'}</td>}
+                          <td className="p-2 text-right">
+                            {isAdmin ? (
+                              <div className="inline-flex items-center gap-2">
+                                <button onClick={()=>updateLeaveStatus(l.id, 'Approved')} className="text-green-600 hover:underline">Approve</button>
+                                <button onClick={()=>updateLeaveStatus(l.id, 'Rejected')} className="text-red-600 hover:underline">Reject</button>
+                              </div>
+                            ) : (
+                              <span className="text-text-secondary">View only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {leaves.length===0 && (
+                        <tr><td colSpan={role==='super'?8:7} className="p-4 text-center text-text-secondary">No leaves</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -237,14 +343,6 @@ const HRMPage: React.FC = () => {
               </div>
             )}
 
-            {/* Allowances & Deductions tab: skeleton */}
-            {tab==='allowances' && (
-              <div className="mt-6 bg-white border rounded-lg shadow-sm p-4">
-                <div className="text-lg font-semibold">Allowances & Deductions</div>
-                <div className="text-sm text-text-secondary">Maintain transport/medical allowances and tax/penalty deductions. Integration with payroll coming soon.</div>
-                <div className="mt-2 text-text-secondary text-sm">No entries yet.</div>
-              </div>
-            )}
 
           </section>
         </div>
@@ -263,6 +361,14 @@ const HRMPage: React.FC = () => {
               <div>
                 <label className="text-sm font-semibold">Email</label>
                 <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.email} onChange={e=>setEditRow({...editRow, email: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Branch</label>
+                {role==='super' ? (
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.branch||''} onChange={e=>setEditRow({...editRow, branch: e.target.value})} />
+                ) : (
+                  <input className="mt-1 w-full border rounded px-2 py-1 bg-gray-50" value={myBranch||''} disabled />
+                )}
               </div>
               <div>
                 <label className="text-sm font-semibold">Role</label>
