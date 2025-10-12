@@ -51,6 +51,132 @@ const HRMPage: React.FC = () => {
   const [lStatus, setLStatus] = useState('');
   const [lFrom, setLFrom] = useState('');
   const [lTo, setLTo] = useState('');
+  // HRM -> Time Record state
+  interface TimeRecordRow {
+    id: number;
+    employee_email: string;
+    work_date: string;
+    check_in: string | null;
+    check_out: string | null;
+    hours: number | null;
+    overtime: number | null;
+    branch?: string | null;
+  }
+  const [trs, setTrs] = useState<TimeRecordRow[]>([]);
+  const [tEmail, setTEmail] = useState('');
+  const [tFrom, setTFrom] = useState('');
+  const [tTo, setTTo] = useState('');
+
+  const loadTimeRecords = async () => {
+    let q = supabase
+      .from('time_records')
+      .select('id, employee_email, work_date, check_in, check_out, hours, overtime, branch')
+      .order('work_date', { ascending: false })
+      .limit(500);
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    if (tEmail) q = q.ilike('employee_email', `%${tEmail}%`);
+    if (tFrom) q = q.gte('work_date', tFrom);
+    if (tTo) q = q.lte('work_date', tTo);
+    const { data } = await q;
+    setTrs((data as any) || []);
+  };
+  useEffect(() => { if (tab==='timerecord' && (role==='super' || myBranch!==null)) loadTimeRecords(); }, [tab, role, myBranch, tEmail, tFrom, tTo]);
+
+  // Add/Edit modal
+  const [showTRModal, setShowTRModal] = useState(false);
+  const [editTR, setEditTR] = useState<TimeRecordRow | null>(null);
+  const openAddTR = () => { setEditTR({ id: 0, employee_email: '', work_date: new Date().toISOString().slice(0,10), check_in: null, check_out: null, hours: null, overtime: null, branch: myBranch||null }); setShowTRModal(true); };
+  const openEditTR = (r: TimeRecordRow) => { setEditTR(r); setShowTRModal(true); };
+  const saveTR = async () => {
+    if (!isAdmin || !editTR) { setShowTRModal(false); return; }
+    const payload: any = {
+      employee_email: editTR.employee_email,
+      work_date: editTR.work_date,
+      check_in: editTR.check_in || null,
+      check_out: editTR.check_out || null,
+      hours: editTR.hours,
+      overtime: editTR.overtime,
+      branch: role==='super' ? (editTR.branch||null) : (myBranch||null),
+    };
+    if (editTR.id && editTR.id !== 0) {
+      const { error } = await supabase.from('time_records').update(payload).eq('id', editTR.id);
+      if (error) return alert(error.message);
+    } else {
+      const { error } = await supabase.from('time_records').insert(payload);
+      if (error) return alert(error.message);
+    }
+    setShowTRModal(false); setEditTR(null); await loadTimeRecords();
+  };
+  const deleteTR = async (id: number) => {
+    if (!isAdmin) return;
+    if (!confirm('Delete this record?')) return;
+    const { error } = await supabase.from('time_records').delete().eq('id', id);
+    if (error) alert(error.message); else loadTimeRecords();
+  };
+  // Payroll state
+  interface PayrollBatch { id: number; year: number; month: number; branch?: string | null; created_at?: string | null; }
+  interface PayrollItem { id: number; batch_id: number; employee_email: string; payable_amount: number | null; details?: any; }
+  const [payrollBatches, setPayrollBatches] = useState<PayrollBatch[]>([]);
+  const [batchItems, setBatchItems] = useState<PayrollItem[]>([]);
+  const [pyMonth, setPyMonth] = useState<number>(new Date().getMonth()+1);
+  const [pyYear, setPyYear] = useState<number>(new Date().getFullYear());
+  const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
+
+  const loadBatches = async () => {
+    let q = supabase.from('payroll_batches').select('id, year, month, branch, created_at').order('created_at', { ascending: false });
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    const { data } = await q as any;
+    setPayrollBatches(data || []);
+  };
+  const loadBatchItems = async (batchId: number) => {
+    const { data } = await supabase.from('payroll_items').select('id, batch_id, employee_email, payable_amount, details').eq('batch_id', batchId).order('employee_email', { ascending: true });
+    setBatchItems((data as any) || []);
+  };
+  useEffect(() => { if (tab==='payroll' && (role==='super' || myBranch!==null)) loadBatches(); }, [tab, role, myBranch]);
+
+  const generatePayroll = async () => {
+    if (!isAdmin) return;
+    // 1) Create batch
+    const batchPayload: any = { year: pyYear, month: pyMonth, branch: role==='super' ? null : myBranch };
+    const { data: batch, error: bErr } = await supabase.from('payroll_batches').insert(batchPayload).select().single();
+    if (bErr) return alert(bErr.message);
+    // 2) gather employees in scope
+    let eQ = supabase.from('dashboard_users').select('email, full_name, branch');
+    if (role !== 'super') eQ = eQ.eq('branch', myBranch);
+    const { data: emps, error: eErr } = await eQ as any;
+    if (eErr) { alert(eErr.message); return; }
+    // 3) For each employee, compute simple payable (placeholder logic: base 0, compute from hours at 0 rate)
+    // Example: 8 hours per day base rate 0 — extend later. We'll just count working days from time_records
+    const start = new Date(pyYear, pyMonth-1, 1);
+    const end = new Date(pyYear, pyMonth, 0);
+    const from = start.toISOString().slice(0,10);
+    const to = end.toISOString().slice(0,10);
+
+    for (const emp of (emps||[])) {
+      let trQ = supabase.from('time_records').select('hours').gte('work_date', from).lte('work_date', to).eq('employee_email', emp.email);
+      if (role !== 'super') trQ = trQ.eq('branch', myBranch);
+      const { data: trsData } = await trQ as any;
+      const totalHours = (trsData||[]).reduce((acc: number, r: any)=> acc + (Number(r.hours)||0), 0);
+      const payable = Math.round(totalHours * 0); // placeholder for now
+      await supabase.from('payroll_items').insert({ batch_id: (batch as any).id, employee_email: emp.email, payable_amount: payable, details: { totalHours } });
+    }
+    await loadBatches();
+  };
+
+  const printPayslip = (item: PayrollItem) => {
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(`<html><head><title>Payslip</title></head><body style="font-family:sans-serif;padding:24px;">
+      <h2 style="margin:0 0 12px">Payslip</h2>
+      <div>Employee: ${item.employee_email}</div>
+      <div>Amount: ${item.payable_amount ?? 0}</div>
+      <pre style="margin-top:12px;background:#f7f7f7;padding:12px;border:1px solid #eee">${JSON.stringify(item.details||{}, null, 2)}</pre>
+      <button onclick="window.print()" style="margin-top:16px;padding:8px 12px">Print</button>
+    </body></html>`);
+    w.document.close();
+  };
+
+
 
   const loadLeaves = async () => {
     let q = supabase
@@ -309,12 +435,19 @@ const HRMPage: React.FC = () => {
               </div>
             )}
 
-            {/* Time Record tab: skeleton */}
+            {/* Time Record tab: CRUD + filters */}
             {tab==='timerecord' && (
-              <div className="mt-6 bg-white border rounded-lg shadow-sm p-4">
-                <div className="text-lg font-semibold">Time Record</div>
-                <div className="text-sm text-text-secondary">Track attendance, check-in/out, hours and overtime. Filters and export coming soon.</div>
-                <div className="mt-3 overflow-x-auto">
+              <div className="mt-6 space-y-3">
+                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
+                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={tEmail} onChange={e=>setTEmail(e.target.value)} />
+                  <input type="date" className="border rounded px-2 py-2" value={tFrom} onChange={e=>setTFrom(e.target.value)} />
+                  <span className="text-text-secondary">to</span>
+                  <input type="date" className="border rounded px-2 py-2" value={tTo} onChange={e=>setTTo(e.target.value)} />
+                  <button onClick={loadTimeRecords} className="px-3 py-2 rounded border">Apply</button>
+                  {isAdmin && <button onClick={openAddTR} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Record</button>}
+                </div>
+
+                <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr className="text-left text-text-secondary">
@@ -324,22 +457,96 @@ const HRMPage: React.FC = () => {
                         <th className="p-2">Check-out</th>
                         <th className="p-2">Hours</th>
                         <th className="p-2">Overtime</th>
+                        <th className="p-2 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      <tr><td colSpan={6} className="p-4 text-center text-text-secondary">No records</td></tr>
+                      {trs.map(r => (
+                        <tr key={r.id}>
+                          <td className="p-2">{r.work_date}</td>
+                          <td className="p-2 font-semibold text-text-primary">{r.employee_email}</td>
+                          <td className="p-2">{r.check_in ? new Date(r.check_in).toLocaleTimeString() : '-'}</td>
+                          <td className="p-2">{r.check_out ? new Date(r.check_out).toLocaleTimeString() : '-'}</td>
+                          <td className="p-2">{r.hours ?? '-'}</td>
+                          <td className="p-2">{r.overtime ?? '-'}</td>
+                          <td className="p-2 text-right">
+                            {isAdmin ? (
+                              <>
+                                <button onClick={()=>openEditTR(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={()=>deleteTR(r.id)} className="text-red-600 hover:underline">Delete</button>
+                              </>
+                            ) : (
+                              <span className="text-text-secondary">View only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {trs.length===0 && (
+                        <tr><td colSpan={7} className="p-4 text-center text-text-secondary">No records</td></tr>
+                      )}
+
+
                     </tbody>
                   </table>
                 </div>
               </div>
             )}
 
-            {/* Payroll tab: skeleton */}
+            {/* Payroll tab: batches, generate, and items */}
             {tab==='payroll' && (
-              <div className="mt-6 bg-white border rounded-lg shadow-sm p-4">
-                <div className="text-lg font-semibold">Payroll</div>
-                <div className="text-sm text-text-secondary">Manage salary generation and payslips. Editing and reports coming soon.</div>
-                <div className="mt-2 text-text-secondary text-sm">No payroll batches yet.</div>
+              <div className="mt-6 space-y-3">
+                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
+                  <select className="border rounded px-2 py-2" value={pyMonth} onChange={e=>setPyMonth(Number(e.target.value))}>
+                    {Array.from({length:12}).map((_,i)=> <option key={i+1} value={i+1}>{i+1}</option>)}
+                  </select>
+                  <input type="number" className="border rounded px-2 py-2 w-28" value={pyYear} onChange={e=>setPyYear(Number(e.target.value))} />
+                  {isAdmin && <button onClick={generatePayroll} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Payroll</button>}
+                </div>
+
+                <div className="bg-white border rounded-lg shadow-sm">
+                  <div className="p-3 text-lg font-semibold">Batches</div>
+                  <div className="divide-y">
+                    {payrollBatches.map(b => (
+                      <div key={b.id} className="p-3">
+                        <div className="flex items-center gap-2">
+                          <div className="font-semibold">{b.year}-{String(b.month).padStart(2,'0')}</div>
+                          {b.branch && <div className="text-sm text-text-secondary">Branch: {b.branch}</div>}
+                          <button onClick={()=>{ setActiveBatchId(b.id); loadBatchItems(b.id); }} className="ml-auto text-blue-600 hover:underline">View</button>
+                        </div>
+                        {activeBatchId===b.id && (
+                          <div className="mt-3 overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                              <thead className="bg-gray-50">
+                                <tr className="text-left text-text-secondary">
+                                  <th className="p-2">Employee</th>
+                                  <th className="p-2">Amount</th>
+                                  <th className="p-2 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y">
+                                {batchItems.map(it => (
+                                  <tr key={it.id}>
+                                    <td className="p-2 font-semibold text-text-primary">{it.employee_email}</td>
+                                    <td className="p-2">{it.payable_amount ?? 0}</td>
+                                    <td className="p-2 text-right">
+                                      <button onClick={()=>printPayslip(it)} className="text-[#ffa332] hover:underline">Print Payslip</button>
+                                    </td>
+                                  </tr>
+                                ))}
+                                {batchItems.length===0 && (
+                                  <tr><td colSpan={3} className="p-4 text-center text-text-secondary">No items</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {payrollBatches.length===0 && (
+                      <div className="p-4 text-center text-text-secondary">No payroll batches</div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -398,6 +605,51 @@ const HRMPage: React.FC = () => {
           </form>
         </div>
       )}
+      {/* Add/Edit Time Record Modal */}
+      {showTRModal && editTR && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <form onSubmit={(e)=>{e.preventDefault(); saveTR();}} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
+            <div className="text-lg font-semibold">{editTR.id? 'Edit Time Record' : 'Add Time Record'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-semibold">Employee Email</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.employee_email} onChange={e=>setEditTR({...editTR, employee_email: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Date</label>
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editTR.work_date} onChange={e=>setEditTR({...editTR, work_date: e.target.value})} required />
+              </div>
+              {role==='super' && (
+                <div>
+                  <label className="text-sm font-semibold">Branch</label>
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.branch||''} onChange={e=>setEditTR({...editTR, branch: e.target.value})} />
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-semibold">Check-in</label>
+                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_in || ''} onChange={e=>setEditTR({...editTR, check_in: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Check-out</label>
+                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_out || ''} onChange={e=>setEditTR({...editTR, check_out: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Hours</label>
+                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.hours ?? ''} onChange={e=>setEditTR({...editTR, hours: e.target.value===''? null : Number(e.target.value)})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Overtime</label>
+                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.overtime ?? ''} onChange={e=>setEditTR({...editTR, overtime: e.target.value===''? null : Number(e.target.value)})} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={()=>{setShowTRModal(false); setEditTR(null);}} className="px-3 py-2 rounded border">Cancel</button>
+              {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
+            </div>
+          </form>
+        </div>
+      )}
+
     </>
   );
 };
