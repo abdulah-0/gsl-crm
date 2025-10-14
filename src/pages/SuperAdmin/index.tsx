@@ -78,11 +78,20 @@ const SuperAdmin: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       // Cases (for recent list, pipeline, employees performance, stat cards)
-      const { data: cases, error: casesErr } = await supabase
+      let { data: cases, error: casesErr } = await supabase
         .from('dashboard_cases')
         .select('id, title, branch, type, stage, employee, status, created_at')
         .order('created_at', { ascending: false })
         .limit(200);
+      if (casesErr) {
+        // fallback if stage column doesn't exist in older schemas
+        const res2 = await supabase
+          .from('dashboard_cases')
+          .select('id, title, branch, type, employee, status, created_at')
+          .order('created_at', { ascending: false })
+          .limit(200);
+        cases = res2.data as any;
+      }
       const casesRows = cases ?? [];
 
       setRecentCases(casesRows.map((c: any) => ({
