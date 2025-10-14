@@ -22,6 +22,9 @@ const Header = ({
   const [displayName, setDisplayName] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
   const [avatarUrl, setAvatarUrl] = useState<string>('');
+  const [notifCount, setNotifCount] = useState<number>(0);
+  const [notifs, setNotifs] = useState<Array<{ id: number; title: string; body?: string; created_at?: string }>>([]);
+  const [showNotif, setShowNotif] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +37,13 @@ const Header = ({
       const { data: u } = await supabase.from('dashboard_users').select('full_name,email,avatar_url').eq('email', em).maybeSingle();
       setDisplayName(u?.full_name || em || 'User');
       setAvatarUrl(u?.avatar_url || '');
+
+      // Load initial notifications
+      const { data: ns } = await supabase.from('notifications').select('id,title,body,created_at,read_at').eq('recipient_email', em).order('created_at', { ascending: false }).limit(10);
+      const list = (ns||[]).map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
+      setNotifs(list as any);
+      setNotifCount(((ns||[]) as any[]).filter((n:any)=>!n.read_at).length);
+
       // subscribe to name/avatar changes
       const chan = supabase
         .channel('rt:header_user')
@@ -42,6 +52,13 @@ const Header = ({
           if (row?.email === em) {
             setDisplayName(row.full_name || em);
             setAvatarUrl(row.avatar_url || '');
+          }
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+          const row: any = payload.new;
+          if (row?.recipient_email === em) {
+            setNotifs(prev => [{ id: row.id, title: row.title, body: row.body, created_at: row.created_at }, ...prev].slice(0, 10));
+            setNotifCount(c => c + 1);
           }
         })
         .subscribe();
@@ -76,7 +93,12 @@ const Header = ({
     }
   };
 
-  const handleNotificationClick = () => {
+  const handleNotificationClick = async () => {
+    setShowNotif(s => !s);
+    if (!showNotif && email) {
+      // mark all unread as read
+      try { await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('recipient_email', email).is('read_at', null); setNotifCount(0); } catch {}
+    }
     if (onNotificationClick) {
       onNotificationClick();
     }
@@ -119,17 +141,35 @@ const Header = ({
       {/* Right Section - Notifications & Profile */}
       <div className="w-full sm:w-auto flex items-center gap-4 flex-wrap justify-end">
         {/* Notification Button */}
-        <button
-          onClick={handleNotificationClick}
-          className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-lg shadow-[0px_6px_58px_#c3cbd61a] flex items-center justify-center transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-          aria-label="Notifications"
-        >
-          <img
-            src="/images/img_notifications.svg"
-            alt="Notifications"
-            className="w-5 h-5 sm:w-6 sm:h-6"
-          />
-        </button>
+        <div className="relative">
+          <button
+            onClick={handleNotificationClick}
+            className="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-lg shadow-[0px_6px_58px_#c3cbd61a] flex items-center justify-center transition-all duration-200 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-orange-500 relative"
+            aria-label="Notifications"
+          >
+            <img
+              src="/images/img_notifications.svg"
+              alt="Notifications"
+              className="w-5 h-5 sm:w-6 sm:h-6"
+            />
+            {notifCount > 0 && <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] rounded-full px-1">{notifCount}</span>}
+          </button>
+          {showNotif && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border z-50">
+              <div className="p-2 text-sm font-bold border-b">Notifications</div>
+              <div className="max-h-80 overflow-auto">
+                {notifs.map(n => (
+                  <div key={n.id} className="px-3 py-2 border-b">
+                    <div className="text-sm font-semibold">{n.title}</div>
+                    {n.body && <div className="text-xs text-text-secondary">{n.body}</div>}
+                    {n.created_at && <div className="text-[10px] text-text-secondary mt-1">{new Date(n.created_at).toLocaleString()}</div>}
+                  </div>
+                ))}
+                {notifs.length===0 && <div className="px-3 py-2 text-xs text-text-secondary">No notifications</div>}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Profile Dropdown */}
         <div className="min-w-[180px] max-w-full">

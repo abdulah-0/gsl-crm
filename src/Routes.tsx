@@ -18,6 +18,7 @@ import InfoPage from './pages/Info';
 import ReportsPage from './pages/Reports';
 import SuperAdminPage from './pages/SuperAdmin';
 import ConsultantPage from './pages/Consultant';
+import DailyTasksPage from './pages/DailyTasks';
 import StudentsPage from './pages/Students';
 import ServicesPage from './pages/Services';
 import UsersPage from './pages/Users';
@@ -40,6 +41,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         if (data.session) {
+          // Check Dormant/Inactive status
+          try {
+            const em = data.session.user?.email || '';
+            const { data: du } = await supabase.from('dashboard_users').select('status').eq('email', em).maybeSingle();
+            const st = (du?.status||'Active').toString();
+            if (st === 'Dormant' || st === 'Inactive') {
+              await supabase.auth.signOut();
+              setAllowed(false);
+              navigate('/login', { replace: true });
+              return;
+            }
+          } catch {}
           setAllowed(true);
         } else {
           setAllowed(false);
@@ -52,7 +65,20 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
             setAllowed(false);
             navigate('/login', { replace: true });
           } else {
-            setAllowed(true);
+            (async () => {
+              try {
+                const em = session.user?.email || '';
+                const { data: du } = await supabase.from('dashboard_users').select('status').eq('email', em).maybeSingle();
+                const st = (du?.status||'Active').toString();
+                if (st === 'Dormant' || st === 'Inactive') {
+                  await supabase.auth.signOut();
+                  setAllowed(false);
+                  navigate('/login', { replace: true });
+                  return;
+                }
+              } catch {}
+              setAllowed(true);
+            })();
           }
         });
       } catch {
@@ -145,6 +171,7 @@ const AppRoutes = () => {
         <Route path="/accounts" element={<ProtectedRoute><FinancesPage /></ProtectedRoute>} />
 
         <Route path="/hrm" element={<ProtectedRoute><HRMPage /></ProtectedRoute>} />
+        <Route path="/dailytask" element={<ProtectedRoute><DailyTasksPage /></ProtectedRoute>} />
 
         <Route path="/messenger" element={<ProtectedRoute><MessengerPage /></ProtectedRoute>} />
         <Route path="/info" element={<ProtectedRoute><InfoPage /></ProtectedRoute>} />

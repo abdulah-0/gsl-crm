@@ -11,7 +11,7 @@ interface Activity { id: string; text: string; at: string; }
 interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: 'Pending' | 'In Progress' | 'Completed'; createdAt?: string; email?: string; }
 
 // Realtime state (replaces mocks)
-const BRANCHES = ['All Branches', 'F-8 Branch', 'I-8 Branch', 'PWD Branch', 'DHA Branch'] as const;
+const BRANCHES = ['All Branches', 'F-8 Branch', 'I-8 Branch', 'PWD Branch', 'Peshawar Branch'] as const;
 
 const fmtMonth = (d: Date) => d.toLocaleString(undefined, { month: 'short' });
 
@@ -80,9 +80,9 @@ const SuperAdmin: React.FC = () => {
       // Cases (for recent list, pipeline, employees performance, stat cards)
       const { data: cases, error: casesErr } = await supabase
         .from('dashboard_cases')
-        .select('id, title, branch, type, employee, status, created_at')
+        .select('id, title, branch, type, stage, employee, status, created_at')
         .order('created_at', { ascending: false })
-        .limit(25);
+        .limit(200);
       const casesRows = cases ?? [];
 
       setRecentCases(casesRows.map((c: any) => ({
@@ -116,21 +116,34 @@ const SuperAdmin: React.FC = () => {
       }));
       setEmployeesPerf(empPerf);
 
-      // Pipeline by stage (Initial, CAS, Visa, Completed)
-      const stageColors: Record<string, string> = { Initial: '#f59e0b', CAS: '#3b82f6', Visa: '#16a34a', Completed: '#8b5cf6' };
-      const byType = new Map<string, number>();
-      for (const c of casesRows) {
-        const t = c.type ?? 'Visa';
-        byType.set(t, (byType.get(t) || 0) + 1);
-      }
-      const stages = ['Initial','CAS','Visa','Completed'] as const;
-      const stageCounts: Record<string, number> = {
-        Initial: (byType.get('Initial') || 0) + (byType.get('Fee') || 0) + (byType.get('Documentation') || 0),
-        CAS: byType.get('CAS') || 0,
-        Visa: byType.get('Visa') || 0,
-        Completed: byType.get('Completed') || 0,
+      // Pipeline by stage (11 stages) with branch filtering
+      const pipelineStages = [
+        'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
+        'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected'
+      ] as const;
+      const stageColors: Record<string, string> = {
+        'Initial Stage': '#f59e0b',
+        'Offer Applied': '#06b6d4',
+        'Offer Received': '#0ea5e9',
+        'Fee Paid': '#84cc16',
+        'Interview': '#a855f7',
+        'CAS Applied': '#3b82f6',
+        'CAS Received': '#60a5fa',
+        'Visa Applied': '#16a34a',
+        'Visa Received': '#22c55e',
+        'Backout': '#f97316',
+        'Visa Rejected': '#ef4444',
       };
-      const pipelineArr = stages.map((name) => ({ name, value: stageCounts[name] || 0, color: stageColors[name] }));
+      const casesForPipeline = branch === 'All Branches' ? casesRows : casesRows.filter((c:any)=> (c.branch||'') === branch);
+      const counts = new Map<string, number>();
+      for (const s of pipelineStages) counts.set(s, 0);
+      for (const c of casesForPipeline) {
+        const stg = (c as any).stage || '';
+        const norm = pipelineStages.find(s => s.toLowerCase() === String(stg).toLowerCase());
+        const key = norm || 'Initial Stage';
+        counts.set(key, (counts.get(key)||0) + 1);
+      }
+      const pipelineArr = (pipelineStages as readonly string[]).map((name) => ({ name, value: counts.get(name) || 0, color: stageColors[name] }));
       setPipeline(pipelineArr);
       setMaxPipeline(Math.max(1, ...pipelineArr.map(p => p.value)));
 
@@ -390,7 +403,7 @@ const SuperAdmin: React.FC = () => {
               <div className="p-4 flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-xl font-bold text-text-primary">Branch Performance</h2>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {['F-8 Branch','I-8 Branch','PWD Branch','DHA Branch'].map(b => (
+                  {['F-8 Branch','I-8 Branch','PWD Branch','Peshawar Branch'].map(b => (
                     <button key={b} onClick={()=>setBranch(b as any)} className={`px-3 py-1 rounded-full border ${branch===b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
                   ))}
                 </div>
@@ -630,7 +643,7 @@ const SuperAdmin: React.FC = () => {
                 <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
                   <option>IG Branch</option>
                   <option>PWD Branch</option>
-                  <option>DHA Branch</option>
+                  <option>Peshawar Branch</option>
                 </select>
               </label>
               <label className="text-sm">
@@ -684,7 +697,7 @@ const SuperAdmin: React.FC = () => {
                 <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
                   <option>IG Branch</option>
                   <option>PWD Branch</option>
-                  <option>DHA Branch</option>
+                  <option>Peshawar Branch</option>
                 </select>
               </label>
               <label className="text-sm">

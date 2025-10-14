@@ -10,7 +10,7 @@ type AppUser = {
   full_name: string;
   email: string;
   role: 'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | string;
-  status: 'Active' | 'Inactive' | string;
+  status: 'Active' | 'Inactive' | 'Dormant' | string;
   permissions: string[]; // ['dashboard','students','services',...]
   created_at?: string;
 };
@@ -57,7 +57,7 @@ const UsersPage: React.FC = () => {
   const [ePassword, setEPassword] = useState('');
   const [eShowPw, setEShowPw] = useState(false);
   const [eRole, setERole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Custom'>('Staff');
-  const [eStatus, setEStatus] = useState<'Active'|'Inactive'>('Active');
+  const [eStatus, setEStatus] = useState<'Active'|'Inactive'|'Dormant'>('Active');
   const [ePerms, setEPerms] = useState<string[]>([]);
 
   useEffect(() => {
@@ -212,7 +212,7 @@ const UsersPage: React.FC = () => {
                 <div className="flex items-center gap-2 text-sm">
                   <input placeholder="Search" value={q} onChange={e=>setQ(e.target.value)} className="border rounded p-2" />
                   <select value={roleF} onChange={e=>setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option></select>
-                  <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option></select>
+                  <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option><option>Dormant</option></select>
                 </div>
               </div>
               <div className="mt-3 overflow-auto">
@@ -281,6 +281,7 @@ const UsersPage: React.FC = () => {
                 <select value={eStatus} onChange={e=>setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
                   <option>Active</option>
                   <option>Inactive</option>
+                  <option>Dormant</option>
                 </select>
               </label>
               <div>
