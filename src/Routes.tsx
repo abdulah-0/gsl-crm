@@ -26,6 +26,7 @@ import TeachersPanel from './pages/Teachers/Panel';
 import ProfilePage from './pages/Profile';
 import LeavesPage from './pages/Leaves';
 import BranchEmployeesPage from './pages/Employees/BranchEmployees';
+import PublicOnboarding from './pages/Public/Onboarding';
 
 
 // Simple ProtectedRoute using Supabase session + idle logout
@@ -179,6 +180,7 @@ const AppRoutes = () => {
         <Route path="/employees" element={<ProtectedRoute><BranchEmployeesPage /></ProtectedRoute>} />
         <Route path="/leaves" element={<ProtectedRoute><LeavesPage /></ProtectedRoute>} />
 
+        <Route path="/onboard" element={<PublicOnboarding />} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<LoginPage />} />

@@ -26,7 +26,7 @@ const HRMPage: React.FC = () => {
   const isAdmin = role === 'super' || role === 'admin';
 
   // Sub-tabs
-  const [tab, setTab] = useState<'employees' | 'leaves' | 'timerecord' | 'payroll'>('employees');
+  const [tab, setTab] = useState<'onboarding' | 'employees' | 'leaves' | 'timerecord' | 'payroll' | 'assets'>('employees');
 
   // Employees state
   const [rows, setRows] = useState<EmpRow[]>([]);
@@ -66,6 +66,131 @@ const HRMPage: React.FC = () => {
   const [tEmail, setTEmail] = useState('');
   const [tFrom, setTFrom] = useState('');
   const [tTo, setTTo] = useState('');
+
+  // Onboarding state
+  interface OnbRow {
+    id: number;
+    secure_token: string | null;
+    status: string | null;
+    candidate_email: string;
+    branch?: string | null;
+    created_by?: string | null;
+    created_at?: string | null;
+    full_name?: string | null;
+    designation?: string | null;
+    reporting_manager_email?: string | null;
+    work_email?: string | null;
+    attachments?: any;
+  }
+  const [onbs, setOnbs] = useState<OnbRow[]>([]);
+  const [newOnbEmail, setNewOnbEmail] = useState('');
+  const loadOnboardings = async () => {
+    let q = supabase
+      .from('employee_onboardings')
+      .select('id, secure_token, status, candidate_email, branch, created_by, created_at, full_name, designation, reporting_manager_email, work_email, attachments')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    const { data } = await q as any;
+    setOnbs(data||[]);
+  };
+  useEffect(() => { if (tab==='onboarding' && (role==='super' || myBranch!==null)) loadOnboardings(); }, [tab, role, myBranch]);
+  const randToken = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const createOnboarding = async () => {
+    if (!isAdmin) return;
+    const emailTrim = newOnbEmail.trim();
+    if (!emailTrim) return alert('Enter candidate email');
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const token = randToken();
+    const payload: any = { candidate_email: emailTrim, created_by: me, secure_token: token, status: 'Initiated', branch: role==='super'? null : myBranch };
+    const { error } = await supabase.from('employee_onboardings').insert(payload);
+    if (error) return alert(error.message);
+    setNewOnbEmail('');
+    await loadOnboardings();
+    alert('Onboarding link generated: ' + window.location.origin + '/onboard?token=' + token);
+  };
+  const approveOnboarding = async (row: OnbRow) => {
+    if (!isAdmin) return;
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const master: any = {
+      email: row.candidate_email,
+      full_name: row.full_name,
+      designation: row.designation,
+      reporting_manager_email: row.reporting_manager_email,
+      work_email: row.work_email,
+      branch: role==='super'? null : myBranch,
+      attachments: row.attachments || null,
+      updated_by: me,
+    };
+    const { error: mErr } = await supabase.from('employees_master').upsert(master, { onConflict: 'email' } as any);
+    if (mErr) return alert(mErr.message);
+    await supabase.from('employee_leave_balances').insert({ employee_email: row.candidate_email, branch: role==='super'? null : myBranch }).onConflict('employee_email').ignore();
+    const { error: uErr } = await supabase.from('employee_onboardings').update({ status: 'Approved', approved_by: me, approved_at: new Date().toISOString() }).eq('id', row.id);
+    if (uErr) return alert(uErr.message);
+    await loadOnboardings();
+  };
+
+  // Assets state
+  interface AssetRow {
+    id: number;
+    asset_id?: string | null;
+    employee_email: string;
+    asset_category?: string | null;
+    asset_name?: string | null;
+    brand_model?: string | null;
+    serial_imei?: string | null;
+    quantity?: number | null;
+    issued_date?: string | null;
+    issued_by?: string | null;
+    condition_at_issuance?: string | null;
+    return_status?: string | null;
+    actual_return_date?: string | null;
+    condition_on_return?: string | null;
+    remarks?: string | null;
+    approved_by?: string | null;
+    acknowledgement?: boolean | null;
+    branch?: string | null;
+  }
+  const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [showAssetModal, setShowAssetModal] = useState(false);
+  const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
+  const loadAssets = async () => {
+    let q = supabase
+      .from('employee_assets')
+      .select('id, asset_id, employee_email, asset_category, asset_name, brand_model, serial_imei, quantity, issued_date, issued_by, condition_at_issuance, return_status, actual_return_date, condition_on_return, remarks, approved_by, acknowledgement, branch')
+      .order('issued_date', { ascending: false })
+      .limit(500);
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    const { data } = await q as any;
+    setAssets(data||[]);
+  };
+  useEffect(() => { if (tab==='assets' && (role==='super' || myBranch!==null)) loadAssets(); }, [tab, role, myBranch]);
+  const openAddAsset = () => {
+    setEditAsset({ id: 0 as any, employee_email: '', asset_category: '', asset_name: '', brand_model: '', serial_imei: '', quantity: 1, issued_date: new Date().toISOString().slice(0,10), issued_by: '', condition_at_issuance: '', return_status: 'Issued', remarks: '', acknowledgement: false, branch: myBranch||null });
+    setShowAssetModal(true);
+  };
+  const saveAsset = async () => {
+    if (!isAdmin || !editAsset) { setShowAssetModal(false); return; }
+    const payload: any = { ...editAsset };
+    payload.branch = role==='super' ? (editAsset.branch||null) : (myBranch||null);
+    if (editAsset.id && editAsset.id !== 0) {
+      const { error } = await supabase.from('employee_assets').update(payload).eq('id', editAsset.id);
+      if (error) return alert(error.message);
+    } else {
+      delete payload.id;
+      const { error } = await supabase.from('employee_assets').insert(payload);
+      if (error) return alert(error.message);
+    }
+    setShowAssetModal(false); setEditAsset(null); await loadAssets();
+  };
+  const deleteAsset = async (id: number) => {
+    if (!isAdmin) return;
+    if (!confirm('Delete this asset?')) return;
+    const { error } = await supabase.from('employee_assets').delete().eq('id', id);
+    if (error) alert(error.message); else loadAssets();
+  };
 
   const loadTimeRecords = async () => {
     let q = supabase
@@ -173,6 +298,8 @@ const HRMPage: React.FC = () => {
       <pre style="margin-top:12px;background:#f7f7f7;padding:12px;border:1px solid #eee">${JSON.stringify(item.details||{}, null, 2)}</pre>
       <button onclick="window.print()" style="margin-top:16px;padding:8px 12px">Print</button>
     </body></html>`);
+
+
     w.document.close();
   };
 
@@ -290,10 +417,12 @@ const HRMPage: React.FC = () => {
 
             {/* Sub-tabs */}
             <div className="mt-4 inline-flex bg-white border rounded-lg p-1">
-              <button onClick={()=>setTab('employees')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab==='employees'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Employees</button>
+              <button onClick={()=>setTab('onboarding')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab==='onboarding'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Onboarding</button>
+              <button onClick={()=>setTab('employees')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='employees'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Employees</button>
               <button onClick={()=>setTab('leaves')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='leaves'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Leaves</button>
               <button onClick={()=>setTab('timerecord')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='timerecord'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Time Record</button>
               <button onClick={()=>setTab('payroll')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='payroll'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Payroll</button>
+              <button onClick={()=>setTab('assets')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='assets'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Assets</button>
             </div>
 
             {/* Employees tab */}
@@ -367,6 +496,61 @@ const HRMPage: React.FC = () => {
               </div>
             )}
 
+
+            {/* Onboarding tab */}
+            {tab==='onboarding' && (
+              <div className="mt-6 space-y-3">
+                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
+                  {isAdmin && (
+                    <>
+                      <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Candidate Email" value={newOnbEmail} onChange={e=>setNewOnbEmail(e.target.value)} />
+                      <button onClick={createOnboarding} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Link</button>
+                    </>
+                  )}
+                  {!isAdmin && myBranch && (
+                    <div className="text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
+                  )}
+                </div>
+                <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-text-secondary">
+                        <th className="p-2">Candidate</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2">Created</th>
+                        <th className="p-2">Link</th>
+                        <th className="p-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {onbs.map(o => (
+                        <tr key={o.id}>
+                          <td className="p-2 font-semibold text-text-primary">{o.full_name || o.candidate_email}</td>
+                          <td className="p-2">{o.status || '-'}</td>
+                          <td className="p-2">{o.created_at ? new Date(o.created_at).toLocaleString() : '-'}</td>
+                          <td className="p-2">
+                            {o.secure_token ? (
+                              <a className="text-blue-600 hover:underline" href={`/onboard?token=${o.secure_token}`} target="_blank" rel="noreferrer">Open</a>
+                            ) : '-' }
+                          </td>
+                          <td className="p-2 text-right">
+                            {isAdmin ? (
+                              <button disabled={o.status==='Approved'} onClick={()=>approveOnboarding(o)} className="text-green-600 hover:underline disabled:text-gray-400">Approve</button>
+                            ) : (
+                              <span className="text-text-secondary">View only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {onbs.length===0 && (
+                        <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No onboarding records</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Leaves tab: branch-scoped approvals with filters */}
             {tab==='leaves' && (
               <div className="mt-6 space-y-3">
@@ -374,9 +558,9 @@ const HRMPage: React.FC = () => {
                   <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={lEmail} onChange={e=>setLEmail(e.target.value)} />
                   <select className="border rounded px-2 py-2" value={lType} onChange={e=>setLType(e.target.value)}>
                     <option value="">All Types</option>
-                    <option value="Sick">Sick</option>
-                    <option value="Remote">Remote</option>
-                    <option value="Vacation">Vacation</option>
+                    <option value="CL">Casual Leave (CL)</option>
+                    <option value="SL">Sick Leave (SL)</option>
+                    <option value="AL">Annual Leave (AL)</option>
                   </select>
                   <select className="border rounded px-2 py-2" value={lStatus} onChange={e=>setLStatus(e.target.value)}>
                     <option value="">All Status</option>
@@ -493,6 +677,61 @@ const HRMPage: React.FC = () => {
             )}
 
             {/* Payroll tab: batches, generate, and items */}
+
+            {/* Assets tab */}
+            {tab==='assets' && (
+              <div className="mt-6 space-y-3">
+                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
+                  {isAdmin && <button onClick={openAddAsset} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Issue/Record Asset</button>}
+                  {!isAdmin && myBranch && (
+                    <div className="ml-auto text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
+                  )}
+                </div>
+                <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-text-secondary">
+                        <th className="p-2">Asset ID</th>
+                        <th className="p-2">Employee</th>
+                        <th className="p-2">Category</th>
+                        <th className="p-2">Name</th>
+                        <th className="p-2">Serial/IMEI</th>
+                        <th className="p-2">Issued</th>
+                        <th className="p-2">Status</th>
+                        <th className="p-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {assets.map(a => (
+                        <tr key={a.id}>
+                          <td className="p-2 font-semibold text-text-primary">{a.asset_id || '-'}</td>
+                          <td className="p-2">{a.employee_email}</td>
+                          <td className="p-2">{a.asset_category || '-'}</td>
+                          <td className="p-2">{a.asset_name || '-'}</td>
+                          <td className="p-2">{a.serial_imei || '-'}</td>
+                          <td className="p-2">{a.issued_date || '-'}</td>
+                          <td className="p-2">{a.return_status || '-'}</td>
+                          <td className="p-2 text-right">
+                            {isAdmin ? (
+                              <>
+                                <button onClick={()=>{ setEditAsset(a); setShowAssetModal(true); }} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={()=>deleteAsset(a.id)} className="text-red-600 hover:underline">Delete</button>
+                              </>
+                            ) : (
+                              <span className="text-text-secondary">View only</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {assets.length===0 && (
+                        <tr><td colSpan={8} className="p-4 text-center text-text-secondary">No assets</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {tab==='payroll' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
@@ -649,6 +888,88 @@ const HRMPage: React.FC = () => {
           </form>
         </div>
       )}
+      {/* Add/Edit Asset Modal */}
+      {showAssetModal && editAsset && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <form onSubmit={(e)=>{e.preventDefault(); saveAsset();}} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl space-y-3">
+            <div className="text-lg font-semibold">{editAsset.id? 'Edit Asset' : 'Record Asset'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-semibold">Employee Email</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.employee_email} onChange={e=>setEditAsset({...editAsset, employee_email: e.target.value})} required />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Asset ID</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_id||''} onChange={e=>setEditAsset({...editAsset, asset_id: e.target.value})} />
+              </div>
+              {role==='super' && (
+                <div>
+                  <label className="text-sm font-semibold">Branch</label>
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.branch||''} onChange={e=>setEditAsset({...editAsset, branch: e.target.value})} />
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-semibold">Category</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_category||''} onChange={e=>setEditAsset({...editAsset, asset_category: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Name</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_name||''} onChange={e=>setEditAsset({...editAsset, asset_name: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Brand/Model</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.brand_model||''} onChange={e=>setEditAsset({...editAsset, brand_model: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Serial/IMEI</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.serial_imei||''} onChange={e=>setEditAsset({...editAsset, serial_imei: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Quantity</label>
+                <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.quantity ?? 1} onChange={e=>setEditAsset({...editAsset, quantity: Number(e.target.value)||1})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Issued Date</label>
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_date||''} onChange={e=>setEditAsset({...editAsset, issued_date: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Issued By</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_by||''} onChange={e=>setEditAsset({...editAsset, issued_by: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Condition at Issuance</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.condition_at_issuance||''} onChange={e=>setEditAsset({...editAsset, condition_at_issuance: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Return Status</label>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={editAsset.return_status||'Issued'} onChange={e=>setEditAsset({...editAsset, return_status: e.target.value})}>
+                  <option>Issued</option>
+                  <option>Returned</option>
+                  <option>Lost</option>
+                  <option>Damaged</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Actual Return Date</label>
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.actual_return_date||''} onChange={e=>setEditAsset({...editAsset, actual_return_date: e.target.value})} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">Remarks</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.remarks||''} onChange={e=>setEditAsset({...editAsset, remarks: e.target.value})} />
+              </div>
+              <div className="md:col-span-2 flex items-center gap-2">
+                <input id="ack" type="checkbox" className="h-4 w-4" checked={!!editAsset.acknowledgement} onChange={e=>setEditAsset({...editAsset, acknowledgement: e.target.checked})} />
+                <label htmlFor="ack" className="text-sm">Acknowledgement received</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={()=>{setShowAssetModal(false); setEditAsset(null);}} className="px-3 py-2 rounded border">Cancel</button>
+              {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
+            </div>
+          </form>
+        </div>
+      )}
+
 
     </>
   );
