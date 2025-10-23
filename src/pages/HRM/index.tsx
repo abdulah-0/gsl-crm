@@ -51,6 +51,37 @@ const HRMPage: React.FC = () => {
   const [lStatus, setLStatus] = useState('');
   const [lFrom, setLFrom] = useState('');
   const [lTo, setLTo] = useState('');
+
+	  interface LeaveBalance {
+	    employee_email: string;
+	    cl_entitlement?: number | null;
+	    sl_entitlement?: number | null;
+	    al_entitlement?: number | null;
+	    cl_availed?: number | null;
+	    sl_availed?: number | null;
+	    al_availed?: number | null;
+	    branch?: string | null;
+	  }
+	  const [lb, setLb] = useState<LeaveBalance | null>(null);
+
+
+	  // Load leave balances for selected employee (if any)
+	  useEffect(() => {
+	    const run = async () => {
+	      const em = lEmail.trim();
+	      if (!(tab==='leaves' && em)) { setLb(null); return; }
+	      let qb: any = supabase
+	        .from('employee_leave_balances')
+	        .select('employee_email, cl_entitlement, sl_entitlement, al_entitlement, cl_availed, sl_availed, al_availed, branch')
+	        .eq('employee_email', em)
+	        .maybeSingle();
+	      if (role !== 'super') qb = qb.eq('branch', myBranch);
+	      const { data } = await qb;
+	      setLb((data as any) || null);
+	    };
+	    run();
+	  }, [tab, lEmail, role, myBranch]);
+
   // HRM -> Time Record state
   interface TimeRecordRow {
     id: number;
@@ -317,8 +348,10 @@ const HRMPage: React.FC = () => {
 
   const loadLeaves = async () => {
     let q = supabase
+
+
       .from('leaves')
-      .select('id, employee_email, type, start_date, end_date, status, reason, branch, created_at')
+      .select('id, employee_email, type, start_date, end_date, status, reason, branch, created_at, manager_approved_by, hr_approved_by, ceo_approved_by')
       .order('created_at', { ascending: false });
     if (role !== 'super') q = q.eq('branch', myBranch);
     if (lEmail) q = q.ilike('employee_email', `%${lEmail}%`);
@@ -347,6 +380,8 @@ const HRMPage: React.FC = () => {
         const { data: u } = await supabase.from('dashboard_users').select('role, branch').eq('email', email).maybeSingle();
         const r = (u?.role || (data.user as any)?.app_metadata?.role || (data.user as any)?.user_metadata?.role || '').toString().toLowerCase();
         if (r.includes('super')) mounted && setRole('super');
+
+
         else if (r.includes('admin')) mounted && setRole('admin');
         else mounted && setRole('other');
         mounted && setMyBranch(u?.branch || null);
@@ -372,6 +407,8 @@ const HRMPage: React.FC = () => {
   useEffect(() => { if (role==='super' || myBranch!==null) loadEmployees(); }, [role, myBranch]);
 
   const filtered = useMemo(() => {
+
+
     const s = search.toLowerCase();
     return rows.filter(r =>
       (!s || (r.full_name||'').toLowerCase().includes(s) || (r.email||'').toLowerCase().includes(s)) &&
@@ -395,6 +432,8 @@ const HRMPage: React.FC = () => {
       role: editRow.role,
       department: editRow.department,
       designation: editRow.designation,
+
+
       joining_date: editRow.joining_date,
       status: editRow.status,
       branch: branchVal,
@@ -544,6 +583,24 @@ const HRMPage: React.FC = () => {
                             ) : '-' }
                           </td>
                           <td className="p-2 text-right">
+
+	                {lb && (
+	                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+	                    <div className="font-semibold mb-1">Leave Entitlements</div>
+	                    <div className="flex flex-wrap gap-6">
+	                      <div>
+	                        CL: {lb.cl_entitlement||0}/{lb.cl_availed||0} (Bal {(lb.cl_entitlement||0) - (lb.cl_availed||0)})
+	                      </div>
+	                      <div>
+	                        SL: {lb.sl_entitlement||0}/{lb.sl_availed||0} (Bal {(lb.sl_entitlement||0) - (lb.sl_availed||0)})
+	                      </div>
+	                      <div>
+	                        AL: {lb.al_entitlement||0}/{lb.al_availed||0} (Bal {(lb.al_entitlement||0) - (lb.al_availed||0)})
+	                      </div>
+	                    </div>
+	                  </div>
+	                )}
+
                             {isAdmin ? (
                               <button disabled={o.status==='Approved'} onClick={()=>approveOnboarding(o)} className="text-green-600 hover:underline disabled:text-gray-400">Approve</button>
                             ) : (
@@ -584,6 +641,24 @@ const HRMPage: React.FC = () => {
                   <button onClick={loadLeaves} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Apply</button>
                 </div>
 
+	                {lb && (
+	                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+	                    <div className="font-semibold mb-1">Leave Entitlements</div>
+	                    <div className="flex flex-wrap gap-6">
+	                      <div>
+	                        CL: {lb.cl_entitlement||0}/{lb.cl_availed||0} (Bal {(lb.cl_entitlement||0) - (lb.cl_availed||0)})
+	                      </div>
+	                      <div>
+	                        SL: {lb.sl_entitlement||0}/{lb.sl_availed||0} (Bal {(lb.sl_entitlement||0) - (lb.sl_availed||0)})
+	                      </div>
+	                      <div>
+	                        AL: {lb.al_entitlement||0}/{lb.al_availed||0} (Bal {(lb.al_entitlement||0) - (lb.al_availed||0)})
+	                      </div>
+	                    </div>
+	                  </div>
+	                )}
+
+
                 <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
@@ -595,6 +670,9 @@ const HRMPage: React.FC = () => {
                         <th className="p-2">Status</th>
                         <th className="p-2">Reason</th>
                         {role==='super' && <th className="p-2">Branch</th>}
+                        <th className="p-2">Manager</th>
+                        <th className="p-2">HR</th>
+                        <th className="p-2">CEO</th>
                         <th className="p-2 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -608,6 +686,9 @@ const HRMPage: React.FC = () => {
                           <td className="p-2">{l.status || '-'}</td>
                           <td className="p-2">{l.reason || '-'}</td>
                           {role==='super' && <td className="p-2">{l.branch || '-'}</td>}
+                          <td className="p-2">{(l as any).manager_approved_by || '-'}</td>
+                          <td className="p-2">{(l as any).hr_approved_by || '-'}</td>
+                          <td className="p-2">{(l as any).ceo_approved_by || '-'}</td>
                           <td className="p-2 text-right">
                             {isAdmin ? (
                               <div className="inline-flex items-center gap-2">
@@ -621,7 +702,7 @@ const HRMPage: React.FC = () => {
                         </tr>
                       ))}
                       {leaves.length===0 && (
-                        <tr><td colSpan={role==='super'?8:7} className="p-4 text-center text-text-secondary">No leaves</td></tr>
+                        <tr><td colSpan={role==='super'?11:10} className="p-4 text-center text-text-secondary">No leaves</td></tr>
                       )}
                     </tbody>
                   </table>
