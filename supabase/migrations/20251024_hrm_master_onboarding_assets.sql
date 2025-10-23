@@ -12,6 +12,18 @@ returns boolean language sql stable as $$
   select coalesce((current_setting('request.jwt.claims', true)::jsonb->>'role') ilike '%hr%', false)
 $$;
 
+
+-- define missing helpers to make this migration self-contained
+create or replace function public.is_super()
+returns boolean language sql stable as $$
+  select coalesce((current_setting('request.jwt.claims', true)::jsonb->>'role') ilike '%super%', false)
+$$;
+
+create or replace function public.jwt_email()
+returns text language sql stable as $$
+  select (current_setting('request.jwt.claims', true)::jsonb->>'email')::text
+$$;
+
 -- employees_master (final master record after approval)
 create table if not exists public.employees_master (
   id bigserial primary key,
