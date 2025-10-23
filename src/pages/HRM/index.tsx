@@ -126,7 +126,7 @@ const HRMPage: React.FC = () => {
     };
     const { error: mErr } = await supabase.from('employees_master').upsert(master, { onConflict: 'email' } as any);
     if (mErr) return alert(mErr.message);
-    await supabase.from('employee_leave_balances').insert({ employee_email: row.candidate_email, branch: role==='super'? null : myBranch }).onConflict('employee_email').ignore();
+    await supabase.from('employee_leave_balances').upsert({ employee_email: row.candidate_email, branch: role==='super'? null : myBranch }, { onConflict: 'employee_email' } as any);
     const { error: uErr } = await supabase.from('employee_onboardings').update({ status: 'Approved', approved_by: me, approved_at: new Date().toISOString() }).eq('id', row.id);
     if (uErr) return alert(uErr.message);
     await loadOnboardings();
@@ -270,20 +270,30 @@ const HRMPage: React.FC = () => {
     if (role !== 'super') eQ = eQ.eq('branch', myBranch);
     const { data: emps, error: eErr } = await eQ as any;
     if (eErr) { alert(eErr.message); return; }
-    // 3) For each employee, compute simple payable (placeholder logic: base 0, compute from hours at 0 rate)
-    // Example: 8 hours per day base rate 0 — extend later. We'll just count working days from time_records
-    const start = new Date(pyYear, pyMonth-1, 1);
-    const end = new Date(pyYear, pyMonth, 0);
-    const from = start.toISOString().slice(0,10);
-    const to = end.toISOString().slice(0,10);
 
+    // 3) Load master payroll fields for employees
+    let mQ = supabase.from('employees_master').select('email, branch, basic_salary, medical_allowance, work_transportation, other_allowances, arrears, bonus, income_tax, life_insurance, health_insurance, employee_loan, lunch_deduction, advance_salary, esb, other_deductions, payment_mode');
+    if (role !== 'super') mQ = mQ.eq('branch', myBranch);
+    const { data: masters } = await mQ as any;
+    const mByEmail: Record<string, any> = {};
+    for (const m of (masters||[])) mByEmail[m.email] = m;
+
+    // 4) For each employee, compute payroll using master fields
     for (const emp of (emps||[])) {
-      let trQ = supabase.from('time_records').select('hours').gte('work_date', from).lte('work_date', to).eq('employee_email', emp.email);
-      if (role !== 'super') trQ = trQ.eq('branch', myBranch);
-      const { data: trsData } = await trQ as any;
-      const totalHours = (trsData||[]).reduce((acc: number, r: any)=> acc + (Number(r.hours)||0), 0);
-      const payable = Math.round(totalHours * 0); // placeholder for now
-      await supabase.from('payroll_items').insert({ batch_id: (batch as any).id, employee_email: emp.email, payable_amount: payable, details: { totalHours } });
+      const m = mByEmail[emp.email] || {};
+      const n = (v: any) => Number(v||0);
+      const gross = n(m.basic_salary) + n(m.medical_allowance) + n(m.work_transportation) + n(m.other_allowances) + n(m.arrears) + n(m.bonus);
+      const deductions = n(m.income_tax) + n(m.life_insurance) + n(m.health_insurance) + n(m.employee_loan) + n(m.lunch_deduction) + n(m.advance_salary) + n(m.esb) + n(m.other_deductions);
+      const net = Math.round(gross - deductions);
+      const details = {
+        month: pyMonth, year: pyYear, payment_mode: m.payment_mode || null,
+        breakdown: {
+          basic_salary: n(m.basic_salary), medical_allowance: n(m.medical_allowance), work_transportation: n(m.work_transportation), other_allowances: n(m.other_allowances), arrears: n(m.arrears), bonus: n(m.bonus),
+          income_tax: n(m.income_tax), life_insurance: n(m.life_insurance), health_insurance: n(m.health_insurance), employee_loan: n(m.employee_loan), lunch_deduction: n(m.lunch_deduction), advance_salary: n(m.advance_salary), esb: n(m.esb), other_deductions: n(m.other_deductions),
+          gross, deductions, net,
+        }
+      };
+      await supabase.from('payroll_items').insert({ batch_id: (batch as any).id, employee_email: emp.email, payable_amount: net, details });
     }
     await loadBatches();
   };
