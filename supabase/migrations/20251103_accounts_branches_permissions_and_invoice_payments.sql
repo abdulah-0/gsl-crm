@@ -144,8 +144,10 @@ $$;
 
 -- Schedule daily at 08:00 server time
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'notify_due_invoices_daily') THEN
-    PERFORM cron.schedule('notify_due_invoices_daily', '0 8 * * *', $$select public.notify_due_invoices();$$);
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'notify_due_invoices_daily') THEN
+      PERFORM cron.schedule('notify_due_invoices_daily', '0 8 * * *', 'select public.notify_due_invoices();');
+    END IF;
   END IF;
 END $$;
 
