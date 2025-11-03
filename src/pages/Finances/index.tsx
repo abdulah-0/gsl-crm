@@ -493,7 +493,7 @@ const Finances: React.FC = () => {
   };
 
   const branchChartData = useMemo(() => {
-    const branchesList = branchList.length ? branchList : (branchNames.length ? branchNames : BRANCHES);
+    const branchesList = branchList.length ? branchList : branchNames;
     const map = new Map<string, number>();
     branchesList.forEach(b => map.set(b, 0));
     vouchers.forEach(v => {
@@ -689,7 +689,7 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Branch</label>
                     <select value={branch} onChange={(e)=>setBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
                       <option value="">Select Branch...</option>
-                      {(branchNames.length ? branchNames : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
+                      {branchNames.map(b=> (<option key={b} value={b}>{b}</option>))}
                     </select>
                     {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
                   </div>
@@ -727,7 +727,7 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Branch</label>
                     <select value={qBranch} onChange={(e)=>setQBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
                       <option value="">Select Branch...</option>
-                      {(branchNames.length ? branchNames : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
+                      {branchNames.map(b=> (<option key={b} value={b}>{b}</option>))}
                     </select>
                     {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
                   </div>
@@ -767,7 +767,7 @@ const Finances: React.FC = () => {
                 <div className="flex flex-col md:flex-row gap-3 md:items-center">
                   <select value={branchFilter} onChange={(e)=>{ setBranchFilter(e.target.value); setPage(1); }} className="border rounded-lg p-2">
                     <option>All Branches</option>
-                    {(branchList.length ? branchList : BRANCHES).map(b => (<option key={b}>{b}</option>))}
+                    {(branchList.length ? branchList : branchNames).map(b => (<option key={b}>{b}</option>))}
                   </select>
                   <input value={search} onChange={(e)=>{ setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
                   <div className="flex gap-2">
