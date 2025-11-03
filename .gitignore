@@ -29,3 +29,7 @@ jest-test-results.json
 .env
 .env.*
 !.env.example
+
+
+# Supabase CLI temp artifacts
+supabase/.temp/

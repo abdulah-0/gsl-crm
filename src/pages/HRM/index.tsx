@@ -3,6 +3,9 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
 
 // Simple role type
 type Role = 'super' | 'admin' | 'other';
@@ -21,9 +24,14 @@ interface EmpRow {
 }
 
 const HRMPage: React.FC = () => {
+  const [myRoleText, setMyRoleText] = useState<string>('');
+
   const [role, setRole] = useState<Role>('other');
   const [myBranch, setMyBranch] = useState<string | null>(null);
   const isAdmin = role === 'super' || role === 'admin';
+  const isSuper = role === 'super';
+  const isHR = React.useMemo(() => (myRoleText?.includes('hr') || role === 'admin' || role === 'super'), [myRoleText, role]);
+
 
   // Sub-tabs
   const [tab, setTab] = useState<'onboarding' | 'employees' | 'leaves' | 'timerecord' | 'payroll' | 'assets'>('employees');
@@ -137,6 +145,7 @@ const HRMPage: React.FC = () => {
     const payload: any = { candidate_email: emailTrim, created_by: me, secure_token: token, status: 'Initiated', branch: role==='super'? null : myBranch };
     const { error } = await supabase.from('employee_onboardings').insert(payload);
     if (error) return alert(error.message);
+    await supabase.from('activity_log').insert([{ entity: 'employee_onboarding', entity_id: String(token), action: `Onboarding initiated`, detail: { candidate_email: emailTrim, token, initiated_by: me, branch: payload.branch } }]);
     setNewOnbEmail('');
     await loadOnboardings();
     alert('Onboarding link generated: ' + window.location.origin + '/onboard?token=' + token);
@@ -160,6 +169,7 @@ const HRMPage: React.FC = () => {
     await supabase.from('employee_leave_balances').upsert({ employee_email: row.candidate_email, branch: role==='super'? null : myBranch }, { onConflict: 'employee_email' } as any);
     const { error: uErr } = await supabase.from('employee_onboardings').update({ status: 'Approved', approved_by: me, approved_at: new Date().toISOString() }).eq('id', row.id);
     if (uErr) return alert(uErr.message);
+    await supabase.from('activity_log').insert([{ entity: 'employee_onboarding', entity_id: String(row.id), action: `Onboarding approved`, detail: { candidate_email: row.candidate_email, approved_by: me } }]);
     await loadOnboardings();
   };
 
@@ -209,10 +219,12 @@ const HRMPage: React.FC = () => {
     if (editAsset.id && editAsset.id !== 0) {
       const { error } = await supabase.from('employee_assets').update(payload).eq('id', editAsset.id);
       if (error) return alert(error.message);
+      await supabase.from('activity_log').insert([{ entity: 'employee_asset', entity_id: String(editAsset.id), action: 'Updated asset', detail: { employee_email: editAsset.employee_email, asset_name: editAsset.asset_name, serial_imei: editAsset.serial_imei } }]);
     } else {
       delete payload.id;
-      const { error } = await supabase.from('employee_assets').insert(payload);
+      const { data: ins, error } = await supabase.from('employee_assets').insert(payload).select('id').single();
       if (error) return alert(error.message);
+      await supabase.from('activity_log').insert([{ entity: 'employee_asset', entity_id: String((ins as any)?.id || 'new'), action: 'Issued asset', detail: { employee_email: editAsset.employee_email, asset_name: editAsset.asset_name, serial_imei: editAsset.serial_imei } }]);
     }
     setShowAssetModal(false); setEditAsset(null); await loadAssets();
   };
@@ -220,7 +232,7 @@ const HRMPage: React.FC = () => {
     if (!isAdmin) return;
     if (!confirm('Delete this asset?')) return;
     const { error } = await supabase.from('employee_assets').delete().eq('id', id);
-    if (error) alert(error.message); else loadAssets();
+    if (error) alert(error.message); else { await supabase.from('activity_log').insert([{ entity: 'employee_asset', entity_id: String(id), action: 'Deleted asset', detail: { id } }]); loadAssets(); }
   };
 
   const loadTimeRecords = async () => {
@@ -345,6 +357,74 @@ const HRMPage: React.FC = () => {
   };
 
 
+  const exportEmployeePDF = async (email: string) => {
+    try {
+      const { data: m } = await supabase
+        .from('employees_master')
+        .select('employee_code, full_name, email, branch, designation, reporting_manager_email, date_of_joining, basic_salary, payment_mode, personal_contact, current_address')
+        .eq('email', email)
+        .maybeSingle();
+      const { data: a } = await supabase
+        .from('employee_assets')
+        .select('asset_id, asset_category, asset_name, serial_imei, issued_date, return_status')
+        .eq('employee_email', email)
+        .order('issued_date', { ascending: false });
+      const { data: b } = await supabase
+        .from('employee_leave_balances')
+        .select('cl_entitlement, cl_availed, sl_entitlement, sl_availed, al_entitlement, al_availed')
+        .eq('employee_email', email)
+        .maybeSingle();
+
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Employee Profile', 14, 18);
+
+      const head = [['Field','Value']];
+      const body = [
+        ['Employee Code', (m as any)?.employee_code || '-'],
+        ['Name', (m as any)?.full_name || '-'],
+        ['Email', email],
+        ['Branch', (m as any)?.branch || '-'],
+        ['Designation', (m as any)?.designation || '-'],
+        ['Manager', (m as any)?.reporting_manager_email || '-'],
+        ['Date of Joining', (m as any)?.date_of_joining || '-'],
+        ['Basic Salary', String((m as any)?.basic_salary ?? 0)],
+        ['Payment Mode', (m as any)?.payment_mode || '-'],
+      ];
+      (autoTable as any)(doc, { head, body, startY: 26, styles: { fontSize: 10 }, headStyles: { fillColor: [255,163,50] } });
+      // @ts-ignore
+      let y = (doc as any).lastAutoTable?.finalY || 26;
+
+      if (b) {
+        const head2 = [['Leave Type','Entitled','Availed','Balance']];
+        const body2 = [
+          ['CL', b.cl_entitlement||0, b.cl_availed||0, (b.cl_entitlement||0)-(b.cl_availed||0)],
+          ['SL', b.sl_entitlement||0, b.sl_availed||0, (b.sl_entitlement||0)-(b.sl_availed||0)],
+          ['AL', b.al_entitlement||0, b.al_availed||0, (b.al_entitlement||0)-(b.al_availed||0)],
+        ];
+        (autoTable as any)(doc, { head: head2, body: body2, startY: y + 6, styles: { fontSize: 9 }, headStyles: { fillColor: [255,163,50] } });
+        // @ts-ignore
+        y = (doc as any).lastAutoTable?.finalY || (y + 6);
+      }
+
+      if (Array.isArray(a) && a.length) {
+        const head3 = [['Asset ID','Category','Name','Serial/IMEI','Issued','Status']];
+        const body3 = (a as any[]).map(x => [x.asset_id||'-', x.asset_category||'-', x.asset_name||'-', x.serial_imei||'-', x.issued_date||'-', x.return_status||'-']);
+        (autoTable as any)(doc, { head: head3, body: body3, startY: y + 6, styles: { fontSize: 8 }, headStyles: { fillColor: [255,163,50] } });
+      }
+
+      const blob = doc.output('blob');
+      const url = URL.createObjectURL(blob);
+      const aEl = document.createElement('a');
+      aEl.href = url; aEl.download = `employee-${email}.pdf`; aEl.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Employee PDF export error', e);
+      alert('Failed to generate employee PDF.');
+    }
+  };
+
 
   const loadLeaves = async () => {
     let q = supabase
@@ -364,10 +444,61 @@ const HRMPage: React.FC = () => {
   };
   useEffect(() => { if (tab==='leaves' && (role==='super' || myBranch!==null)) loadLeaves(); }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
 
-  const updateLeaveStatus = async (id: number, status: 'Approved' | 'Rejected') => {
-    const { error } = await supabase.from('leaves').update({ status }).eq('id', id);
-    if (error) alert(error.message); else loadLeaves();
+  const approveAsManager = async (id: number) => {
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    // fetch leave and employee manager
+    const { data: lv } = await supabase.from('leaves').select('employee_email, manager_approved_by').eq('id', id).maybeSingle();
+    if (!lv) return alert('Leave not found');
+    if ((lv as any).manager_approved_by) return alert('Already approved at manager stage');
+    const { data: em } = await supabase.from('employees_master').select('reporting_manager_email').eq('email', (lv as any).employee_email).maybeSingle();
+    const mgr = (em as any)?.reporting_manager_email || '';
+    if (!mgr || mgr.toLowerCase() !== me.toLowerCase()) return alert('You are not the reporting manager for this employee');
+    const { error } = await supabase.from('leaves').update({ manager_approved_by: me, manager_approved_at: new Date().toISOString(), status: 'Pending' }).eq('id', id);
+    if (error) alert(error.message); else {
+      await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'Manager approved', detail: { leave_id: id, approved_by: me } }]);
+      loadLeaves();
+    }
   };
+
+  const approveAsHR = async (id: number) => {
+    if (!isHR) return alert('Not allowed');
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const { data: lv } = await supabase.from('leaves').select('manager_approved_by, hr_approved_by').eq('id', id).maybeSingle();
+    if (!(lv as any)?.manager_approved_by) return alert('Manager approval pending');
+    if ((lv as any)?.hr_approved_by) return alert('Already approved at HR stage');
+    const { error } = await supabase.from('leaves').update({ hr_approved_by: me, hr_approved_at: new Date().toISOString(), status: 'Pending' }).eq('id', id);
+    if (error) alert(error.message); else {
+      await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'HR approved', detail: { leave_id: id, approved_by: me } }]);
+      loadLeaves();
+    }
+  };
+
+  const approveAsCEO = async (id: number) => {
+    if (!isSuper) return alert('Not allowed');
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const { data: lv } = await supabase.from('leaves').select('hr_approved_by, ceo_approved_by').eq('id', id).maybeSingle();
+    if (!(lv as any)?.hr_approved_by) return alert('HR approval pending');
+    if ((lv as any)?.ceo_approved_by) return alert('Already approved at CEO stage');
+    const { error } = await supabase.from('leaves').update({ ceo_approved_by: me, ceo_approved_at: new Date().toISOString(), status: 'Approved' }).eq('id', id);
+    if (error) alert(error.message); else {
+      await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'CEO approved', detail: { leave_id: id, approved_by: me } }]);
+      loadLeaves();
+    }
+  };
+
+  const rejectLeave = async (id: number) => {
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const { error } = await supabase.from('leaves').update({ status: 'Rejected' }).eq('id', id);
+    if (error) alert(error.message); else {
+      await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'Rejected', detail: { leave_id: id, rejected_by: me } }]);
+      loadLeaves();
+    }
+  };
+
 
 
   // Load role
@@ -379,9 +510,8 @@ const HRMPage: React.FC = () => {
         const email = data.user?.email || '';
         const { data: u } = await supabase.from('dashboard_users').select('role, branch').eq('email', email).maybeSingle();
         const r = (u?.role || (data.user as any)?.app_metadata?.role || (data.user as any)?.user_metadata?.role || '').toString().toLowerCase();
+        mounted && setMyRoleText(r);
         if (r.includes('super')) mounted && setRole('super');
-
-
         else if (r.includes('admin')) mounted && setRole('admin');
         else mounted && setRole('other');
         mounted && setMyBranch(u?.branch || null);
@@ -439,8 +569,15 @@ const HRMPage: React.FC = () => {
       branch: branchVal,
     } as any;
     // Upsert basic employee profile (does not create auth account)
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
     const { error } = await supabase.from('dashboard_users').upsert(payload, { onConflict: 'email' } as any);
-    if (!error) { setShowEmpModal(false); setEditRow(null); await loadEmployees(); } else { alert(error.message); }
+    if (error) { alert(error.message); return; }
+    // upsert minimal employees_master profile too
+    const { error: mErr } = await supabase.from('employees_master').upsert({ email: editRow.email, full_name: editRow.full_name, designation: editRow.designation, branch: branchVal } as any, { onConflict: 'email' } as any);
+    if (mErr) { alert(mErr.message); return; }
+    await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: editRow.email, action: 'Saved employee profile', detail: { email: editRow.email, full_name: editRow.full_name, updated_by: me } }]);
+    setShowEmpModal(false); setEditRow(null); await loadEmployees();
   };
   const onDelete = async (email: string) => {
     if (!isAdmin) return;
@@ -528,6 +665,7 @@ const HRMPage: React.FC = () => {
                             {isAdmin ? (
                               <>
                                 <button onClick={()=>openEdit(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={()=>exportEmployeePDF(r.email)} className="text-[#ffa332] hover:underline mr-3">Export PDF</button>
                                 <button onClick={()=>onDelete(r.email)} className="text-red-600 hover:underline">Remove</button>
                               </>
                             ) : (
@@ -690,14 +828,20 @@ const HRMPage: React.FC = () => {
                           <td className="p-2">{(l as any).hr_approved_by || '-'}</td>
                           <td className="p-2">{(l as any).ceo_approved_by || '-'}</td>
                           <td className="p-2 text-right">
-                            {isAdmin ? (
-                              <div className="inline-flex items-center gap-2">
-                                <button onClick={()=>updateLeaveStatus(l.id, 'Approved')} className="text-green-600 hover:underline">Approve</button>
-                                <button onClick={()=>updateLeaveStatus(l.id, 'Rejected')} className="text-red-600 hover:underline">Reject</button>
-                              </div>
-                            ) : (
-                              <span className="text-text-secondary">View only</span>
-                            )}
+                            <div className="inline-flex items-center gap-3">
+                              {!(l as any).manager_approved_by && (isAdmin || isHR || (myRoleText||'').includes('manager')) && (
+                                <button onClick={()=>approveAsManager(l.id)} className="text-amber-700 hover:underline">Approve as Manager</button>
+                              )}
+                              {(l as any).manager_approved_by && !(l as any).hr_approved_by && isHR && (
+                                <button onClick={()=>approveAsHR(l.id)} className="text-green-700 hover:underline">Approve as HR</button>
+                              )}
+                              {(l as any).hr_approved_by && !(l as any).ceo_approved_by && isSuper && (
+                                <button onClick={()=>approveAsCEO(l.id)} className="text-blue-700 hover:underline">Approve as CEO</button>
+                              )}
+                              {(isAdmin || isHR || isSuper) && (
+                                <button onClick={()=>rejectLeave(l.id)} className="text-red-600 hover:underline">Reject</button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -928,9 +1072,14 @@ const HRMPage: React.FC = () => {
                 <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.status||''} onChange={e=>setEditRow({...editRow, status: e.target.value})} />
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={()=>{setShowEmpModal(false); setEditRow(null);}} className="px-3 py-2 rounded border">Cancel</button>
-              {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
+            <div className="flex items-center justify-between gap-2 pt-2">
+              {editRow.email && (
+                <button type="button" onClick={()=>exportEmployeePDF(editRow.email)} className="text-[#ffa332] hover:underline">Export Profile to PDF</button>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button type="button" onClick={()=>{setShowEmpModal(false); setEditRow(null);}} className="px-3 py-2 rounded border">Cancel</button>
+                {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
+              </div>
             </div>
           </form>
         </div>
