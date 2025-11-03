@@ -21,6 +21,7 @@ type VoucherRow = {
   date: string; // ISO or pretty
   status: VoucherStatus;
   description?: string;
+  uploaded_bill?: string; // storage path
 };
 
 type DBVoucher = {
@@ -32,6 +33,7 @@ type DBVoucher = {
   occurred_at: string;
   status: VoucherStatus;
   description?: string | null;
+  uploaded_bill?: string | null;
 };
 
 function mapDbToRow(v: DBVoucher): VoucherRow {
@@ -46,6 +48,7 @@ function mapDbToRow(v: DBVoucher): VoucherRow {
     date: v.occurred_at,
     status: v.status,
     description: v.description ?? undefined,
+    uploaded_bill: (v as any).uploaded_bill ?? undefined,
   };
 }
 
@@ -135,6 +138,7 @@ function downloadCSV(filename: string, rows: VoucherRow[]) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
+
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
@@ -150,6 +154,7 @@ function generateVoucherPDF(row: VoucherRow) {
       ['Voucher ID', row.id],
       ['Type', row.type],
       ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount>=0?'(In)':'(Out)'}`],
+
       ['Branch', row.branch],
       ['Date', new Date(row.date).toLocaleString()],
       ['Status', row.status],
@@ -175,6 +180,18 @@ function generateVoucherPDF(row: VoucherRow) {
     alert('Failed to generate voucher PDF.');
   }
 }
+
+async function openBill(path: string) {
+  try {
+    const { data, error } = await supabase.storage.from('attachments').createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) { alert('Unable to open bill'); return; }
+    window.open(data.signedUrl, '_blank');
+  } catch (e) {
+    console.error('openBill error', e);
+    alert('Unable to open bill');
+  }
+}
+
 
 
 const Finances: React.FC = () => {
@@ -219,6 +236,35 @@ const Finances: React.FC = () => {
   const [qAmount, setQAmount] = useState<string>('');
   const [qBranch, setQBranch] = useState<string>('');
   const [qDescription, setQDescription] = useState<string>('Salaries');
+  const [qBillFile, setQBillFile] = useState<File | null>(null);
+  const [qBillError, setQBillError] = useState<string>('');
+
+
+	  const [finAccess, setFinAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
+	  const canCrud = finAccess === 'CRUD';
+
+	  useEffect(() => {
+	    (async () => {
+	      try {
+	        const { data: auth } = await supabase.auth.getUser();
+	        const email = auth.user?.email;
+	        if (!email) return;
+	        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+	        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
+	        if (roleStr.includes('super')) { setFinAccess('CRUD'); return; }
+	        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'accounts');
+	        if (up && up.length) {
+	          setFinAccess((up[0].access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
+	        } else {
+	          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
+	          setFinAccess(perms.includes('accounts') ? 'CRUD' : 'NONE');
+	        }
+	      } catch {
+	        // ignore
+	      }
+	    })();
+	  }, []);
+
   const qValid = useMemo(()=>{
     const amt = Number(qAmount);
     return qCategory && !Number.isNaN(amt) && amt>0 && qBranch;
@@ -352,11 +398,39 @@ const Finances: React.FC = () => {
       return;
     }
 
+    // Optional bill upload
+    if (qBillFile) {
+      const file = qBillFile;
+      const allowed = ['application/pdf','image/jpeg','image/png'];
+      if (!allowed.includes(file.type)) {
+        setQBillError('Only PDF, JPG, or PNG allowed');
+      } else if (file.size > 5 * 1024 * 1024) {
+        setQBillError('Max file size is 5MB');
+      } else {
+        setQBillError('');
+        const path = `cashout/${code}/bill_${Date.now()}_${file.name}`;
+        const upload = await supabase.storage.from('attachments').upload(path, file, { upsert: true, cacheControl: '3600', contentType: file.type });
+        if (upload.error) {
+          console.error('Upload error', upload.error);
+          alert('Failed to upload bill');
+        } else {
+          const upd = await supabase.from('vouchers').update({ uploaded_bill: path }).eq('code', code);
+          if (upd.error) {
+            console.error('Set bill path error', upd.error);
+          }
+          setVouchers(prev => prev.map(v => v.id === code ? { ...v, uploaded_bill: path } : v));
+        }
+      }
+    }
+
+
     generateVoucherPDF({ id: code, type: rowType, amount: signedAmt, branch: qBranch, date: occurred_at, status, description: desc });
 
     setQAmount('');
     setQBranch('');
     setQDescription(qCategory);
+    setQBillFile(null);
+    setQBillError('');
   };
 
   const branchChartData = useMemo(() => {
@@ -547,7 +621,7 @@ const Finances: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <button disabled={!isValid} className={`px-4 py-2 rounded-lg font-bold ${isValid ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
+                  <button disabled={!isValid || !canCrud} className={`px-4 py-2 rounded-lg font-bold ${(isValid && canCrud) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
                 </div>
               </form>
 
@@ -582,8 +656,27 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Description</label>
                     <textarea value={qDescription} onChange={(e)=>setQDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder={`e.g. ${qCategory} for May`} />
                   </div>
+                  <div>
+                    <label className="text-sm font-semibold text-text-secondary">Upload Bill (optional)</label>
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png"
+                      onChange={(e)=>{
+                        const f = e.target.files?.[0] || null;
+                        if (!f) { setQBillFile(null); setQBillError(''); return; }
+                        if (!['application/pdf','image/jpeg','image/png'].includes(f.type)) { setQBillError('Only PDF, JPG, or PNG allowed'); setQBillFile(null); return; }
+                        if (f.size > 5 * 1024 * 1024) { setQBillError('Max file size is 5MB'); setQBillFile(null); return; }
+                        setQBillError('');
+                        setQBillFile(f);
+                      }}
+                      className="mt-1 w-full border rounded-lg p-2"
+                    />
+                    {qBillFile && <div className="text-xs text-text-secondary mt-1">{qBillFile.name}</div>}
+                    {qBillError && <div className="text-xs text-red-600 mt-1">{qBillError}</div>}
+                  </div>
+
                   <div className="mt-1">
-                    <button disabled={!qValid} className={`px-4 py-2 rounded-lg font-bold ${qValid ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
+                    <button disabled={!qValid || !!qBillError || !canCrud} className={`px-4 py-2 rounded-lg font-bold ${(qValid && !qBillError && canCrud) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
                   </div>
                 </form>
               </div>
@@ -634,9 +727,12 @@ const Finances: React.FC = () => {
                         </td>
                         <td className="py-2 pr-4">
                           <div className="flex gap-2 text-sm">
+                            {r.uploaded_bill && (
+                              <button type="button" onClick={()=>openBill(r.uploaded_bill!)} className="text-green-700 hover:underline">Bill</button>
+                            )}
                             <button type="button" onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
-                            <button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>
-                            <button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>
+                            {canCrud && (<button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>)}
+                            {canCrud && (<button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>)}
                           </div>
                         </td>
                       </tr>
@@ -714,6 +810,11 @@ const Finances: React.FC = () => {
               <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
               <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
               {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
+              {viewVoucher.uploaded_bill && (
+                <div>
+                  <span className="text-text-secondary">Bill:</span> <button type="button" onClick={()=>openBill(viewVoucher.uploaded_bill!)} className="text-green-700 underline">Open</button>
+                </div>
+              )}
             </div>
             <div className="mt-4 text-right">
               <button type="button" onClick={()=>setViewVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Close</button>

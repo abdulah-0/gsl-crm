@@ -65,6 +65,28 @@ const Cases: React.FC = () => {
   const [activeCaseId, setActiveCaseId] = useState<string>('');
   const navigate = useNavigate();
 
+  const [caseAccess, setCaseAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
+  const canCrud = caseAccess === 'CRUD';
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email;
+        if (!email) return;
+        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
+        if (roleStr.includes('super')) { setCaseAccess('CRUD'); return; }
+        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'cases');
+        if (up && up.length) setCaseAccess((up[0].access as any)==='CRUD'?'CRUD':'VIEW');
+        else {
+          const perms = Array.isArray(u?.permissions)? (u?.permissions as any as string[]) : [];
+          setCaseAccess(perms.includes('cases')? 'CRUD' : 'NONE');
+        }
+      }catch{}
+    })();
+  },[]);
+
+
   useEffect(() => {
     const load = async () => {
       const { data, error } = await supabase
@@ -142,6 +164,30 @@ const Cases: React.FC = () => {
     add_course_or_uni:'', add_travel_history:'', add_visa_refusal:'', add_asylum_family:'',
     office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_counsellor_sign:'', office_next_follow_up_date:''
   });
+  // Student selection for case linking
+  const [studentsForDropdown, setStudentsForDropdown] = useState<Array<{ id:string; full_name:string; cnic?:string; phone?:string; batch_no?:string; program_title?:string }>>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<string>('');
+
+  useEffect(() => {
+    (async()=>{
+      const { data } = await supabase
+        .from('dashboard_students')
+        .select('id, full_name, cnic, phone, batch_no, program_title, status, archived')
+        .eq('status','Active').eq('archived', false)
+        .order('full_name');
+      setStudentsForDropdown((data as any) || []);
+    })();
+  }, []);
+
+  const onSelectStudent = (id: string) => {
+    setSelectedStudentId(id);
+    const st = studentsForDropdown.find(x => x.id === id);
+    if (st) {
+      setSf((prev:any) => ({ ...prev, basic_name: st.full_name, basic_phone: st.phone || '' }));
+      setFormTitle(st.full_name);
+    }
+  };
+
 
   // Add Task modal state
   const [showAddTask, setShowAddTask] = useState(false);
@@ -218,6 +264,8 @@ const Cases: React.FC = () => {
   }, [activeCase?.caseId]);
 
   const updateTaskStatus = async (taskId: string, next: Status) => {
+    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+
     // Optimistic UI
     setCases(prev => prev.map(c => {
       if (c.caseId !== activeCaseId) return c;
@@ -229,6 +277,8 @@ const Cases: React.FC = () => {
   };
 
   const moveTask = async (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: Status }) => {
+    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+
     // Optimistic UI
     setCases(prev => prev.map(c => {
       if (!activeCase || c.caseId !== activeCase.caseId) return c;
@@ -271,6 +321,8 @@ const Cases: React.FC = () => {
     e.preventDefault();
     try {
       const id = e.dataTransfer.getData('text/case');
+    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+
       if (!id) return;
       let prevStatus: 'Pending'|'In Progress'|'Completed'|undefined;
       // Optimistic UI update and capture previous
@@ -317,10 +369,19 @@ const Cases: React.FC = () => {
 
   const addCase = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+
     const title = formTitle.trim() || sf.basic_name || 'New Case';
     if (!title) return;
     const assignees = formAssignees.split(',').map(s => s.trim()).filter(Boolean);
-    const payload: any = { title, assignees, status: 'In Progress', student_info: sf };
+    const sel = selectedStudentId ? studentsForDropdown.find(x => x.id === selectedStudentId) : null;
+    const payload: any = {
+      title,
+      assignees,
+      status: 'In Progress',
+      student_id: selectedStudentId || null,
+      student_info: { ...sf, student: sel ? { id: sel.id, full_name: sel.full_name, cnic: sel.cnic, batch_no: sel.batch_no, phone: sel.phone, program_title: sel.program_title } : undefined }
+    };
     const { data, error } = await supabase
       .from('dashboard_cases')
       .insert([payload])
@@ -329,7 +390,7 @@ const Cases: React.FC = () => {
     if (!error && data) {
       setActiveCaseId(data.case_number);
       setShowAddCase(false);
-      setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium');
+      setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium'); setSelectedStudentId('');
       setSf({
         basic_name:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'', basic_student_sign:'',
         ug_olevels:false, ug_olevels_year:'', ug_olevels_grades:'', ug_alevels:false, ug_alevels_year:'', ug_alevels_grades:'', ug_matric:false, ug_matric_year:'', ug_matric_grades:'', ug_hssc:false, ug_hssc_year:'', ug_hssc_grades:'', ug_other:'',
@@ -349,6 +410,8 @@ const Cases: React.FC = () => {
     e.preventDefault();
     if (!activeCaseId) return;
     const id = newTaskId();
+    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+
     const name = tfName.trim() || 'Untitled Task';
     const estimate_mins = Math.max(0, Number(tfEstimate) || 0);
     const spent_mins = 0;
@@ -399,7 +462,7 @@ const Cases: React.FC = () => {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>On Going Cases</h1>
               <div className="flex items-center gap-2">
-                <button onClick={()=>setShowAddCase(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
+                <button onClick={()=> canCrud ? setShowAddCase(true) : null} disabled={!canCrud} className={`px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95 ${!canCrud ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   + Add Case
                 </button>
               </div>
@@ -719,6 +782,31 @@ const Cases: React.FC = () => {
               <label className="sm:col-span-2"><span className="text-text-secondary">Case Title</span><input value={formTitle} onChange={e=>setFormTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Case Title (optional)"/></label>
             </div>
 
+            {/* Student Link */}
+            <div className="mt-4">
+              <h4 className="font-semibold">Student</h4>
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <label className="sm:col-span-2"><span className="text-text-secondary">Select Student</span>
+                  <select value={selectedStudentId} onChange={(e)=>onSelectStudent(e.target.value)} className="mt-1 w-full border rounded p-2">
+                    <option value="">— Select —</option>
+                    {studentsForDropdown.map(st => (<option key={st.id} value={st.id}>{st.full_name} ({st.id})</option>))}
+                  </select>
+                </label>
+                {selectedStudentId && (
+                  <div className="text-xs text-text-secondary mt-2 sm:mt-6">
+                    {(() => { const st = studentsForDropdown.find(x=>x.id===selectedStudentId); return st ? (
+                      <div className="space-y-1">
+                        <div>CNIC: {st.cnic || ''}</div>
+                        <div>Batch: {st.batch_no || ''}</div>
+                        <div>Contact: {st.phone || ''}</div>
+                        <div>Service: {st.program_title || ''}</div>
+                      </div>
+                    ) : null })()}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Basic Info */}
             <div className="mt-5">
               <h4 className="font-semibold">Basic Info</h4>
@@ -838,7 +926,7 @@ const Cases: React.FC = () => {
 
             <div className="mt-6 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Case</button>
+              <button type="submit" disabled={!canCrud} className={`px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43] ${!canCrud ? 'opacity-50 cursor-not-allowed' : ''}`}>Save Case</button>
             </div>
           </form>
         </div>
@@ -900,7 +988,7 @@ const Cases: React.FC = () => {
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAddTask(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
-              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Task</button>
+              <button type="submit" disabled={!canCrud} className={`px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43] ${!canCrud ? 'opacity-50 cursor-not-allowed' : ''}`}>Save Task</button>
             </div>
           </form>
         </div>

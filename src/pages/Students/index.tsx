@@ -57,6 +57,38 @@ const StudentsPage: React.FC = () => {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [stuAccess, setStuAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
+  const canCrud = stuAccess === 'CRUD';
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email;
+        if(!email) return;
+        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
+        if (roleStr.includes('super')) { setStuAccess('CRUD'); return; }
+        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'students');
+        if (up && up.length) setStuAccess((up[0].access as any)==='CRUD'?'CRUD':'VIEW');
+        else {
+          const perms = Array.isArray(u?.permissions)? (u?.permissions as any as string[]) : [];
+          setStuAccess(perms.includes('students')? 'CRUD' : 'NONE');
+        }
+      }catch{}
+    })();
+  },[]);
+  useEffect(()=>{ if(tab==='add' && !canCrud) setTab('list'); }, [tab, canCrud]);
+
+
+
+  // Invoice modal state (post-creation)
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [lastCreatedStudent, setLastCreatedStudent] = useState<{id:string; full_name:string; batch_no:string; program_title?:string} | null>(null);
+  const [invReg, setInvReg] = useState<string>('1000');
+  const [invSvc, setInvSvc] = useState<string>('');
+  const [invDisc, setInvDisc] = useState<string>('0');
+  const [invDiscType, setInvDiscType] = useState<'flat' | 'percent'>('flat');
+
   // Services for enrollment
   const [services, setServices] = useState<Array<{id:string; name:string; type?:string; price?:number; duration_weeks?:number}>>([]);
 
@@ -78,6 +110,14 @@ const StudentsPage: React.FC = () => {
       if (svc) setS(prev=>({ ...prev, program_title: svc }));
     })();
   }, [location.search]);
+  // Prefill service fee into invoice from selected service price when opening the modal
+  useEffect(() => {
+    if (invoiceOpen && lastCreatedStudent) {
+      const svc = services.find(sv => sv.name === (lastCreatedStudent.program_title || ''));
+      if (svc?.price != null) setInvSvc(String(svc.price));
+    }
+  }, [invoiceOpen, lastCreatedStudent, services]);
+
 
   const resetForm = () => {
     setS(defaultStudent);
@@ -90,7 +130,7 @@ const StudentsPage: React.FC = () => {
 
   const validateForm = (): string | null => {
     if (!s.program_title) return 'Program Title is required';
-    if (!s.batch_no) return 'Batch No. is required';
+
     if (!s.full_name || s.full_name !== s.full_name.toUpperCase()) return 'Full Name must be in CAPITAL letters';
     if (!s.father_name) return 'Father/Guardian Name is required';
     if (!/^\+?[0-9]{10,15}$/.test(s.phone)) return 'Invalid phone number format';
@@ -112,6 +152,7 @@ const StudentsPage: React.FC = () => {
 
   const submitStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCrud) { alert('You have view-only access for Students.'); return; }
     const err = validateForm();
     if (err) { alert(err); return; }
     setSaving(true);
@@ -121,7 +162,7 @@ const StudentsPage: React.FC = () => {
         .from('dashboard_students')
         .insert([{
           program_title: s.program_title,
-          batch_no: s.batch_no,
+
           full_name: s.full_name,
           father_name: s.father_name,
           phone: s.phone,
@@ -133,7 +174,7 @@ const StudentsPage: React.FC = () => {
           status: s.status,
           archived: false
         }])
-        .select('id')
+        .select('id, batch_no, full_name, program_title')
         .single();
       if (eCreate) throw eCreate;
       const newId = created?.id as string;
@@ -156,16 +197,51 @@ const StudentsPage: React.FC = () => {
         await supabase.from('dashboard_student_experiences').insert(expRows);
       }
 
-      resetForm();
-      setTab('list');
+      const { data: srow } = await supabase.from('dashboard_students').select('id, full_name, batch_no, program_title').eq('id', newId).maybeSingle();
+      setLastCreatedStudent(srow as any);
+      setInvoiceOpen(true);
       await loadList();
-      alert('Student added successfully');
+      resetForm();
+      alert('Student added successfully. You can now generate the invoice.');
     } catch (err: any) {
       alert(`Failed to save student: ${err.message || err}`);
     } finally {
       setSaving(false);
     }
   };
+  // Invoice helpers
+  const computeTotal = useCallback(() => {
+    const reg = Number(invReg) || 0;
+    const svc = Number(invSvc) || 0;
+    const disc = Number(invDisc) || 0;
+    const pre = reg + svc;
+    return invDiscType === 'percent' ? Math.max(0, pre - (pre * disc / 100)) : Math.max(0, pre - disc);
+  }, [invReg, invSvc, invDisc, invDiscType]);
+
+  const handleCreateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lastCreatedStudent) return;
+    const reg = Number(invReg) || 0;
+    const svc = Number(invSvc) || 0;
+    const disc = Number(invDisc) || 0;
+    const pre = reg + svc;
+    const total = invDiscType === 'percent' ? pre - (pre * disc / 100) : pre - disc;
+    const totalSafe = Math.max(0, Math.round(total * 100) / 100);
+    const payload = {
+      student_id: lastCreatedStudent.id,
+      registration_fee: reg,
+      service_fee: svc,
+      discount: disc,
+      discount_type: invDiscType,
+      total_amount: totalSafe,
+      service_items: [{ name: lastCreatedStudent.program_title || 'Service', amount: svc }]
+    } as any;
+    const { error } = await supabase.from('invoices').insert([payload]);
+    if (error) { alert(`Failed to create invoice: ${error.message}`); return; }
+    alert('Invoice created successfully.');
+    setInvoiceOpen(false);
+  };
+
 
   // List loading (no pagination; fetch all filtered students)
   const loadList = useCallback(async () => {
@@ -205,6 +281,7 @@ const StudentsPage: React.FC = () => {
   const countWithdrawn = useMemo(() => items.filter(i => i.status === 'Withdrawn').length, [items]);
 
   const archiveStudent = async (id: string) => {
+    if (!canCrud) { alert('You have view-only access for Students.'); return; }
     if (!confirm('Archive this student?')) return;
     await supabase.from('dashboard_students').update({ archived: true }).eq('id', id);
     await loadList();
@@ -212,6 +289,7 @@ const StudentsPage: React.FC = () => {
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCrud) { alert('You have view-only access for Students.'); return; }
     if (!editItem) return;
     const { id, full_name, father_name, phone, email, cnic, dob, city, reference, status, program_title, batch_no } = editItem;
     await supabase.from('dashboard_students').update({ full_name, father_name, phone, email, cnic, dob, city, reference, status, program_title, batch_no }).eq('id', id);
@@ -230,7 +308,7 @@ const StudentsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Students</h1>
             <div className="bg-white rounded-full p-1 shadow flex">
-              <button onClick={()=>setTab('add')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Add New Student</button>
+              <button disabled={!canCrud} onClick={()=>{ if(canCrud) setTab('add'); }} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add' && canCrud ? 'bg-[#ffa332] text-white' : 'text-text-secondary'} ${!canCrud? 'opacity-60 cursor-not-allowed' : ''}`}>Add New Student</button>
               <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>All Students</button>
             </div>
           </div>
@@ -246,7 +324,7 @@ const StudentsPage: React.FC = () => {
                       {services.map(sv => (<option key={sv.id} value={sv.name}>{sv.name}</option>))}
                     </select>
                   </label>
-                  <label className="text-sm"><span className="text-text-secondary">Batch No.</span><input value={s.batch_no} onChange={e=>setS({...s, batch_no:e.target.value})} className="mt-1 w-full border rounded p-2" placeholder="e.g., 2025-01" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">Batch No. (auto)</span><input value={s.batch_no || 'Auto on save'} readOnly className="mt-1 w-full border rounded p-2 bg-gray-50 text-gray-500"/></label>
                 </div>
 
                 <h3 className="mt-6 font-bold text-lg">Personal Details</h3>
@@ -322,7 +400,7 @@ const StudentsPage: React.FC = () => {
                 <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e)=>setDeclTextAgree(e.target.checked)} className="mt-1"/><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
 
                 <div className="mt-6 text-right">
-                  <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Submit'}</button>
+                  <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Submit'}</button>
                 </div>
               </div>
 
@@ -381,8 +459,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -422,8 +500,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -463,8 +541,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              <button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                              <button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>
+                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -502,6 +580,35 @@ const StudentsPage: React.FC = () => {
           </form>
         </div>
       )}
+      {invoiceOpen && lastCreatedStudent && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <form onSubmit={handleCreateInvoice} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Generate Invoice for {lastCreatedStudent.full_name}</h3>
+              <button type="button" onClick={()=>setInvoiceOpen(false)} className="text-text-secondary">✕</button>
+            </div>
+            <div className="mt-3 text-sm space-y-3">
+              <div className="text-text-secondary">Student ID: {lastCreatedStudent.id} • Batch: {lastCreatedStudent.batch_no}</div>
+              <label className="block"><span className="text-text-secondary">Registration Fee (Rs)</span><input type="number" min={0} value={invReg} onChange={e=>setInvReg(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+              <label className="block"><span className="text-text-secondary">Service Fee (Rs)</span><input type="number" min={0} value={invSvc} onChange={e=>setInvSvc(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block"><span className="text-text-secondary">Discount</span><input type="number" min={0} value={invDisc} onChange={e=>setInvDisc(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+                <label className="block"><span className="text-text-secondary">Discount Type</span>
+                  <select value={invDiscType} onChange={e=>setInvDiscType(e.target.value as 'flat' | 'percent')} className="mt-1 w-full border rounded p-2">
+                    <option value="flat">Flat</option>
+                    <option value="percent">%</option>
+                  </select>
+                </label>
+              </div>
+              <div className="font-semibold">Total Payable: Rs {computeTotal().toLocaleString()}</div>
+            </div>
+            <div className="mt-4 text-right">
+              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Generate Invoice</button>
+            </div>
+          </form>
+        </div>
+      )}
+
     </main>
   );
 };

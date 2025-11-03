@@ -21,7 +21,7 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'services', label: 'Products & Services' },
   { id: 'cases', label: 'On-Going Cases' },
   { id: 'calendar', label: 'Calendar' },
-  { id: 'finances', label: 'Finances' },
+  { id: 'accounts', label: 'Accounts' },
   { id: 'employees', label: 'Employees' },
   { id: 'teachers', label: 'Teachers' },
   { id: 'messenger', label: 'Messenger' },
@@ -29,6 +29,21 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'reports', label: 'Reports' },
   { id: 'users', label: 'Users' }, // Only super admin can see even if checked
 ];
+
+  type AccessLevel = 'NONE' | 'VIEW' | 'CRUD';
+  const normalizeModule = (id: string) => {
+    if (id === 'info-portal') return 'info';
+    if (id === 'finances') return 'accounts';
+    return id;
+  };
+  const MODULE_IDS = ALL_TABS.map(t => t.id);
+  const emptyAccessMap = (): Record<string, AccessLevel> => Object.fromEntries(MODULE_IDS.map(m => [m, 'NONE'])) as Record<string, AccessLevel>;
+  const rowsFromAccess = (email: string, map: Record<string, AccessLevel>) => (
+    Object.entries(map)
+      .filter(([_, a]) => a !== 'NONE')
+      .map(([module, access]) => ({ user_email: email, module: normalizeModule(module), access }))
+  );
+
 
 const UsersPage: React.FC = () => {
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
@@ -39,6 +54,8 @@ const UsersPage: React.FC = () => {
 
   const [q, setQ] = useState('');
   const [roleF, setRoleF] = useState('All');
+  const [nAccess, setNAccess] = useState<Record<string, AccessLevel>>(()=>{ const m = emptyAccessMap(); m['dashboard']='VIEW'; return m; });
+
   const [statusF, setStatusF] = useState('All');
 
   // Add form state
@@ -47,6 +64,8 @@ const UsersPage: React.FC = () => {
   const [nPassword, setNPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [nRole, setNRole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Custom'>('Staff');
+  const [eAccess, setEAccess] = useState<Record<string, AccessLevel>>({});
+
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
   const [saving, setSaving] = useState(false);
 
@@ -111,10 +130,20 @@ const UsersPage: React.FC = () => {
     setSaving(true);
     try {
       const id = `USR${Date.now().toString().slice(-8)}`;
-      // Note: Password creation for authentication must be handled via Supabase Admin API on a secure server.
-      const perms = nRole === 'Super Admin' ? ALL_TABS.map(t => t.id) : nPerms;
-      await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: perms }]);
-      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']);
+      // Build permissions for backward-compat array and granular rows
+      const permsArray = nRole === 'Super Admin'
+        ? ALL_TABS.map(t => normalizeModule(t.id))
+        : Object.keys(nAccess).filter(k => nAccess[k] !== 'NONE').map(normalizeModule);
+      await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray }]);
+      // Upsert granular permissions
+      const rows = nRole === 'Super Admin'
+        ? ALL_TABS.map(t => ({ user_email: nEmail, module: normalizeModule(t.id), access: 'CRUD' as const }))
+        : rowsFromAccess(nEmail, nAccess);
+      if (rows.length) {
+        await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
+      }
+      // Reset
+      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=>{ const m=emptyAccessMap(); m['dashboard']='VIEW'; return m; });
       await load();
       alert('User added');
     } catch (err: any) {
@@ -127,15 +156,53 @@ const UsersPage: React.FC = () => {
   const openEdit = (u: AppUser) => {
     setEditing(u);
     setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEPerms(u.permissions||[]);
+    // Load granular permissions
+    (async ()=>{
+      try {
+        if (u.role === 'Super Admin') {
+          const m: Record<string, AccessLevel> = {} as any; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setEAccess(m);
+          return;
+        }
+        const { data } = await supabase.from('user_permissions').select('module, access').eq('user_email', u.email);
+        const base = emptyAccessMap();
+        (data||[]).forEach(r => { base[r.module as string] = (r.access as AccessLevel) || 'VIEW'; });
+        if (!data || data.length === 0) {
+          // Fallback from old array permissions: treat checked modules as CRUD by default
+          (u.permissions||[]).forEach(p => { base[p] = 'CRUD'; });
+          base['dashboard'] = base['dashboard'] || 'VIEW';
+        }
+        setEAccess(base);
+      } catch {
+        setEAccess(prev => Object.keys(prev).length ? prev : emptyAccessMap());
+      }
+    })();
   };
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
-    const perms = eRole === 'Super Admin' ? ALL_TABS.map(t => t.id) : ePerms;
-    await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: perms }).eq('id', editing.id);
-    setEditing(null);
-    await load();
+    setSaving(true);
+    try {
+      const permsArray = eRole === 'Super Admin'
+        ? ALL_TABS.map(t => normalizeModule(t.id))
+        : Object.keys(eAccess).filter(k => eAccess[k] !== 'NONE').map(normalizeModule);
+      await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray }).eq('id', editing.id);
+      // Replace granular permissions
+      await supabase.from('user_permissions').delete().eq('user_email', editing.email);
+      const rows = eRole === 'Super Admin'
+        ? ALL_TABS.map(t => ({ user_email: editing.email, module: normalizeModule(t.id), access: 'CRUD' as const }))
+        : rowsFromAccess(editing.email, eAccess);
+      if (rows.length) {
+        await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
+      }
+      alert('Updated');
+      setEditing(null);
+      await load();
+    } catch (err: any) {
+      alert(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const delUser = async (u: AppUser) => {
@@ -180,7 +247,7 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { setNPerms(ALL_TABS.map(t=>t.id)); } else if (v==='Teacher') { setNPerms(['teachers']); } }} className="mt-1 w-full border rounded p-2">
+                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { const m: Record<string, AccessLevel> = {}; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setNAccess(m); } else if (v==='Teacher') { const m = emptyAccessMap(); m['teachers']='VIEW'; m['dashboard']='VIEW'; setNAccess(m); } else { const m = emptyAccessMap(); m['dashboard']='VIEW'; setNAccess(m); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -190,13 +257,25 @@ const UsersPage: React.FC = () => {
                 </select>
               </label>
               <div>
-                <div className="text-text-secondary mb-1">Accessible Tabs</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-40 overflow-auto">
+                <div className="text-text-secondary mb-1">Module Access</div>
+                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-48 overflow-auto text-xs">
                   {ALL_TABS.map(t => (
-                    <label key={t.id} className="flex items-center gap-2 text-xs">
-                      <input type="checkbox" checked={nRole==='Super Admin' ? true : nPerms.includes(t.id)} onChange={()=>togglePerm(nPerms, setNPerms, t.id, nRole==='Super Admin')} disabled={nRole==='Super Admin'} />
-                      {t.label}
-                    </label>
+                    <div key={t.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{t.label}</span>
+                      <select
+                        disabled={nRole==='Super Admin'}
+                        className="border rounded p-1 text-xs"
+                        value={nRole==='Super Admin' ? 'CRUD' : (nAccess[t.id] || 'NONE')}
+                        onChange={e=>{
+                          const v = e.target.value as AccessLevel;
+                          setNAccess(prev => ({ ...prev, [t.id]: v }));
+                        }}
+                      >
+                        <option value="NONE">None</option>
+                        <option value="VIEW">View</option>
+                        <option value="CRUD">CRUD</option>
+                      </select>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -268,7 +347,7 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { setEPerms(ALL_TABS.map(t=>t.id)); } else if (v==='Teacher') { setEPerms(['teachers']); } }} className="mt-1 w-full border rounded p-2">
+                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { const m: Record<string, AccessLevel> = {} as any; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setEAccess(m); } else if (v==='Teacher') { const m = emptyAccessMap(); m['teachers']='VIEW'; m['dashboard']='VIEW'; setEAccess(m); } else { const m = emptyAccessMap(); m['dashboard']='VIEW'; setEAccess(m); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -285,13 +364,25 @@ const UsersPage: React.FC = () => {
                 </select>
               </label>
               <div>
-                <div className="text-text-secondary mb-1">Accessible Tabs</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-40 overflow-auto">
+                <div className="text-text-secondary mb-1">Module Access</div>
+                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-48 overflow-auto text-xs">
                   {ALL_TABS.map(t => (
-                    <label key={t.id} className="flex items-center gap-2 text-xs">
-                      <input type="checkbox" checked={eRole==='Super Admin' ? true : ePerms.includes(t.id)} onChange={()=>togglePerm(ePerms, setEPerms, t.id, eRole==='Super Admin')} disabled={eRole==='Super Admin'} />
-                      {t.label}
-                    </label>
+                    <div key={t.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{t.label}</span>
+                      <select
+                        disabled={eRole==='Super Admin'}
+                        className="border rounded p-1 text-xs"
+                        value={eRole==='Super Admin' ? 'CRUD' : (eAccess[t.id] || 'NONE')}
+                        onChange={ev=>{
+                          const v = ev.target.value as AccessLevel;
+                          setEAccess(prev => ({ ...prev, [t.id]: v }));
+                        }}
+                      >
+                        <option value="NONE">None</option>
+                        <option value="VIEW">View</option>
+                        <option value="CRUD">CRUD</option>
+                      </select>
+                    </div>
                   ))}
                 </div>
               </div>

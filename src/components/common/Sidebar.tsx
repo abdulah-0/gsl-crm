@@ -37,14 +37,19 @@ const Sidebar = ({
         const ALL = ['dashboard','students','services','cases','calendar','accounts','teachers','employees','leaves','hrm','dailytask','messenger','info','reports','users'];
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
+        // Prefer granular permissions when present
+        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email);
+        const granularAllowed = (up||[]).map(r => (r.module === 'info-portal' ? 'info' : (r.module as string)));
         if (superRole) {
           setAllowed(ALL);
+        } else if ((granularAllowed && granularAllowed.length > 0)) {
+          setAllowed(Array.from(new Set(granularAllowed)));
         } else if (role.includes('admin')) {
-          // Admins see at least Teachers by default
+          // Admins see at least Teachers by default (fallback to legacy array)
           const union = Array.from(new Set([...normalizedPerms, 'teachers']));
           setAllowed(union);
         } else if (role.includes('teacher')) {
-          // Teachers by default only see Teachers unless explicitly granted more
+          // Teachers by default only see Teachers unless explicitly granted more (fallback)
           setAllowed((normalizedPerms && normalizedPerms.length>0) ? normalizedPerms : ['teachers']);
         } else {
           setAllowed(normalizedPerms.length ? normalizedPerms : null);
