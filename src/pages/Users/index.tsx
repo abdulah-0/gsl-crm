@@ -30,18 +30,29 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'users', label: 'Users' }, // Only super admin can see even if checked
 ];
 
-  type AccessLevel = 'NONE' | 'VIEW' | 'CRUD';
+  type ModulePermissions = { add: boolean; edit: boolean; del: boolean };
   const normalizeModule = (id: string) => {
     if (id === 'info-portal') return 'info';
     if (id === 'finances') return 'accounts';
     return id;
   };
   const MODULE_IDS = ALL_TABS.map(t => t.id);
-  const emptyAccessMap = (): Record<string, AccessLevel> => Object.fromEntries(MODULE_IDS.map(m => [m, 'NONE'])) as Record<string, AccessLevel>;
-  const rowsFromAccess = (email: string, map: Record<string, AccessLevel>) => (
-    Object.entries(map)
-      .filter(([_, a]) => a !== 'NONE')
-      .map(([module, access]) => ({ user_email: email, module: normalizeModule(module), access }))
+  const emptyPermMap = (): Record<string, ModulePermissions> => (
+    Object.fromEntries(MODULE_IDS.map(m => [m, { add: false, edit: false, del: false }])) as Record<string, ModulePermissions>
+  );
+  const rowsFromPerms = (email: string, map: Record<string, ModulePermissions>) => (
+    Object.entries(map).flatMap(([module, p]) => {
+      const hasAny = !!(p?.add || p?.edit || p?.del);
+      if (!hasAny && module !== 'dashboard') return [] as any[];
+      return [{
+        user_email: email,
+        module: normalizeModule(module),
+        access: hasAny ? 'CRUD' : 'VIEW',
+        can_add: !!p?.add,
+        can_edit: !!p?.edit,
+        can_delete: !!p?.del,
+      }];
+    })
   );
 
 
@@ -54,7 +65,7 @@ const UsersPage: React.FC = () => {
 
   const [q, setQ] = useState('');
   const [roleF, setRoleF] = useState('All');
-  const [nAccess, setNAccess] = useState<Record<string, AccessLevel>>(()=>{ const m = emptyAccessMap(); m['dashboard']='VIEW'; return m; });
+  const [nAccess, setNAccess] = useState<Record<string, ModulePermissions>>(()=> emptyPermMap());
 
   const [statusF, setStatusF] = useState('All');
 
@@ -64,7 +75,7 @@ const UsersPage: React.FC = () => {
   const [nPassword, setNPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [nRole, setNRole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Custom'>('Staff');
-  const [eAccess, setEAccess] = useState<Record<string, AccessLevel>>({});
+  const [eAccess, setEAccess] = useState<Record<string, ModulePermissions>>({});
 
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
   const [saving, setSaving] = useState(false);
@@ -130,20 +141,20 @@ const UsersPage: React.FC = () => {
     setSaving(true);
     try {
       const id = `USR${Date.now().toString().slice(-8)}`;
-      // Build permissions for backward-compat array and granular rows
-      const permsArray = nRole === 'Super Admin'
-        ? ALL_TABS.map(t => normalizeModule(t.id))
-        : Object.keys(nAccess).filter(k => nAccess[k] !== 'NONE').map(normalizeModule);
+      // Build permissions array (for sidebar gating) and granular rows
+      const baseModules = nRole === 'Super Admin' ? ALL_TABS.map(t=>normalizeModule(t.id)) : nPerms;
+      const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
+      const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
       await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray }]);
       // Upsert granular permissions
       const rows = nRole === 'Super Admin'
-        ? ALL_TABS.map(t => ({ user_email: nEmail, module: normalizeModule(t.id), access: 'CRUD' as const }))
-        : rowsFromAccess(nEmail, nAccess);
+        ? ALL_TABS.map(t => ({ user_email: nEmail, module: normalizeModule(t.id), access: 'CRUD' as const, can_add: true, can_edit: true, can_delete: true }))
+        : rowsFromPerms(nEmail, nAccess);
       if (rows.length) {
         await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
       }
       // Reset
-      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=>{ const m=emptyAccessMap(); m['dashboard']='VIEW'; return m; });
+      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=> emptyPermMap());
       await load();
       alert('User added');
     } catch (err: any) {
@@ -160,20 +171,27 @@ const UsersPage: React.FC = () => {
     (async ()=>{
       try {
         if (u.role === 'Super Admin') {
-          const m: Record<string, AccessLevel> = {} as any; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setEAccess(m);
+          const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setEAccess(m);
           return;
         }
-        const { data } = await supabase.from('user_permissions').select('module, access').eq('user_email', u.email);
-        const base = emptyAccessMap();
-        (data||[]).forEach(r => { base[r.module as string] = (r.access as AccessLevel) || 'VIEW'; });
+        const { data } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', u.email);
+        const base = emptyPermMap();
+        (data||[]).forEach((r:any) => {
+          const mod = r.module as string;
+          const hasCrud = (r.access === 'CRUD');
+          base[mod] = {
+            add: r.can_add ?? hasCrud,
+            edit: r.can_edit ?? hasCrud,
+            del: r.can_delete ?? hasCrud,
+          };
+        });
         if (!data || data.length === 0) {
-          // Fallback from old array permissions: treat checked modules as CRUD by default
-          (u.permissions||[]).forEach(p => { base[p] = 'CRUD'; });
-          base['dashboard'] = base['dashboard'] || 'VIEW';
+          // Fallback: from old array permissions — mark those modules as view-only (no flags)
+          (u.permissions||[]).forEach(p => { if (!base[p]) base[p] = { add:false, edit:false, del:false }; });
         }
         setEAccess(base);
       } catch {
-        setEAccess(prev => Object.keys(prev).length ? prev : emptyAccessMap());
+        setEAccess(prev => Object.keys(prev).length ? prev : emptyPermMap());
       }
     })();
   };
@@ -183,15 +201,15 @@ const UsersPage: React.FC = () => {
     if (!editing) return;
     setSaving(true);
     try {
-      const permsArray = eRole === 'Super Admin'
-        ? ALL_TABS.map(t => normalizeModule(t.id))
-        : Object.keys(eAccess).filter(k => eAccess[k] !== 'NONE').map(normalizeModule);
+      const baseModules = eRole === 'Super Admin' ? ALL_TABS.map(t=>normalizeModule(t.id)) : ePerms;
+      const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
+      const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
       await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray }).eq('id', editing.id);
       // Replace granular permissions
       await supabase.from('user_permissions').delete().eq('user_email', editing.email);
       const rows = eRole === 'Super Admin'
-        ? ALL_TABS.map(t => ({ user_email: editing.email, module: normalizeModule(t.id), access: 'CRUD' as const }))
-        : rowsFromAccess(editing.email, eAccess);
+        ? ALL_TABS.map(t => ({ user_email: editing.email, module: normalizeModule(t.id), access: 'CRUD' as const, can_add: true, can_edit: true, can_delete: true }))
+        : rowsFromPerms(editing.email, eAccess);
       if (rows.length) {
         await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
       }
@@ -247,7 +265,7 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { const m: Record<string, AccessLevel> = {}; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setNAccess(m); } else if (v==='Teacher') { const m = emptyAccessMap(); m['teachers']='VIEW'; m['dashboard']='VIEW'; setNAccess(m); } else { const m = emptyAccessMap(); m['dashboard']='VIEW'; setNAccess(m); } }} className="mt-1 w-full border rounded p-2">
+                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { const m: Record<string, ModulePermissions> = {}; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setNAccess(m); setNPerms(ALL_TABS.map(t=>normalizeModule(t.id))); } else if (v==='Teacher') { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard','teachers']); } else { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -258,23 +276,24 @@ const UsersPage: React.FC = () => {
               </label>
               <div>
                 <div className="text-text-secondary mb-1">Module Access</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-48 overflow-auto text-xs">
+                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-56 overflow-auto text-xs">
                   {ALL_TABS.map(t => (
                     <div key={t.id} className="flex items-center justify-between gap-2">
                       <span className="truncate">{t.label}</span>
-                      <select
-                        disabled={nRole==='Super Admin'}
-                        className="border rounded p-1 text-xs"
-                        value={nRole==='Super Admin' ? 'CRUD' : (nAccess[t.id] || 'NONE')}
-                        onChange={e=>{
-                          const v = e.target.value as AccessLevel;
-                          setNAccess(prev => ({ ...prev, [t.id]: v }));
-                        }}
-                      >
-                        <option value="NONE">None</option>
-                        <option value="VIEW">View</option>
-                        <option value="CRUD">CRUD</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.add} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), add: e.target.checked } }))} />
+                          <span>Add</span>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.edit} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), edit: e.target.checked } }))} />
+                          <span>Edit</span>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.del} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), del: e.target.checked } }))} />
+                          <span>Delete</span>
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -347,7 +366,7 @@ const UsersPage: React.FC = () => {
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { const m: Record<string, AccessLevel> = {} as any; MODULE_IDS.forEach(id=>{ m[id]='CRUD'; }); setEAccess(m); } else if (v==='Teacher') { const m = emptyAccessMap(); m['teachers']='VIEW'; m['dashboard']='VIEW'; setEAccess(m); } else { const m = emptyAccessMap(); m['dashboard']='VIEW'; setEAccess(m); } }} className="mt-1 w-full border rounded p-2">
+                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setEAccess(m); setEPerms(ALL_TABS.map(t=>normalizeModule(t.id))); } else if (v==='Teacher') { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard','teachers']); } else { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -365,23 +384,24 @@ const UsersPage: React.FC = () => {
               </label>
               <div>
                 <div className="text-text-secondary mb-1">Module Access</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-48 overflow-auto text-xs">
+                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-56 overflow-auto text-xs">
                   {ALL_TABS.map(t => (
                     <div key={t.id} className="flex items-center justify-between gap-2">
                       <span className="truncate">{t.label}</span>
-                      <select
-                        disabled={eRole==='Super Admin'}
-                        className="border rounded p-1 text-xs"
-                        value={eRole==='Super Admin' ? 'CRUD' : (eAccess[t.id] || 'NONE')}
-                        onChange={ev=>{
-                          const v = ev.target.value as AccessLevel;
-                          setEAccess(prev => ({ ...prev, [t.id]: v }));
-                        }}
-                      >
-                        <option value="NONE">None</option>
-                        <option value="VIEW">View</option>
-                        <option value="CRUD">CRUD</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.add} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), add: ev.target.checked } }))} />
+                          <span>Add</span>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.edit} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), edit: ev.target.checked } }))} />
+                          <span>Edit</span>
+                        </label>
+                        <label className="flex items-center gap-1">
+                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.del} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), del: ev.target.checked } }))} />
+                          <span>Delete</span>
+                        </label>
+                      </div>
                     </div>
                   ))}
                 </div>

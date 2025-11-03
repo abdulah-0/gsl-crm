@@ -34,17 +34,28 @@ const Header = ({
       if (!mounted) return;
       setEmail(em);
       // Try dashboard_users for full name and avatar
-      const { data: u } = await supabase.from('dashboard_users').select('full_name,email,avatar_url').eq('email', em).maybeSingle();
+      const { data: u } = await supabase.from('dashboard_users').select('full_name,email,avatar_url,role').eq('email', em).maybeSingle();
       setDisplayName(u?.full_name || em || 'User');
       setAvatarUrl(u?.avatar_url || '');
+      const roleLower = (u?.role || '').toString().toLowerCase();
+      const wantedRoles = roleLower.includes('super') ? ['super','admin','finance'] : (roleLower ? [roleLower] : []);
 
-      // Load initial notifications
-      const { data: ns } = await supabase.from('notifications').select('id,title,body,created_at,read_at').eq('recipient_email', em).order('created_at', { ascending: false }).limit(10);
-      const list = (ns||[]).map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
+      // Load initial notifications (email-targeted or role-targeted)
+      const { data: ns } = await supabase
+        .from('notifications')
+        .select('id,title,body,created_at,read_at,recipient_email,recipient_role')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      const filtered = (ns || []).filter((n:any) => {
+        const rr = (n.recipient_role || '').toString().toLowerCase();
+        const byRole = wantedRoles.some(w => rr.includes(w));
+        return n.recipient_email === em || byRole;
+      });
+      const list = filtered.map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
       setNotifs(list as any);
-      setNotifCount(((ns||[]) as any[]).filter((n:any)=>!n.read_at).length);
+      setNotifCount(filtered.filter((n:any)=>!n.read_at && (n.recipient_email === em)).length);
 
-      // subscribe to name/avatar changes
+      // subscribe to name/avatar changes and new notifications
       const chan = supabase
         .channel('rt:header_user')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
@@ -56,9 +67,11 @@ const Header = ({
         })
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
           const row: any = payload.new;
-          if (row?.recipient_email === em) {
+          const rr = (row?.recipient_role || '').toString().toLowerCase();
+          const byRole = wantedRoles.some(w => rr.includes(w));
+          if (row?.recipient_email === em || byRole) {
             setNotifs(prev => [{ id: row.id, title: row.title, body: row.body, created_at: row.created_at }, ...prev].slice(0, 10));
-            setNotifCount(c => c + 1);
+            if (row?.recipient_email === em) setNotifCount(c => c + 1);
           }
         })
         .subscribe();

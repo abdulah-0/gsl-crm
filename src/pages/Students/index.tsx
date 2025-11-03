@@ -59,6 +59,13 @@ const StudentsPage: React.FC = () => {
 
   const [stuAccess, setStuAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
   const canCrud = stuAccess === 'CRUD';
+  const [isSuper, setIsSuper] = useState(false);
+  const [permFlags, setPermFlags] = useState<{add:boolean; edit:boolean; del:boolean}>({add:false, edit:false, del:false});
+  const canAdd = isSuper || permFlags.add || canCrud;
+  const canEdit = isSuper || permFlags.edit || canCrud;
+  const canDelete = isSuper || permFlags.del || canCrud;
+
+
   useEffect(()=>{
     (async()=>{
       try{
@@ -67,17 +74,21 @@ const StudentsPage: React.FC = () => {
         if(!email) return;
         const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
         const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
-        if (roleStr.includes('super')) { setStuAccess('CRUD'); return; }
-        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'students');
-        if (up && up.length) setStuAccess((up[0].access as any)==='CRUD'?'CRUD':'VIEW');
-        else {
+        setIsSuper(roleStr.includes('super'));
+        if (roleStr.includes('super')) { setStuAccess('CRUD'); setPermFlags({add:true, edit:true, del:true}); return; }
+        const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'students');
+        if (up && up.length) {
+          const r: any = up[0];
+          setPermFlags({ add: !!r.can_add || r.access==='CRUD', edit: !!r.can_edit || r.access==='CRUD', del: !!r.can_delete || r.access==='CRUD' });
+          setStuAccess((r.access as any)==='CRUD'?'CRUD':'VIEW');
+        } else {
           const perms = Array.isArray(u?.permissions)? (u?.permissions as any as string[]) : [];
           setStuAccess(perms.includes('students')? 'CRUD' : 'NONE');
         }
       }catch{}
     })();
   },[]);
-  useEffect(()=>{ if(tab==='add' && !canCrud) setTab('list'); }, [tab, canCrud]);
+  useEffect(()=>{ if(tab==='add' && !canAdd) setTab('list'); }, [tab, canAdd]);
 
 
 
@@ -88,6 +99,10 @@ const StudentsPage: React.FC = () => {
   const [invSvc, setInvSvc] = useState<string>('');
   const [invDisc, setInvDisc] = useState<string>('0');
   const [invDiscType, setInvDiscType] = useState<'flat' | 'percent'>('flat');
+  const [paymentOption, setPaymentOption] = useState<'full' | 'partial'>('full');
+  const [amountPaidNow, setAmountPaidNow] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
+
 
   // Services for enrollment
   const [services, setServices] = useState<Array<{id:string; name:string; type?:string; price?:number; duration_weeks?:number}>>([]);
@@ -152,7 +167,7 @@ const StudentsPage: React.FC = () => {
 
   const submitStudent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCrud) { alert('You have view-only access for Students.'); return; }
+    if (!canAdd) { alert('You are not permitted to add Students.'); return; }
     const err = validateForm();
     if (err) { alert(err); return; }
     setSaving(true);
@@ -227,6 +242,10 @@ const StudentsPage: React.FC = () => {
     const pre = reg + svc;
     const total = invDiscType === 'percent' ? pre - (pre * disc / 100) : pre - disc;
     const totalSafe = Math.max(0, Math.round(total * 100) / 100);
+    const amtPaid = paymentOption === 'full' ? totalSafe : Math.max(0, Math.min(totalSafe, Number(amountPaidNow) || 0));
+    const remaining = Math.max(0, totalSafe - amtPaid);
+    const payment_status: 'Paid' | 'Partially Paid' | 'Unpaid' = amtPaid >= totalSafe ? 'Paid' : (amtPaid > 0 ? 'Partially Paid' : 'Unpaid');
+
     const payload = {
       student_id: lastCreatedStudent.id,
       registration_fee: reg,
@@ -234,8 +253,14 @@ const StudentsPage: React.FC = () => {
       discount: disc,
       discount_type: invDiscType,
       total_amount: totalSafe,
+      amount_paid: amtPaid,
+      remaining_amount: remaining,
+      payment_status,
+      due_date: (paymentOption === 'partial' && remaining > 0 && dueDate) ? dueDate : null,
+      status: payment_status === 'Paid' ? 'Paid' : 'Pending',
       service_items: [{ name: lastCreatedStudent.program_title || 'Service', amount: svc }]
     } as any;
+
     const { error } = await supabase.from('invoices').insert([payload]);
     if (error) { alert(`Failed to create invoice: ${error.message}`); return; }
     alert('Invoice created successfully.');
@@ -281,7 +306,7 @@ const StudentsPage: React.FC = () => {
   const countWithdrawn = useMemo(() => items.filter(i => i.status === 'Withdrawn').length, [items]);
 
   const archiveStudent = async (id: string) => {
-    if (!canCrud) { alert('You have view-only access for Students.'); return; }
+    if (!canDelete) { alert('You are not permitted to archive Students.'); return; }
     if (!confirm('Archive this student?')) return;
     await supabase.from('dashboard_students').update({ archived: true }).eq('id', id);
     await loadList();
@@ -289,7 +314,7 @@ const StudentsPage: React.FC = () => {
 
   const saveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCrud) { alert('You have view-only access for Students.'); return; }
+    if (!canEdit) { alert('You are not permitted to edit Students.'); return; }
     if (!editItem) return;
     const { id, full_name, father_name, phone, email, cnic, dob, city, reference, status, program_title, batch_no } = editItem;
     await supabase.from('dashboard_students').update({ full_name, father_name, phone, email, cnic, dob, city, reference, status, program_title, batch_no }).eq('id', id);
@@ -308,7 +333,7 @@ const StudentsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Students</h1>
             <div className="bg-white rounded-full p-1 shadow flex">
-              <button disabled={!canCrud} onClick={()=>{ if(canCrud) setTab('add'); }} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add' && canCrud ? 'bg-[#ffa332] text-white' : 'text-text-secondary'} ${!canCrud? 'opacity-60 cursor-not-allowed' : ''}`}>Add New Student</button>
+              <button disabled={!canAdd} onClick={()=>{ if(canAdd) setTab('add'); }} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add' && canAdd ? 'bg-[#ffa332] text-white' : 'text-text-secondary'} ${!canAdd? 'opacity-60 cursor-not-allowed' : ''}`}>Add New Student</button>
               <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>All Students</button>
             </div>
           </div>
@@ -459,8 +484,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -500,8 +525,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -541,8 +566,8 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.email}</td>
                             <td className="p-2">{st.city}</td>
                             <td className="p-2 text-right">
-                              {canCrud && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canCrud && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
@@ -601,9 +626,31 @@ const StudentsPage: React.FC = () => {
                 </label>
               </div>
               <div className="font-semibold">Total Payable: Rs {computeTotal().toLocaleString()}</div>
+
+              <div className="mt-3">
+                <div className="text-sm font-semibold mb-1">Payment Option</div>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="payopt" value="full" checked={paymentOption==='full'} onChange={()=>setPaymentOption('full')} />
+                    <span>Full Payment</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="payopt" value="partial" checked={paymentOption==='partial'} onChange={()=>setPaymentOption('partial')} />
+                    <span>Partial Payment</span>
+                  </label>
+                </div>
+              </div>
+
+              {paymentOption==='partial' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="block"><span className="text-text-secondary">Amount Paid Now (Rs)</span><input type="number" min={0} value={amountPaidNow} onChange={e=>setAmountPaidNow(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+                  <label className="block"><span className="text-text-secondary">Due Date</span><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+                  <div className="sm:col-span-2 text-sm text-text-secondary">Remaining Balance: Rs {Math.max(0, computeTotal() - (Number(amountPaidNow)||0)).toLocaleString()}</div>
+                </div>
+              )}
             </div>
             <div className="mt-4 text-right">
-              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Generate Invoice</button>
+              <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save Invoice</button>
             </div>
           </form>
         </div>

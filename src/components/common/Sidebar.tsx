@@ -38,8 +38,13 @@ const Sidebar = ({
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
         // Prefer granular permissions when present
-        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email);
-        const granularAllowed = (up||[]).map(r => (r.module === 'info-portal' ? 'info' : (r.module as string)));
+        const { data: up } = await supabase
+          .from('user_permissions')
+          .select('module, access, can_add, can_edit, can_delete')
+          .eq('user_email', email);
+        const granularAllowed = (up||[])
+          .filter((r:any) => (r.can_add || r.can_edit || r.can_delete || (r.access && ['VIEW','CRUD'].includes(r.access))))
+          .map((r:any) => (r.module === 'info-portal' ? 'info' : (r.module as string)));
         if (superRole) {
           setAllowed(ALL);
         } else if ((granularAllowed && granularAllowed.length > 0)) {

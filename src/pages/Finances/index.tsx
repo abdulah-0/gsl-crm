@@ -3,6 +3,7 @@ import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
+import { useBranches } from '../../hooks/useBranches';
 
 import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts';
 import { jsPDF } from 'jspdf';
@@ -211,6 +212,18 @@ const Finances: React.FC = () => {
   const [description, setDescription] = useState<string>('');
   const [status] = useState<VoucherStatus>('Pending');
 
+  // Universal branches
+  const branches = useBranches();
+  const branchNames = useMemo(() => branches.map(b => b.branch_name), [branches]);
+
+  const [showAddBranch, setShowAddBranch] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchCode, setNewBranchCode] = useState('');
+
+  type AccountRow = { student_id: string; name: string; total: number; paid: number; remaining: number; next_due: string | null };
+  const [accounts, setAccounts] = useState<AccountRow[]>([]);
+
+
   const [search, setSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState<string>('All Branches');
   const [page, setPage] = useState(1);
@@ -240,8 +253,12 @@ const Finances: React.FC = () => {
   const [qBillError, setQBillError] = useState<string>('');
 
 
-	  const [finAccess, setFinAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
-	  const canCrud = finAccess === 'CRUD';
+	  const [finAccess, setFinAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE'); // legacy fallback
+	  const [isSuper, setIsSuper] = useState(false);
+	  const [permFlags, setPermFlags] = useState<{add:boolean; edit:boolean; del:boolean}>({add:false, edit:false, del:false});
+	  const canAdd = isSuper || permFlags.add || finAccess === 'CRUD';
+	  const canEdit = isSuper || permFlags.edit || finAccess === 'CRUD';
+	  const canDelete = isSuper || permFlags.del || finAccess === 'CRUD';
 
 	  useEffect(() => {
 	    (async () => {
@@ -251,16 +268,56 @@ const Finances: React.FC = () => {
 	        if (!email) return;
 	        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
 	        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
-	        if (roleStr.includes('super')) { setFinAccess('CRUD'); return; }
-	        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'accounts');
+	        const isSuperRole = roleStr.includes('super');
+	        setIsSuper(isSuperRole);
+	        if (isSuperRole) { setFinAccess('CRUD'); setPermFlags({add:true, edit:true, del:true}); return; }
+	        const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'accounts');
 	        if (up && up.length) {
-	          setFinAccess((up[0].access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
+	          const r: any = up[0];
+	          setPermFlags({ add: !!r.can_add || r.access==='CRUD', edit: !!r.can_edit || r.access==='CRUD', del: !!r.can_delete || r.access==='CRUD' });
+	          setFinAccess((r.access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
 	        } else {
 	          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
 	          setFinAccess(perms.includes('accounts') ? 'CRUD' : 'NONE');
 	        }
 	      } catch {
 	        // ignore
+
+  // Accounts (payment breakdown by student)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: invs, error } = await supabase
+          .from('invoices')
+          .select('student_id,total_amount,amount_paid,remaining_amount,due_date')
+          .limit(2000);
+        if (error) { console.error('Load accounts error', error); if (!cancelled) setAccounts([]); return; }
+        const rows = (invs as any[]) || [];
+        const ids = Array.from(new Set(rows.map(r => r.student_id).filter(Boolean)));
+        let nameMap: Record<string,string> = {};
+        if (ids.length) {
+          const { data: studs } = await supabase.from('dashboard_students').select('id, full_name').in('id', ids);
+          (studs as any[] || []).forEach(s => { nameMap[s.id] = s.full_name; });
+        }
+        const grouped: Record<string, AccountRow> = {};
+        rows.forEach(r => {
+          const sid = r.student_id as string;
+          if (!sid) return;
+          if (!grouped[sid]) grouped[sid] = { student_id: sid, name: nameMap[sid] || sid, total: 0, paid: 0, remaining: 0, next_due: null };
+          grouped[sid].total += Number(r.total_amount || 0);
+          grouped[sid].paid += Number(r.amount_paid || 0);
+          grouped[sid].remaining += Number(r.remaining_amount || 0);
+          if (r.due_date && (!grouped[sid].next_due || new Date(r.due_date) < new Date(grouped[sid].next_due!))) grouped[sid].next_due = r.due_date;
+        });
+        if (!cancelled) setAccounts(Object.values(grouped).sort((a,b)=> b.remaining - a.remaining).slice(0, 10));
+      } catch (e) {
+        console.error('Accounts load error', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 	      }
 	    })();
 	  }, []);
@@ -274,7 +331,7 @@ const Finances: React.FC = () => {
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) return;
+    if (!isValid || !canAdd) return;
 
     const rowType = voucherTypeToRowType(voucherType as VoucherType);
     const dbType = voucherTypeToDbType(voucherType as VoucherType);
@@ -312,6 +369,7 @@ const Finances: React.FC = () => {
   const onView = (r: VoucherRow) => setViewVoucher(r);
   const onEdit = (r: VoucherRow) => { setEditVoucher(r); setEditStatus(r.status); setEditDescription(r.description ?? ''); };
   const onDelete = async (r: VoucherRow) => {
+    if (!canDelete) { alert('Not permitted'); return; }
     if (!confirm(`Delete voucher ${r.id}?`)) return;
     // Try by code first
     let { data, error } = await supabase.from('vouchers').delete().eq('code', r.id).select('id,code');
@@ -328,6 +386,7 @@ const Finances: React.FC = () => {
   };
   const onSaveEdit = async () => {
     if (!editVoucher) return;
+    if (!canEdit) { alert('Not permitted'); return; }
     const payload = { status: editStatus, description: editDescription } as const;
 
     // Try update by code first
@@ -373,7 +432,7 @@ const Finances: React.FC = () => {
   // Quick Cash Out submission
   const handleGenerateCashOut = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!qValid) return;
+    if (!qValid || !canAdd) return;
 
     const rowType: VoucherRow['type'] = 'Cash Out';
     const dbType: DBVoucher['vtype'] = 'cash_out';
@@ -434,16 +493,16 @@ const Finances: React.FC = () => {
   };
 
   const branchChartData = useMemo(() => {
-    const branches = branchList.length ? branchList : BRANCHES;
+    const branchesList = branchList.length ? branchList : (branchNames.length ? branchNames : BRANCHES);
     const map = new Map<string, number>();
-    branches.forEach(b => map.set(b, 0));
+    branchesList.forEach(b => map.set(b, 0));
     vouchers.forEach(v => {
       if (v.status === 'Approved' && v.amount > 0) {
         map.set(v.branch, (map.get(v.branch) || 0) + v.amount);
       }
     });
-    return branches.map(b => ({ branch: b, revenue: map.get(b) || 0 }));
-  }, [vouchers, branchList]);
+    return branchesList.map(b => ({ branch: b, revenue: map.get(b) || 0 }));
+  }, [vouchers, branchList, branchNames]);
 
   const methodChartData = useMemo(() => {
     const approved = vouchers.filter(v => v.status === 'Approved');
@@ -520,12 +579,28 @@ const Finances: React.FC = () => {
 
     return {
       cashIn: { value: sum.cur.cashIn, pct: pct(sum.cur.cashIn, sum.prev.cashIn) },
+
+
       cashOut: { value: sum.cur.cashOut, pct: pct(sum.cur.cashOut, sum.prev.cashOut) },
       online: { value: sum.cur.online, pct: pct(sum.cur.online, sum.prev.online) },
       bank: { value: sum.cur.bank, pct: pct(sum.cur.bank, sum.prev.bank) },
     };
   }, [vouchers]);
 
+
+
+  const handleAddBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuper) { alert('Only Super Admin can add branches'); return; }
+    const name = newBranchName.trim();
+    const code = newBranchCode.trim();
+    if (!name || !code) return;
+    const { error } = await supabase.from('branches').insert([{ branch_name: name, branch_code: code }]);
+    if (error) { alert(`Failed to add branch: ${error.message}`); return; }
+    setShowAddBranch(false);
+    setNewBranchName('');
+    setNewBranchCode('');
+  };
 
   return (
 
@@ -537,6 +612,8 @@ const Finances: React.FC = () => {
 
       <main className="w-full min-h-screen bg-background-main flex">
         <div className="w-[14%] min-w-[200px] hidden lg:block">
+
+
           <Sidebar />
         </div>
 
@@ -612,8 +689,9 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Branch</label>
                     <select value={branch} onChange={(e)=>setBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
                       <option value="">Select Branch...</option>
-                      {(branchList.length ? branchList : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
+                      {(branchNames.length ? branchNames : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
                     </select>
+                    {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-text-secondary">Description</label>
@@ -621,7 +699,7 @@ const Finances: React.FC = () => {
                   </div>
                 </div>
                 <div className="mt-4">
-                  <button disabled={!isValid || !canCrud} className={`px-4 py-2 rounded-lg font-bold ${(isValid && canCrud) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
+                  <button disabled={!isValid || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(isValid && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
                 </div>
               </form>
 
@@ -649,8 +727,9 @@ const Finances: React.FC = () => {
                     <label className="text-sm font-semibold text-text-secondary">Branch</label>
                     <select value={qBranch} onChange={(e)=>setQBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
                       <option value="">Select Branch...</option>
-                      {(branchList.length ? branchList : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
+                      {(branchNames.length ? branchNames : BRANCHES).map(b=> (<option key={b} value={b}>{b}</option>))}
                     </select>
+                    {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
                   </div>
                   <div>
                     <label className="text-sm font-semibold text-text-secondary">Description</label>
@@ -676,7 +755,7 @@ const Finances: React.FC = () => {
                   </div>
 
                   <div className="mt-1">
-                    <button disabled={!qValid || !!qBillError || !canCrud} className={`px-4 py-2 rounded-lg font-bold ${(qValid && !qBillError && canCrud) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
+                    <button disabled={!qValid || !!qBillError || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(qValid && !qBillError && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
                   </div>
                 </form>
               </div>
@@ -713,6 +792,7 @@ const Finances: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
+
                     {pageRows.map((r)=> (
                       <tr key={r.id} className="border-t">
                         <td className="py-2 pr-4 font-semibold">#{r.id}</td>
@@ -731,8 +811,8 @@ const Finances: React.FC = () => {
                               <button type="button" onClick={()=>openBill(r.uploaded_bill!)} className="text-green-700 hover:underline">Bill</button>
                             )}
                             <button type="button" onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
-                            {canCrud && (<button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>)}
-                            {canCrud && (<button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>)}
+                            {canEdit && (<button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>)}
+                            {canDelete && (<button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>)}
                           </div>
                         </td>
                       </tr>
@@ -754,6 +834,38 @@ const Finances: React.FC = () => {
             </div>
 
             {/* Charts */}
+            {/* Accounts Section */}
+            <div className="mt-10 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Accounts (Top Outstanding)</h2>
+              <div className="mt-3 overflow-x-auto">
+                <table className="min-w-full text-left">
+                  <thead>
+                    <tr className="text-sm text-text-secondary">
+                      <th className="py-2 pr-4">Student</th>
+                      <th className="py-2 pr-4">Total</th>
+                      <th className="py-2 pr-4">Paid</th>
+                      <th className="py-2 pr-4">Remaining</th>
+                      <th className="py-2 pr-4">Next Due</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map(a => (
+                      <tr key={a.student_id} className="border-t">
+                        <td className="py-2 pr-4 font-semibold">{a.name}</td>
+                        <td className="py-2 pr-4">Rs {a.total.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-green-700">Rs {a.paid.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-red-600">Rs {a.remaining.toLocaleString()}</td>
+                        <td className="py-2 pr-4">{a.next_due ? new Date(a.next_due).toLocaleDateString() : '-'}</td>
+                      </tr>
+                    ))}
+                    {accounts.length === 0 && (
+                      <tr><td colSpan={5} className="text-center text-text-secondary py-6">No account data</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* Branch Performance (Bar) */}
               <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
@@ -783,6 +895,8 @@ const Finances: React.FC = () => {
                       <Tooltip formatter={(v:any, n:any)=>[`Rs ${Number(v).toLocaleString()}`, n as string]} />
                       <Legend />
                       <Pie data={methodChartData} dataKey="value" nameKey="name" outerRadius={90} label={(e)=>`${e.name} ${e.pct}%`}>
+
+
                         {methodChartData.map((_, index) => (
                           <Cell key={`cell-${index}`} fill={["#22c55e","#fb923c","#8b5cf6"][index]} />
                         ))}
@@ -829,6 +943,8 @@ const Finances: React.FC = () => {
           <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Edit Voucher #{editVoucher.id}</h3>
+
+
               <button type="button" onClick={()=>setEditVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             <div className="mt-3 space-y-3">
@@ -852,6 +968,33 @@ const Finances: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Add Branch Modal (Super Admin only) */}
+      {showAddBranch && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Add New Branch</h3>
+              <button type="button" onClick={()=>setShowAddBranch(false)} className="text-text-secondary hover:opacity-70">✕</button>
+            </div>
+            <form onSubmit={handleAddBranch} className="mt-4 space-y-3">
+              <label className="block text-sm">
+                <span className="text-text-secondary">Branch Name</span>
+                <input value={newBranchName} onChange={e=>setNewBranchName(e.target.value)} className="mt-1 w-full border rounded p-2" required/>
+              </label>
+              <label className="block text-sm">
+                <span className="text-text-secondary">Branch Code</span>
+                <input value={newBranchCode} onChange={e=>setNewBranchCode(e.target.value)} className="mt-1 w-full border rounded p-2" required/>
+              </label>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={()=>setShowAddBranch(false)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="px-3 py-2 rounded bg-[#ffa332] text-white">Add Branch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
 
         </div>
       </main>

@@ -65,8 +65,13 @@ const Cases: React.FC = () => {
   const [activeCaseId, setActiveCaseId] = useState<string>('');
   const navigate = useNavigate();
 
-  const [caseAccess, setCaseAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
-  const canCrud = caseAccess === 'CRUD';
+  const [caseAccess, setCaseAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE'); // legacy fallback
+  const [isSuper, setIsSuper] = useState(false);
+  const [permFlags, setPermFlags] = useState<{add:boolean; edit:boolean; del:boolean}>({add:false, edit:false, del:false});
+  const canAdd = isSuper || permFlags.add || caseAccess === 'CRUD';
+  const canEdit = isSuper || permFlags.edit || caseAccess === 'CRUD';
+  const canDelete = isSuper || permFlags.del || caseAccess === 'CRUD';
+
   useEffect(()=>{
     (async()=>{
       try{
@@ -75,10 +80,13 @@ const Cases: React.FC = () => {
         if (!email) return;
         const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
         const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
-        if (roleStr.includes('super')) { setCaseAccess('CRUD'); return; }
-        const { data: up } = await supabase.from('user_permissions').select('module, access').eq('user_email', email).eq('module', 'cases');
-        if (up && up.length) setCaseAccess((up[0].access as any)==='CRUD'?'CRUD':'VIEW');
-        else {
+        if (roleStr.includes('super')) { setIsSuper(true); setPermFlags({add:true, edit:true, del:true}); setCaseAccess('CRUD'); return; }
+        const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'cases');
+        if (up && up.length) {
+          const row: any = up[0];
+          setPermFlags({ add: !!row.can_add, edit: !!row.can_edit, del: !!row.can_delete });
+          if (row.access) setCaseAccess((row.access as any)==='CRUD'?'CRUD':(row.access as any)==='VIEW'?'VIEW':'NONE');
+        } else {
           const perms = Array.isArray(u?.permissions)? (u?.permissions as any as string[]) : [];
           setCaseAccess(perms.includes('cases')? 'CRUD' : 'NONE');
         }
@@ -264,7 +272,7 @@ const Cases: React.FC = () => {
   }, [activeCase?.caseId]);
 
   const updateTaskStatus = async (taskId: string, next: Status) => {
-    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+    if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
     // Optimistic UI
     setCases(prev => prev.map(c => {
@@ -277,7 +285,7 @@ const Cases: React.FC = () => {
   };
 
   const moveTask = async (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: Status }) => {
-    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+    if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
     // Optimistic UI
     setCases(prev => prev.map(c => {
@@ -321,7 +329,7 @@ const Cases: React.FC = () => {
     e.preventDefault();
     try {
       const id = e.dataTransfer.getData('text/case');
-    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+    if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
       if (!id) return;
       let prevStatus: 'Pending'|'In Progress'|'Completed'|undefined;
@@ -369,7 +377,7 @@ const Cases: React.FC = () => {
 
   const addCase = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+    if (!canAdd) { showToast('Not permitted', 'error'); return; }
 
     const title = formTitle.trim() || sf.basic_name || 'New Case';
     if (!title) return;
@@ -410,7 +418,7 @@ const Cases: React.FC = () => {
     e.preventDefault();
     if (!activeCaseId) return;
     const id = newTaskId();
-    if (!canCrud) { showToast('Not permitted', 'error'); return; }
+    if (!canAdd) { showToast('Not permitted', 'error'); return; }
 
     const name = tfName.trim() || 'Untitled Task';
     const estimate_mins = Math.max(0, Number(tfEstimate) || 0);
@@ -462,7 +470,7 @@ const Cases: React.FC = () => {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>On Going Cases</h1>
               <div className="flex items-center gap-2">
-                <button onClick={()=> canCrud ? setShowAddCase(true) : null} disabled={!canCrud} className={`px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95 ${!canCrud ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <button onClick={()=> canAdd ? setShowAddCase(true) : null} disabled={!canAdd} className={`px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95 ${!canAdd ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   + Add Case
                 </button>
               </div>
