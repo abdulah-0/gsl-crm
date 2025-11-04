@@ -61,6 +61,61 @@ const SuperAdmin: React.FC = () => {
   // Student Communication (realtime tasks summary)
   const [commCounts, setCommCounts] = useState<{ pending: number; completed: number }>({ pending: 0, completed: 0 });
 
+
+  // Branches management state
+  const [branchesList, setBranchesList] = useState<Array<{id:string; branch_name:string; branch_code:string}>>([]);
+  const [brName, setBrName] = useState('');
+  const [brCode, setBrCode] = useState('');
+  const [brSaving, setBrSaving] = useState(false);
+  const [brError, setBrError] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('branches')
+          .select('id, branch_name, branch_code')
+          .order('branch_name', { ascending: true });
+        if (!error && data) setBranchesList(data as any);
+      } catch {}
+    })();
+  }, []);
+
+  const addBranch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBrError(null);
+    const name = brName.trim();
+    const code = brCode.trim();
+    if (!name || !code) { setBrError('Both Branch Name and Branch Code are required'); return; }
+    setBrSaving(true);
+    try {
+      const { data: au } = await supabase.auth.getUser();
+      const created_by = (au as any)?.user?.email || null;
+      const { data, error } = await supabase
+        .from('branches')
+        .insert([{ branch_name: name, branch_code: code, created_by }])
+        .select('id, branch_name, branch_code')
+        .single();
+      if (error) { setBrError(error.message); setBrSaving(false); return; }
+      setBranchesList(prev => [...prev, data as any].sort((a,b)=> a.branch_name.localeCompare(b.branch_name)));
+      setBrName(''); setBrCode('');
+    } catch (er: any) {
+      setBrError(er?.message || 'Failed to add branch');
+    } finally { setBrSaving(false); }
+  };
+
+  const deleteBranch = async (id: string) => {
+    const ok = window.confirm('Delete this branch? This cannot be undone.');
+    if (!ok) return;
+    try {
+      const { error } = await supabase.from('branches').delete().eq('id', id);
+      if (error) { alert(`Failed to delete branch: ${error.message}`); return; }
+      setBranchesList(prev => prev.filter(b => b.id !== id));
+    } catch (er: any) {
+      alert(er?.message || 'Failed to delete branch');
+    }
+  };
+
   // New Case modal state
   const [showAddCase, setShowAddCase] = useState(false);
   const [formStudent, setFormStudent] = useState('');
@@ -575,6 +630,8 @@ const SuperAdmin: React.FC = () => {
                       {/* Student (avatar + name + email) */}
                       <div className="col-span-3 flex items-center gap-3">
                         <img src="/images/img_image.svg" alt="avatar" className="w-8 h-8 rounded-full" />
+
+
                         <div>
                           <div className="font-medium">{c.student}</div>
                           <div className="text-xs text-text-secondary">{c.email || 'student@example.com'}</div>
@@ -630,6 +687,57 @@ const SuperAdmin: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            {/* Branches Management */}
+            <div className="mt-8 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-xl font-bold text-text-primary">Branches</h2>
+              </div>
+              <form onSubmit={addBranch} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <label className="text-sm">
+                  <span className="text-text-secondary">Branch Code</span>
+                  <input value={brCode} onChange={e=>setBrCode(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG" />
+                </label>
+                <label className="text-sm">
+                  <span className="text-text-secondary">Branch Name</span>
+                  <input value={brName} onChange={e=>setBrName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG Branch" />
+                </label>
+                <div className="flex items-end">
+                  <button type="submit" disabled={brSaving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43] w-full">
+                    {brSaving ? 'Adding...' : 'Add Branch'}
+                  </button>
+                </div>
+              </form>
+              {brError && <div className="mt-2 text-red-600 text-sm">{brError}</div>}
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-text-secondary">
+                    <tr className="grid grid-cols-12 px-2 py-2">
+                      <th className="col-span-3 text-left font-medium">Code</th>
+                      <th className="col-span-7 text-left font-medium">Name</th>
+                      <th className="col-span-2 text-right font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {branchesList.map(b => (
+                      <tr key={b.id} className="grid grid-cols-12 items-center px-2 py-2">
+                        <td className="col-span-3">{b.branch_code}</td>
+                        <td className="col-span-7">{b.branch_name}</td>
+                        <td className="col-span-2 text-right">
+                          <button onClick={()=>deleteBranch(b.id)} className="text-[11px] text-red-600 hover:underline">Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {branchesList.length === 0 && (
+                      <tr className="grid grid-cols-12 items-center px-2 py-3 text-text-secondary">
+                        <td className="col-span-12">No branches yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
           </section>
         </div>
       </main>
@@ -679,6 +787,8 @@ const SuperAdmin: React.FC = () => {
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
               <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+
+
               <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
                 {savingCase ? 'Saving...' : 'Save Case'}
               </button>
