@@ -76,8 +76,21 @@ const SuperAdmin: React.FC = () => {
           .from('branches')
           .select('id, branch_name, branch_code')
           .order('branch_name', { ascending: true });
-        if (!error && data) setBranchesList(data as any);
-      } catch {}
+        if (error) throw error;
+        if (data) setBranchesList(data as any);
+      } catch (err) {
+        // Fallback for older schema with columns "name" and "code"
+        try {
+          const { data, error } = await supabase
+            .from('branches')
+            .select('id, name, code')
+            .order('name', { ascending: true });
+          if (!error && data) {
+            const mapped = (data as any[]).map(r => ({ id: r.id, branch_name: r.name, branch_code: r.code }));
+            setBranchesList(mapped as any);
+          }
+        } catch {}
+      }
     })();
   }, []);
 
@@ -91,20 +104,30 @@ const SuperAdmin: React.FC = () => {
     try {
       const { data: au } = await supabase.auth.getUser();
       const created_by = (au as any)?.user?.email || null;
-      // Try insert with created_by; if the column doesn't exist in DB, fallback without it
-      let ins = await supabase
-        .from('branches')
-        .insert([{ branch_name: name, branch_code: code, created_by }])
-        .select('id, branch_name, branch_code')
-        .single();
 
-      if (ins.error && /created_by/i.test(ins.error.message || '')) {
-        // Fallback: older DB may not have created_by column yet
+      // Try multiple payloads to be compatible with older schemas
+      const payloads: any[] = [
+        { branch_name: name, branch_code: code, created_by },
+        { branch_name: name, branch_code: code },
+        { branch_name: name, code: code, created_by },
+        { branch_name: name, code: code },
+        { name: name, branch_code: code, created_by },
+        { name: name, branch_code: code },
+        { name: name, code: code, created_by },
+        { name: name, code: code },
+      ];
+
+      let ins: any = { data: null, error: null };
+      for (const p of payloads) {
         ins = await supabase
           .from('branches')
-          .insert([{ branch_name: name, branch_code: code }])
-          .select('id, branch_name, branch_code')
+          .insert([p])
+          .select('id, branch_name, branch_code, name, code')
           .single();
+        if (!ins.error) break;
+        // If RLS error, no need to continue
+        const msg = (ins.error.message || '').toLowerCase();
+        if (msg.includes('row level security')) break;
       }
 
       if (ins.error) {
@@ -118,7 +141,14 @@ const SuperAdmin: React.FC = () => {
         return;
       }
 
-      setBranchesList(prev => [...prev, ins.data as any].sort((a,b)=> a.branch_name.localeCompare(b.branch_name)));
+      const inserted = ins.data as any;
+      const mapped = {
+        id: inserted.id,
+        branch_name: inserted.branch_name ?? inserted.name,
+        branch_code: inserted.branch_code ?? inserted.code,
+      } as any;
+
+      setBranchesList(prev => [...prev, mapped].sort((a,b)=> (a.branch_name || '').localeCompare(b.branch_name || '')));
       setBrName(''); setBrCode('');
     } catch (er: any) {
       const msg = er?.message || '';
