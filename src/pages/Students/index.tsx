@@ -263,6 +263,33 @@ const StudentsPage: React.FC = () => {
 
     const { error } = await supabase.from('invoices').insert([payload]);
     if (error) { alert(`Failed to create invoice: ${error.message}`); return; }
+
+    // Also record a Cash In voucher for the amount paid now so it reflects in Finances/SuperAdmin dashboards
+    if (amtPaid > 0) {
+      try {
+        const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+        const occurred_at = new Date().toISOString();
+        let branchName = 'Main Branch';
+        try {
+          const { data: au } = await supabase.auth.getUser();
+          const em = au.user?.email || '';
+          if (em) {
+            const { data: du } = await supabase.from('dashboard_users').select('branch').eq('email', em).maybeSingle();
+            if ((du as any)?.branch) branchName = (du as any).branch as string;
+          }
+        } catch {}
+        const desc = `Invoice payment for ${lastCreatedStudent.full_name} (${lastCreatedStudent.id})`;
+        const vErr = await supabase.from('vouchers').insert([
+          { code, vtype: 'cash_in', amount: amtPaid, branch: branchName, occurred_at, status: 'Approved', description: desc }
+        ]);
+        if ((vErr as any)?.error) {
+          console.warn('Failed to create cash-in voucher for invoice payment:', (vErr as any).error?.message || vErr);
+        }
+      } catch (e) {
+        console.warn('Voucher creation error for invoice payment', e);
+      }
+    }
+
     alert('Invoice created successfully.');
     setInvoiceOpen(false);
   };
