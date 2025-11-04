@@ -29,9 +29,21 @@ const ProfilePage: React.FC = () => {
   // Security form
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
-  const canSaveName = useMemo(()=> !!me && (
-    name.trim() !== (me.full_name||'') || phone !== (me.phone||'') || city !== (me.city||'') || title !== (me.job_title||'') || about !== (me.about||'') || !!avatarFile
-  ), [me, name, phone, city, title, about, avatarFile]);
+  // Enable Save if there are changes; also allow creating your profile row if missing
+  const canSaveName = useMemo(() => {
+    if (!me) {
+      // When no dashboard_users row exists yet, allow saving if any field provided or an avatar is chosen
+      return !!avatarFile || !!name.trim() || !!phone || !!city || !!title || !!about;
+    }
+    return (
+      name.trim() !== (me.full_name || '') ||
+      phone !== (me.phone || '') ||
+      city !== (me.city || '') ||
+      title !== (me.job_title || '') ||
+      about !== (me.about || '') ||
+      !!avatarFile
+    );
+  }, [me, name, phone, city, title, about, avatarFile]);
   const canSavePass = useMemo(()=> newPass.length >= 8 && newPass === confirmPass, [newPass, confirmPass]);
 
   useEffect(() => {
@@ -84,66 +96,90 @@ const ProfilePage: React.FC = () => {
 
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!me) return;
     if (!canSaveName) return;
     setSaving(true);
     try {
+      const { data: au } = await supabase.auth.getUser();
+      const em = au.user?.email || '';
+      const uid = au.user?.id || '';
+      const profileId = me?.id || (uid ? `USR-${uid.slice(-8)}` : `USR${Date.now().toString().slice(-8)}`);
+
       let newAvatarUrl = avatarUrl;
 
-      // Upload avatar first (optional)
+      // Upload avatar first (optional) → use unified 'attachments' bucket
       if (avatarFile) {
         try {
-          const path = `${me.id}/${Date.now()}_${avatarFile.name}`;
-          const { error: upErr } = await supabase.storage.from('avatars').upload(path, avatarFile, { upsert: true });
+          const path = `avatars/${profileId}/${Date.now()}_${avatarFile.name}`;
+          const { error: upErr } = await supabase.storage.from('attachments').upload(path, avatarFile, { upsert: true });
           if (upErr) throw upErr;
-          const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path);
-          newAvatarUrl = pub.publicUrl || newAvatarUrl;
+          const { data: pub } = supabase.storage.from('attachments').getPublicUrl(path);
+          newAvatarUrl = pub?.publicUrl || newAvatarUrl;
         } catch (uploadErr: any) {
           console.warn('Avatar upload failed:', uploadErr?.message || uploadErr);
           alert('Avatar upload failed. Saving profile without avatar.');
         }
       }
 
-      // Detect which columns exist to avoid schema drift issues
-      const colsResp = await supabase
-        .from('information_schema.columns' as any)
-        .select('column_name')
-        .eq('table_schema', 'public')
-        .eq('table_name', 'dashboard_users');
-      const existingCols: string[] = (colsResp.data || []).map((r: any) => r.column_name);
+      const nameToSave = (name || '').trim() || me?.full_name || em || 'User';
 
-      // Build payload only with existing columns
-      const updatePayload: any = { full_name: name.trim() };
-      if (existingCols.includes('phone')) updatePayload.phone = phone || null;
-      if (existingCols.includes('city')) updatePayload.city = city || null;
-      if (existingCols.includes('job_title')) updatePayload.job_title = title || null;
-      if (existingCols.includes('about')) updatePayload.about = about || null;
-      if (existingCols.includes('avatar_url')) updatePayload.avatar_url = newAvatarUrl || null;
+      // Build payload with known columns (these exist in our migrations)
+      const updatePayload: any = {
+        full_name: nameToSave,
+        phone: phone || null,
+        city: city || null,
+        job_title: title || null,
+        about: about || null,
+        avatar_url: newAvatarUrl || null,
+      };
 
-      // Update by id -> by email
-      let { error: updErr } = await supabase
-        .from('dashboard_users')
-        .update(updatePayload)
-        .eq('id', me.id)
-        .select('id')
-        .single();
-
-      if (updErr) {
-        console.warn('Update by id failed, retry by email:', updErr.message);
-        const retryByEmail = await supabase
+      if (me) {
+        // Update by id -> by email
+        let { error: updErr } = await supabase
           .from('dashboard_users')
           .update(updatePayload)
-          .eq('email', me.email)
+          .eq('id', me.id)
           .select('id')
           .single();
-        updErr = retryByEmail.error || null;
-      }
 
-      if (updErr) {
-        alert(`Failed to update profile: ${updErr.message}`);
+        if (updErr) {
+          console.warn('Update by id failed, retry by email:', updErr.message);
+          const retryByEmail = await supabase
+            .from('dashboard_users')
+            .update(updatePayload)
+            .eq('email', me.email)
+            .select('id')
+            .single();
+          updErr = retryByEmail.error || null;
+        }
+
+        if (updErr) {
+          alert(`Failed to update profile: ${updErr.message}`);
+        } else {
+          setAvatarFile(null);
+          alert('Profile updated');
+        }
       } else {
-        setAvatarFile(null);
-        alert('Profile updated');
+        // No profile row yet → create it
+        const insertPayload = {
+          id: profileId,
+          email: em,
+          role: 'Staff',
+          status: 'Active',
+          permissions: ['dashboard'],
+          ...updatePayload,
+        };
+        const { error: insErr } = await supabase
+          .from('dashboard_users')
+          .upsert(insertPayload, { onConflict: 'email' });
+        if (insErr) {
+          alert(`Failed to save profile: ${insErr.message}`);
+        } else {
+          setAvatarFile(null);
+          // Refresh me state
+          const { data: row } = await supabase.from('dashboard_users').select('*').eq('email', em).maybeSingle();
+          if (row) setMe(row as any);
+          alert('Profile saved');
+        }
       }
     } catch (err: any) {
       console.error('Save profile error:', err);

@@ -41,22 +41,30 @@ const Header = ({
       const wantedRoles = roleLower.includes('super') ? ['super','admin','finance'] : (roleLower ? [roleLower] : []);
 
       // Load initial notifications (email-targeted or role-targeted)
-      const { data: ns } = await supabase
-        .from('notifications')
-        .select('id,title,body,created_at,read_at,recipient_email,recipient_role')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      const filtered = (ns || []).filter((n:any) => {
-        const rr = (n.recipient_role || '').toString().toLowerCase();
-        const byRole = wantedRoles.some(w => rr.includes(w));
-        return n.recipient_email === em || byRole;
-      });
-      const list = filtered.map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
-      setNotifs(list as any);
-      setNotifCount(filtered.filter((n:any)=>!n.read_at && (n.recipient_email === em)).length);
+      let notificationsReady = true;
+      try {
+        const { data: ns, error: nErr } = await supabase
+          .from('notifications')
+          .select('id,title,body,created_at,read_at,recipient_email,recipient_role')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (nErr) throw nErr;
+        const filtered = (ns || []).filter((n:any) => {
+          const rr = (n.recipient_role || '').toString().toLowerCase();
+          const byRole = wantedRoles.some(w => rr.includes(w));
+          return n.recipient_email === em || byRole;
+        });
+        const list = filtered.map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
+        setNotifs(list as any);
+        setNotifCount(filtered.filter((n:any)=>!n.read_at && (n.recipient_email === em)).length);
+      } catch (_) {
+        notificationsReady = false; // Table likely missing in this environment; skip realtime for it
+        setNotifs([]);
+        setNotifCount(0);
+      }
 
       // subscribe to name/avatar changes and new notifications
-      const chan = supabase
+      let chan = supabase
         .channel('rt:header_user')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
           const row: any = payload.new;
@@ -64,8 +72,9 @@ const Header = ({
             setDisplayName(row.full_name || em);
             setAvatarUrl(row.avatar_url || '');
           }
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        });
+      if (notificationsReady) {
+        chan = chan.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
           const row: any = payload.new;
           const rr = (row?.recipient_role || '').toString().toLowerCase();
           const byRole = wantedRoles.some(w => rr.includes(w));
@@ -73,8 +82,9 @@ const Header = ({
             setNotifs(prev => [{ id: row.id, title: row.title, body: row.body, created_at: row.created_at }, ...prev].slice(0, 10));
             if (row?.recipient_email === em) setNotifCount(c => c + 1);
           }
-        })
-        .subscribe();
+        });
+      }
+      chan = chan.subscribe();
       return () => { mounted = false; supabase.removeChannel(chan); };
     })();
   }, []);
