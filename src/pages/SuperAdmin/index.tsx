@@ -107,31 +107,31 @@ const SuperAdmin: React.FC = () => {
       const { data: au } = await supabase.auth.getUser();
       const created_by = (au as any)?.user?.email || null;
 
-      // Try multiple payloads to be compatible with schema detected at load time
-      const payloads: any[] = branchesSchema === 'legacy'
-        ? [
-            { name: name, code: code, created_by },
-            { name: name, code: code },
-          ]
-        : [
-            { branch_name: name, branch_code: code, created_by },
-            { branch_name: name, branch_code: code },
-            { branch_name: name, code: code, created_by },
-            { branch_name: name, code: code },
-          ];
+      // Build robust payload attempts: try both sets first, then modern, then legacy, then mixed
+      const payloads: any[] = [
+        { branch_name: name, branch_code: code, name, code, created_by },
+        { branch_name: name, branch_code: code, name, code },
+        { branch_name: name, branch_code: code, created_by },
+        { branch_name: name, branch_code: code },
+        { name, code, created_by },
+        { name, code },
+        { branch_name: name, code, created_by },
+        { branch_name: name, code },
+        { name, branch_code: code, created_by },
+        { name, branch_code: code },
+      ];
 
       let ins: any = { data: null, error: null };
       for (const p of payloads) {
-        const sel = 'id,' + (('branch_name' in p ? 'branch_name' : 'name')) + ',' + (('branch_code' in p ? 'branch_code' : 'code'));
         ins = await supabase
           .from('branches')
           .insert([p])
-          .select(sel)
+          .select('*')
           .single();
         if (!ins.error) break;
-        // If RLS error, no need to continue
+        // If RLS/permission error, no need to continue
         const msg = (ins.error.message || '').toLowerCase();
-        if (msg.includes('row level security')) break;
+        if (msg.includes('row level security') || msg.includes('permission')) break;
       }
 
       if (ins.error) {
