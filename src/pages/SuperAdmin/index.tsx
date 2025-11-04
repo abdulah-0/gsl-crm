@@ -119,10 +119,11 @@ const SuperAdmin: React.FC = () => {
 
       let ins: any = { data: null, error: null };
       for (const p of payloads) {
+        const sel = 'id,' + (('branch_name' in p ? 'branch_name' : 'name')) + ',' + (('branch_code' in p ? 'branch_code' : 'code'));
         ins = await supabase
           .from('branches')
           .insert([p])
-          .select('id, branch_name, branch_code, name, code')
+          .select(sel)
           .single();
         if (!ins.error) break;
         // If RLS error, no need to continue
