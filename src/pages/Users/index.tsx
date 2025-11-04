@@ -116,6 +116,16 @@ const UsersPage: React.FC = () => {
 
   useEffect(() => { load(); }, []);
 
+
+  // Realtime: reload when users change
+  useEffect(() => {
+    const chan = supabase
+      .channel('public:dashboard_users')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_users' }, () => load())
+      .subscribe();
+    return () => { try { supabase.removeChannel(chan); } catch {} };
+  }, []);
+
   const filtered = useMemo(() => {
     const term = q.toLowerCase().trim();
     return items.filter(u => {

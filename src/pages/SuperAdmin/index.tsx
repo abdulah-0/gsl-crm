@@ -94,6 +94,33 @@ const SuperAdmin: React.FC = () => {
         } catch {}
       }
     })();
+
+	  // Realtime: keep branches list in sync across tabs
+	  useEffect(() => {
+	    const chan = supabase
+	      .channel('public:branches')
+	      .on('postgres_changes', { event: '*', schema: 'public', table: 'branches' }, async () => {
+	        try {
+	          const { data, error } = await supabase
+	            .from('branches')
+	            .select('id, branch_name, branch_code')
+	            .order('branch_name', { ascending: true });
+	          if (!error && data) { setBranchesList(data as any); setBranchesSchema('modern'); return; }
+	        } catch {}
+	        try {
+	          const { data } = await supabase
+	            .from('branches')
+	            .select('id, name, code')
+	            .order('name', { ascending: true });
+	          const mapped = ((data as any[])||[]).map((r:any) => ({ id: r.id, branch_name: r.name, branch_code: r.code }));
+	          setBranchesList(mapped as any);
+	          setBranchesSchema('legacy');
+	        } catch {}
+	      })
+	      .subscribe();
+	    return () => { try { supabase.removeChannel(chan); } catch {} };
+	  }, []);
+
   }, []);
 
   const addBranch = async (e: React.FormEvent) => {
