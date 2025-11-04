@@ -276,26 +276,63 @@ const UsersPage: React.FC = () => {
               </label>
               <div>
                 <div className="text-text-secondary mb-1">Module Access</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-56 overflow-auto text-xs">
-                  {ALL_TABS.map(t => (
-                    <div key={t.id} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{t.label}</span>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.add} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), add: e.target.checked } }))} />
-                          <span>Add</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.edit} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), edit: e.target.checked } }))} />
-                          <span>Edit</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={nRole==='Super Admin'} checked={nRole==='Super Admin' || !!nAccess[t.id]?.del} onChange={(e)=>setNAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), del: e.target.checked } }))} />
-                          <span>Delete</span>
-                        </label>
+                <div className="border rounded p-2 max-h-64 overflow-auto text-xs divide-y">
+                  {ALL_TABS.map(t => {
+                    const perm = nAccess[t.id] || { add:false, edit:false, del:false };
+                    const value = nRole==='Super Admin' ? 'CRUD' : (
+                      perm.add && perm.edit && perm.del ? 'CRUD' :
+                      perm.add && perm.edit ? 'ADD_EDIT' :
+                      perm.add && perm.del ? 'ADD_DELETE' :
+                      perm.edit && perm.del ? 'EDIT_DELETE' :
+                      perm.add ? 'ADD' :
+                      perm.edit ? 'EDIT' :
+                      perm.del ? 'DELETE' :
+                      (nPerms.includes(normalizeModule(t.id)) ? 'VIEW' : 'NONE')
+                    );
+                    return (
+                      <div key={t.id} className="flex items-center justify-between gap-3 py-1.5">
+                        <span className="truncate">{t.label}</span>
+                        <select
+                          disabled={nRole==='Super Admin'}
+                          value={value}
+                          onChange={(e) => {
+                            const v = e.target.value as 'NONE'|'VIEW'|'ADD'|'EDIT'|'DELETE'|'ADD_EDIT'|'ADD_DELETE'|'EDIT_DELETE'|'CRUD';
+                            setNAccess(prev => {
+                              const base = { ...(prev[t.id] || { add:false, edit:false, del:false }) };
+                              switch (v) {
+                                case 'NONE': base.add=false; base.edit=false; base.del=false; break;
+                                case 'VIEW': base.add=false; base.edit=false; base.del=false; break;
+                                case 'ADD': base.add=true; base.edit=false; base.del=false; break;
+                                case 'EDIT': base.add=false; base.edit=true; base.del=false; break;
+                                case 'DELETE': base.add=false; base.edit=false; base.del=true; break;
+                                case 'ADD_EDIT': base.add=true; base.edit=true; base.del=false; break;
+                                case 'ADD_DELETE': base.add=true; base.edit=false; base.del=true; break;
+                                case 'EDIT_DELETE': base.add=false; base.edit=true; base.del=true; break;
+                                case 'CRUD': base.add=true; base.edit=true; base.del=true; break;
+                              }
+                              return { ...prev, [t.id]: base };
+                            });
+                            setNPerms(prev => {
+                              const mod = normalizeModule(t.id);
+                              if (v === 'NONE') return prev.filter(x => x !== mod);
+                              return prev.includes(mod) ? prev : [...prev, mod];
+                            });
+                          }}
+                          className="border rounded p-1 text-xs"
+                        >
+                          <option value="NONE">None</option>
+                          <option value="VIEW">View</option>
+                          <option value="ADD">Add</option>
+                          <option value="EDIT">Edit</option>
+                          <option value="DELETE">Delete</option>
+                          <option value="ADD_EDIT">Add + Edit</option>
+                          <option value="ADD_DELETE">Add + Delete</option>
+                          <option value="EDIT_DELETE">Edit + Delete</option>
+                          <option value="CRUD">Full (CRUD)</option>
+                        </select>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
               <div className="text-right"><button disabled={saving} type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save</button></div>
