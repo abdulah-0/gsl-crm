@@ -68,6 +68,7 @@ const SuperAdmin: React.FC = () => {
   const [brCode, setBrCode] = useState('');
   const [brSaving, setBrSaving] = useState(false);
   const [brError, setBrError] = useState<string | null>(null);
+  const [branchesSchema, setBranchesSchema] = useState<'modern' | 'legacy' | 'unknown'>('unknown');
 
   useEffect(() => {
     (async () => {
@@ -77,7 +78,7 @@ const SuperAdmin: React.FC = () => {
           .select('id, branch_name, branch_code')
           .order('branch_name', { ascending: true });
         if (error) throw error;
-        if (data) setBranchesList(data as any);
+        if (data) { setBranchesList(data as any); setBranchesSchema('modern'); }
       } catch (err) {
         // Fallback for older schema with columns "name" and "code"
         try {
@@ -88,6 +89,7 @@ const SuperAdmin: React.FC = () => {
           if (!error && data) {
             const mapped = (data as any[]).map(r => ({ id: r.id, branch_name: r.name, branch_code: r.code }));
             setBranchesList(mapped as any);
+            setBranchesSchema('legacy');
           }
         } catch {}
       }
@@ -105,17 +107,18 @@ const SuperAdmin: React.FC = () => {
       const { data: au } = await supabase.auth.getUser();
       const created_by = (au as any)?.user?.email || null;
 
-      // Try multiple payloads to be compatible with older schemas
-      const payloads: any[] = [
-        { branch_name: name, branch_code: code, created_by },
-        { branch_name: name, branch_code: code },
-        { branch_name: name, code: code, created_by },
-        { branch_name: name, code: code },
-        { name: name, branch_code: code, created_by },
-        { name: name, branch_code: code },
-        { name: name, code: code, created_by },
-        { name: name, code: code },
-      ];
+      // Try multiple payloads to be compatible with schema detected at load time
+      const payloads: any[] = branchesSchema === 'legacy'
+        ? [
+            { name: name, code: code, created_by },
+            { name: name, code: code },
+          ]
+        : [
+            { branch_name: name, branch_code: code, created_by },
+            { branch_name: name, branch_code: code },
+            { branch_name: name, code: code, created_by },
+            { branch_name: name, code: code },
+          ];
 
       let ins: any = { data: null, error: null };
       for (const p of payloads) {
