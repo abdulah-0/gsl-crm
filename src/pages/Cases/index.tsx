@@ -71,6 +71,8 @@ const Cases: React.FC = () => {
   const canAdd = isSuper || permFlags.add || caseAccess === 'CRUD';
   const canEdit = isSuper || permFlags.edit || caseAccess === 'CRUD';
   const canDelete = isSuper || permFlags.del || caseAccess === 'CRUD';
+  const canCrud = canAdd;
+
 
   useEffect(()=>{
     (async()=>{
