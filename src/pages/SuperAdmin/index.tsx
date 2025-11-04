@@ -107,12 +107,26 @@ const SuperAdmin: React.FC = () => {
           .single();
       }
 
-      if (ins.error) { setBrError(ins.error.message); setBrSaving(false); return; }
+      if (ins.error) {
+        const msg = ins.error.message || '';
+        if (msg.toLowerCase().includes('row level security')) {
+          setBrError('Only Super Admin can add branches. Please ensure your profile role is Super Admin.');
+        } else {
+          setBrError(msg);
+        }
+        setBrSaving(false);
+        return;
+      }
 
       setBranchesList(prev => [...prev, ins.data as any].sort((a,b)=> a.branch_name.localeCompare(b.branch_name)));
       setBrName(''); setBrCode('');
     } catch (er: any) {
-      setBrError(er?.message || 'Failed to add branch');
+      const msg = er?.message || '';
+      if (msg.toLowerCase().includes('row level security')) {
+        setBrError('Only Super Admin can add branches. Please ensure your profile role is Super Admin.');
+      } else {
+        setBrError(msg || 'Failed to add branch');
+      }
     } finally { setBrSaving(false); }
   };
 
@@ -121,7 +135,15 @@ const SuperAdmin: React.FC = () => {
     if (!ok) return;
     try {
       const { error } = await supabase.from('branches').delete().eq('id', id);
-      if (error) { alert(`Failed to delete branch: ${error.message}`); return; }
+      if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('row level security')) {
+          alert('Only Super Admin can delete branches. Please ensure your profile role is Super Admin.');
+        } else {
+          alert(`Failed to delete branch: ${error.message}`);
+        }
+        return;
+      }
       setBranchesList(prev => prev.filter(b => b.id !== id));
     } catch (er: any) {
       alert(er?.message || 'Failed to delete branch');
