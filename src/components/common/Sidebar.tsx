@@ -30,7 +30,8 @@ const Sidebar = ({
         if (!email) { setAllowed(null); setIsSuper(false); return; }
         // Check app dashboard_users
         const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
-        const roleStr = (u?.role || (sess.user as any)?.app_metadata?.role || (sess.user as any)?.user_metadata?.role || '').toString();
+        // Prefer auth metadata role as source of truth; fallback to dashboard_users.role
+        const roleStr = (((sess.user as any)?.app_metadata?.role) || ((sess.user as any)?.user_metadata?.role) || (u?.role) || '').toString();
         const role = roleStr.toLowerCase();
         const superRole = role.includes('super');
         setIsSuper(superRole);
