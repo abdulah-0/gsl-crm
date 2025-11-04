@@ -159,13 +159,18 @@ const ProfilePage: React.FC = () => {
           alert('Profile updated');
         }
       } else {
-        // No profile row yet → create it
+        // No profile row yet → create it, preserving role from auth metadata if available
+        const authRole = (
+          (au.user as any)?.app_metadata?.role ||
+          (au.user as any)?.user_metadata?.role ||
+          'Staff'
+        ) as string;
         const insertPayload = {
           id: profileId,
           email: em,
-          role: 'Staff',
+          role: authRole,
           status: 'Active',
-          permissions: ['dashboard'],
+          // Do not set legacy permissions here; let defaults apply or granular perms drive access
           ...updatePayload,
         };
         const { error: insErr } = await supabase
