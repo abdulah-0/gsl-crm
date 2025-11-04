@@ -91,13 +91,25 @@ const SuperAdmin: React.FC = () => {
     try {
       const { data: au } = await supabase.auth.getUser();
       const created_by = (au as any)?.user?.email || null;
-      const { data, error } = await supabase
+      // Try insert with created_by; if the column doesn't exist in DB, fallback without it
+      let ins = await supabase
         .from('branches')
         .insert([{ branch_name: name, branch_code: code, created_by }])
         .select('id, branch_name, branch_code')
         .single();
-      if (error) { setBrError(error.message); setBrSaving(false); return; }
-      setBranchesList(prev => [...prev, data as any].sort((a,b)=> a.branch_name.localeCompare(b.branch_name)));
+
+      if (ins.error && /created_by/i.test(ins.error.message || '')) {
+        // Fallback: older DB may not have created_by column yet
+        ins = await supabase
+          .from('branches')
+          .insert([{ branch_name: name, branch_code: code }])
+          .select('id, branch_name, branch_code')
+          .single();
+      }
+
+      if (ins.error) { setBrError(ins.error.message); setBrSaving(false); return; }
+
+      setBranchesList(prev => [...prev, ins.data as any].sort((a,b)=> a.branch_name.localeCompare(b.branch_name)));
       setBrName(''); setBrCode('');
     } catch (er: any) {
       setBrError(er?.message || 'Failed to add branch');
