@@ -36,6 +36,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
 
   useEffect(() => {
     let mounted = true;
+    let authSub: any = null;
     (async () => {
       try {
         const { supabase } = await import('./lib/supabaseClient');
@@ -60,7 +61,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
           navigate('/login', { replace: true });
         }
         // subscribe to changes
-        supabase.auth.onAuthStateChange((_evt, session) => {
+        authSub = supabase.auth.onAuthStateChange((_evt, session) => {
           if (!mounted) return;
           if (!session) {
             setAllowed(false);
@@ -89,6 +90,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     })();
     return () => {
       mounted = false;
+      try { authSub?.data?.subscription?.unsubscribe?.(); } catch {}
     };
   }, [navigate]);
 
@@ -109,6 +111,7 @@ const RoleBasedDashboard: React.FC = () => {
 
   useEffect(() => {
     let mounted = true;
+    let authSub: any = null;
 
     const extractRoles = (user: any): string[] => {
       const am = user?.app_metadata ?? {};
@@ -135,7 +138,7 @@ const RoleBasedDashboard: React.FC = () => {
         const { data } = await supabase.auth.getSession();
         if (!mounted) return;
         setRole(resolveRole(data.session?.user));
-        supabase.auth.onAuthStateChange((_evt, session) => {
+        authSub = supabase.auth.onAuthStateChange((_evt, session) => {
           if (!mounted) return;
           setRole(resolveRole(session?.user));
         });
@@ -145,7 +148,7 @@ const RoleBasedDashboard: React.FC = () => {
       }
     })();
 
-    return () => { mounted = false; };
+    return () => { mounted = false; try { authSub?.data?.subscription?.unsubscribe?.(); } catch {} };
   }, []);
 
   if (role === null) return null; // small loader placeholder
