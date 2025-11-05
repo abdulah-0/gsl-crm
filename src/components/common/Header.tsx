@@ -28,6 +28,7 @@ const Header = ({
 
   useEffect(() => {
     let mounted = true;
+    let chan: any = null;
     (async () => {
       const { data: sess } = await supabase.auth.getUser();
       const em = sess.user?.email || '';
@@ -87,8 +88,8 @@ const Header = ({
         });
       }
       chan = chan.subscribe();
-      return () => { mounted = false; supabase.removeChannel(chan); };
     })();
+    return () => { mounted = false; try { if (chan) supabase.removeChannel(chan); } catch {} };
   }, []);
 
   const profileOptions = [
