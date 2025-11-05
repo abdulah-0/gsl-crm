@@ -5,6 +5,15 @@ import { Helmet } from 'react-helmet';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 
+// Local error boundary to prevent blank screens if something throws during render
+class DetailErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: any }> {
+  constructor(props: any){ super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error: any){ return { error }; }
+  componentDidCatch(error: any, info: any){ console.error('TeacherDetail render crashed', error, info); }
+  render(){ if (this.state.error){ return (<main className="w-full min-h-screen bg-background-main flex"><div className="flex-1 flex items-center justify-center p-6"><div className="bg-white rounded-xl p-4 shadow">Something went wrong loading this page. Please reload.</div></div></main>); } return this.props.children as any; }
+}
+
+
 interface Teacher { id: string; full_name: string; email: string; }
 interface Service { id: string; name: string; }
 interface Assignment { service_id?: string|null; service_name?: string|null; batch_no?: string|null; }
@@ -176,100 +185,100 @@ const TeacherDetailPage: React.FC = () => {
   };
 
   return (
-    <main className="w-full min-h-screen bg-background-main flex">
-      <Helmet><title>Teacher Detail | GSL Pakistan CRM</title></Helmet>
-      <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar /></div>
-      <div className="flex-1 flex flex-col">
-        <Header />
+    <DetailErrorBoundary>
+      <main className="w-full min-h-screen bg-background-main flex">
+        <Helmet><title>Teacher Detail | GSL Pakistan CRM</title></Helmet>
+        <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar /></div>
+        <div className="flex-1 flex flex-col">
+          <Header />
 
-        <div className="px-4 sm:px-6 lg:px-8 mt-6">
-          <button className="text-sm text-blue-600" onClick={()=>navigate('/teachers')}>{'< Back to Teachers'}</button>
-          <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] mt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-bold">{teacher?.full_name || 'Teacher'} — Students</h2>
-              <div className="flex flex-wrap items-center gap-2 text-sm">
-                <label className="flex items-center gap-2">Date <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="border rounded p-1"/></label>
+          <div className="px-4 sm:px-6 lg:px-8 mt-6">
+            <button className="text-sm text-blue-600" onClick={()=>navigate('/teachers')}>{'< Back to Teachers'}</button>
+            <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] mt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-lg font-bold">{teacher?.full_name || 'Teacher'} — Students</h2>
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <label className="flex items-center gap-2">Date <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="border rounded p-1"/></label>
 
-                <label className="flex items-center gap-2">Batch <select value={batchFilter} onChange={e=>setBatchFilter(e.target.value)} className="border rounded p-1"><option>All</option>{uniqueBatches.map(b=><option key={b}>{b}</option>)}</select></label>
+                  <label className="flex items-center gap-2">Batch <select value={batchFilter} onChange={e=>setBatchFilter(e.target.value)} className="border rounded p-1"><option>All</option>{uniqueBatches.map(b=><option key={b}>{b}</option>)}</select></label>
 
+                  {fatalError && (
+                    <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] text-red-700 mt-3">
+                      {fatalError}
+                    </div>
+                  )}
 
-
-            {fatalError && (
-              <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] text-red-700 mt-3">
-                {fatalError}
-              </div>
-            )}
-
-                <div className="flex items-center gap-2">
-                  <select value={assignStudentId} onChange={e=>setAssignStudentId(e.target.value)} className="border rounded p-1 min-w-[240px]">
-                    <option value="">Assign student...</option>
-                    {assignableStudents.map(s=> <option key={s.id} value={s.id}>{s.label}</option>)}
-                  </select>
-                  <button disabled={!assignStudentId || assigning} onClick={assignStudent} className="px-3 py-2 rounded bg-gray-800 text-white disabled:opacity-50">{assigning?'Assigning...':'Assign'}</button>
+                  <div className="flex items-center gap-2">
+                    <select value={assignStudentId} onChange={e=>setAssignStudentId(e.target.value)} className="border rounded p-1 min-w-[240px]">
+                      <option value="">Assign student...</option>
+                      {assignableStudents.map(s=> <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                    <button disabled={!assignStudentId || assigning} onClick={assignStudent} className="px-3 py-2 rounded bg-gray-800 text-white disabled:opacity-50">{assigning?'Assigning...':'Assign'}</button>
+                  </div>
+                  <button onClick={saveAttendance} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">Save Attendance</button>
                 </div>
-                <button onClick={saveAttendance} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">Save Attendance</button>
               </div>
-            </div>
 
-            <div className="mt-3 overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="text-left text-text-secondary border-b">
-                    <th className="py-2 pr-4">Student</th>
-                    <th className="py-2 pr-4">Batch / Course</th>
-                    <th className="py-2 pr-4">Attendance %</th>
-                    <th className="py-2 pr-4">Mark Attendance</th>
-                    <th className="py-2 pr-4">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && (<tr><td colSpan={5} className="py-4 text-center text-text-secondary">Loading...</td></tr>)}
-                  {!loading && filteredStudents.map(st => {
-                    const full = st.full_name || `${st.first_name||''} ${st.last_name||''}`.trim();
-                    const prog = st.program_title || '';
-                    const batch = st.batch_no || '';
-                    // Attendance % (simple: fetch counts)
-                    const [attended, total] = [0,0]; // Placeholder (could compute via extra queries for accuracy)
-                    const pct = total>0 ? Math.round((attended/total)*100) : 0;
-                    return (
-                      <tr key={st.id} className="border-b align-top">
-                        <td className="py-2 pr-4 font-semibold">{full}{assignedIds.includes(st.id) && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Explicit</span>}</td>
-                        <td className="py-2 pr-4">{prog}{batch?` (${batch})`:''}</td>
-                        <td className="py-2 pr-4">{pct}%</td>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center gap-3">
-                            {(['Present','Absent','Late'] as const).map(opt => (
-                              <label key={opt} className="flex items-center gap-1">
-                                <input type="radio" name={`att-${st.id}`} checked={(attendance[st.id]||'')===opt} onChange={()=>setAttendance(prev=>({ ...prev, [st.id]: opt }))} /> {opt}
-                              </label>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-2 pr-4">
-                          <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <input placeholder="Add remark" value={remarkText[st.id]||''} onChange={e=>setRemarkText(prev=>({ ...prev, [st.id]: e.target.value }))} className="border rounded p-2 flex-1"/>
-                              <button className="px-3 py-1 rounded bg-gray-800 text-white" onClick={()=>addRemark(st.id)}>Add</button>
-                                {assignedIds.includes(st.id) && <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={()=>unassignStudent(st.id)}>Unassign</button>}
-                            </div>
-                            <div className="text-xs text-text-secondary max-h-24 overflow-auto">
-                              {(remarks[st.id]||[]).slice(0,3).map((r,i)=>(
-                                <div key={i} className="border rounded p-2 mb-1"><div className="font-medium">{new Date(r.created_at).toLocaleString()}</div><div>{r.note}</div></div>
+              <div className="mt-3 overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-text-secondary border-b">
+                      <th className="py-2 pr-4">Student</th>
+                      <th className="py-2 pr-4">Batch / Course</th>
+                      <th className="py-2 pr-4">Attendance %</th>
+                      <th className="py-2 pr-4">Mark Attendance</th>
+                      <th className="py-2 pr-4">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading && (<tr><td colSpan={5} className="py-4 text-center text-text-secondary">Loading...</td></tr>)}
+                    {!loading && filteredStudents.map(st => {
+                      const full = st.full_name || `${st.first_name||''} ${st.last_name||''}`.trim();
+                      const prog = st.program_title || '';
+                      const batch = st.batch_no || '';
+                      // Attendance % (simple: fetch counts)
+                      const [attended, total] = [0,0]; // Placeholder (could compute via extra queries for accuracy)
+                      const pct = total>0 ? Math.round((attended/total)*100) : 0;
+                      return (
+                        <tr key={st.id} className="border-b align-top">
+                          <td className="py-2 pr-4 font-semibold">{full}{assignedIds.includes(st.id) && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Explicit</span>}</td>
+                          <td className="py-2 pr-4">{prog}{batch?` (${batch})`:''}</td>
+                          <td className="py-2 pr-4">{pct}%</td>
+                          <td className="py-2 pr-4">
+                            <div className="flex items-center gap-3">
+                              {(['Present','Absent','Late'] as const).map(opt => (
+                                <label key={opt} className="flex items-center gap-1">
+                                  <input type="radio" name={`att-${st.id}`} checked={(attendance[st.id]||'')===opt} onChange={()=>setAttendance(prev=>({ ...prev, [st.id]: opt }))} /> {opt}
+                                </label>
                               ))}
                             </div>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {!loading && filteredStudents.length===0 && (<tr><td colSpan={5} className="py-4 text-center text-text-secondary">No students found for this teacher</td></tr>)}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-2">
+                                <input placeholder="Add remark" value={remarkText[st.id]||''} onChange={e=>setRemarkText(prev=>({ ...prev, [st.id]: e.target.value }))} className="border rounded p-2 flex-1"/>
+                                <button className="px-3 py-1 rounded bg-gray-800 text-white" onClick={()=>addRemark(st.id)}>Add</button>
+                                  {assignedIds.includes(st.id) && <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={()=>unassignStudent(st.id)}>Unassign</button>}
+                              </div>
+                              <div className="text-xs text-text-secondary max-h-24 overflow-auto">
+                                {(remarks[st.id]||[]).slice(0,3).map((r,i)=>(
+                                  <div key={i} className="border rounded p-2 mb-1"><div className="font-medium">{new Date(r.created_at).toLocaleString()}</div><div>{r.note}</div></div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!loading && filteredStudents.length===0 && (<tr><td colSpan={5} className="py-4 text-center text-text-secondary">No students found for this teacher</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </DetailErrorBoundary>
   );
 };
 

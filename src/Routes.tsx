@@ -23,6 +23,8 @@ import StudentsPage from './pages/Students';
 import ServicesPage from './pages/Services';
 import UsersPage from './pages/Users';
 import TeachersPanel from './pages/Teachers/Panel';
+import TeacherDetail from './pages/Teachers/Detail';
+
 import ProfilePage from './pages/Profile';
 import LeavesPage from './pages/Leaves';
 import BranchEmployeesPage from './pages/Employees/BranchEmployees';
@@ -101,7 +103,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     onTimeout: () => navigate('/login', { replace: true }),
   });
 
-  if (allowed === null) return null; // or a loader
+  if (allowed === null) return (<div style={{ padding: 20, fontFamily: 'system-ui, sans-serif' }}>Loading...</div>); // tiny loader to avoid blank screen
   return children;
 };
 
@@ -167,6 +169,8 @@ const AppRoutes = () => {
         <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
 
         <Route path="/students" element={<ProtectedRoute><StudentsPage /></ProtectedRoute>} />
+        <Route path="/teachers/:id" element={<ProtectedRoute><TeacherDetail /></ProtectedRoute>} />
+
         <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
         <Route path="/teachers" element={<ProtectedRoute><TeachersPanel /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
