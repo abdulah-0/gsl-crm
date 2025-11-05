@@ -22,6 +22,7 @@ const TeacherDetailPage: React.FC = () => {
   const [assigning, setAssigning] = useState(false);
   const [assignStudentId, setAssignStudentId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [fatalError, setFatalError] = useState<string>('');
 
   // Attendance state
   const [date, setDate] = useState<string>(()=> new Date().toISOString().slice(0,10));
@@ -33,13 +34,29 @@ const TeacherDetailPage: React.FC = () => {
 
   const [batchFilter, setBatchFilter] = useState<string>('All');
 
+  // If route param is missing, show a friendly message instead of rendering nothing
+  if (!id) {
+    return (
+      <main className="w-full min-h-screen bg-background-main flex">
+        <Helmet><title>Teacher Detail | GSL Pakistan CRM</title></Helmet>
+        <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar /></div>
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <div className="p-6"><div className="bg-white rounded-xl p-4">Invalid teacher link. Please go back to Teachers and try again.</div></div>
+        </div>
+      </main>
+    );
+  }
+
   useEffect(() => { load(); }, [id]);
 
   const load = async () => {
     if (!id) return;
     setLoading(true);
     try {
-      const { data: t } = await supabase.from('dashboard_teachers').select('*').eq('id', id).maybeSingle();
+      const { data: t, error: tErr } = await supabase.from('dashboard_teachers').select('*').eq('id', id).maybeSingle();
+      if (tErr) throw tErr;
+      if (!t) { setFatalError('Teacher not found'); return; }
       setTeacher((t as any) || null);
 
       const [{ data: svcs }, { data: assigns }] = await Promise.all([
@@ -172,7 +189,17 @@ const TeacherDetailPage: React.FC = () => {
               <h2 className="text-lg font-bold">{teacher?.full_name || 'Teacher'} — Students</h2>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="flex items-center gap-2">Date <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="border rounded p-1"/></label>
+
                 <label className="flex items-center gap-2">Batch <select value={batchFilter} onChange={e=>setBatchFilter(e.target.value)} className="border rounded p-1"><option>All</option>{uniqueBatches.map(b=><option key={b}>{b}</option>)}</select></label>
+
+
+
+            {fatalError && (
+              <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] text-red-700 mt-3">
+                {fatalError}
+              </div>
+            )}
+
                 <div className="flex items-center gap-2">
                   <select value={assignStudentId} onChange={e=>setAssignStudentId(e.target.value)} className="border rounded p-1 min-w-[240px]">
                     <option value="">Assign student...</option>
