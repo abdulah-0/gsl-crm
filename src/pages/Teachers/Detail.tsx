@@ -38,58 +38,63 @@ const TeacherDetailPage: React.FC = () => {
   const load = async () => {
     if (!id) return;
     setLoading(true);
-    const [{ data: t }, { data: svcs }, { data: assigns }] = await Promise.all([
-      supabase.from('dashboard_teachers').select('*').eq('id', id).maybeSingle(),
-      supabase.from('dashboard_services').select('id,name'),
-      supabase.from('dashboard_teacher_assignments').select('*').eq('teacher_id', id)
-    ]);
-    setTeacher((t as any) || null);
-    setServices((svcs||[]) as any);
-    setAssignments((assigns||[]) as any);
+    try {
+      const { data: t } = await supabase.from('dashboard_teachers').select('*').eq('id', id).maybeSingle();
+      setTeacher((t as any) || null);
 
-    // Build student list by matching program_title to assigned service name, and batch if present
-    const svcById: Record<string,string> = {};
-    (svcs||[]).forEach((s:any)=>{ svcById[s.id]=s.name; });
-    const progNames = (assigns||[]).map((a:any)=> a.service_id ? svcById[a.service_id] : (a.service_name||'')).filter(Boolean);
+      const [{ data: svcs }, { data: assigns }] = await Promise.all([
+        supabase.from('dashboard_services').select('id,name'),
+        supabase.from('dashboard_teacher_assignments').select('*').eq('teacher_id', id)
+      ]);
+      setServices((svcs||[]) as any);
+      setAssignments((assigns||[]) as any);
 
-    // Fetch students that match any of the program names; filtering by batch_no if provided
-    const { data: allSt } = await supabase.from('dashboard_students').select('*');
-    setAllStudents((allSt||[]) as any);
-    // explicit mappings
-    const { data: mapped } = await supabase.from('dashboard_teacher_student').select('student_id').eq('teacher_id', id);
-    const mapIds: string[] = (mapped||[]).map((m:any)=> m.student_id);
-    setAssignedIds(mapIds);
-    const matched = (allSt||[]).filter((st:any) => {
-      const program = (st.program_title||'').toString();
-      const okProg = progNames.includes(program);
-      if (!okProg) return false;
-      // If any assignment has batch_no, accept if matches any batch for that program
-      const relevantAssigns = (assigns||[]).filter((a:any)=> (a.service_id? svcById[a.service_id] : (a.service_name||''))===program);
-      if (relevantAssigns.some((a:any)=> !a.batch_no)) return true;
-      return relevantAssigns.some((a:any)=> (a.batch_no||'') === (st.batch_no||''));
-    });
-    const extras = (allSt||[]).filter((st:any)=> mapIds.includes(st.id) && !matched.some((m:any)=> m.id===st.id));
-    setStudents([...(matched as any), ...extras]);
+      // Build student list by matching program_title to assigned service name, and batch if present
+      const svcById: Record<string,string> = {};
+      (svcs||[]).forEach((s:any)=>{ svcById[s.id]=s.name; });
+      const progNames = (assigns||[]).map((a:any)=> a.service_id ? svcById[a.service_id] : (a.service_name||'')).filter(Boolean);
 
-    // Load existing attendance for the date
-    const { data: att } = await supabase.from('dashboard_attendance')
-      .select('student_id,status')
-      .eq('teacher_id', id)
-      .eq('attendance_date', date);
-    const map: Record<string, 'Present'|'Absent'|'Late'|''> = {};
-    (att||[]).forEach((a:any) => { map[a.student_id] = a.status; });
-    setAttendance(map);
+      // Fetch students that match any of the program names; filtering by batch_no if provided
+      const { data: allSt } = await supabase.from('dashboard_students').select('*');
+      setAllStudents((allSt||[]) as any);
+      // explicit mappings
+      const { data: mapped } = await supabase.from('dashboard_teacher_student').select('student_id').eq('teacher_id', id);
+      const mapIds: string[] = (mapped||[]).map((m:any)=> m.student_id);
+      setAssignedIds(mapIds);
+      const matched = (allSt||[]).filter((st:any) => {
+        const program = (st.program_title||'').toString();
+        const okProg = progNames.includes(program);
+        if (!okProg) return false;
+        // If any assignment has batch_no, accept if matches any batch for that program
+        const relevantAssigns = (assigns||[]).filter((a:any)=> (a.service_id? svcById[a.service_id] : (a.service_name||''))===program);
+        if (relevantAssigns.some((a:any)=> !a.batch_no)) return true;
+        return relevantAssigns.some((a:any)=> (a.batch_no||'') === (st.batch_no||''));
+      });
+      const extras = (allSt||[]).filter((st:any)=> mapIds.includes(st.id) && !matched.some((m:any)=> m.id===st.id));
+      setStudents([...(matched as any), ...extras]);
 
-    // Load recent remarks per student
-    const { data: rmk } = await supabase.from('dashboard_student_remarks')
-      .select('student_id,note,created_at')
-      .eq('teacher_id', id)
-      .order('created_at', { ascending: false });
-    const rem: Record<string, { note: string; created_at: string }[]> = {};
-    (rmk||[]).forEach((r:any)=> { if (!rem[r.student_id]) rem[r.student_id]=[]; rem[r.student_id].push({ note: r.note, created_at: r.created_at }); });
-    setRemarks(rem);
+      // Load existing attendance for the date
+      const { data: att } = await supabase.from('dashboard_attendance')
+        .select('student_id,status')
+        .eq('teacher_id', id)
+        .eq('attendance_date', date);
+      const map: Record<string, 'Present'|'Absent'|'Late'|''> = {};
+      (att||[]).forEach((a:any) => { map[a.student_id] = a.status; });
+      setAttendance(map);
 
-    setLoading(false);
+      // Load recent remarks per student
+      const { data: rmk } = await supabase.from('dashboard_student_remarks')
+        .select('student_id,note,created_at')
+        .eq('teacher_id', id)
+        .order('created_at', { ascending: false });
+      const rem: Record<string, { note: string; created_at: string }[]> = {};
+      (rmk||[]).forEach((r:any)=> { if (!rem[r.student_id]) rem[r.student_id]=[]; rem[r.student_id].push({ note: r.note, created_at: r.created_at }); });
+      setRemarks(rem);
+    } catch (e) {
+      console.error('Teacher detail load failed', e);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { // reload attendance when date changes
