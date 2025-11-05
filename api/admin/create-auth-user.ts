@@ -15,10 +15,10 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE;
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET || process.env.SUPABASE_SERVICE_KEY;
     if (!supabaseUrl || !serviceRoleKey) {
-      res.status(500).json({ error: 'Server is not configured for admin operations (missing SUPABASE_URL or SUPABASE_SERVICE_ROLE)' });
+      res.status(500).json({ error: 'Server is not configured for admin operations. Expected SUPABASE_URL (or VITE_SUPABASE_URL) and SUPABASE_SERVICE_ROLE (or SUPABASE_SERVICE_ROLE_KEY).' });
       return;
     }
 
