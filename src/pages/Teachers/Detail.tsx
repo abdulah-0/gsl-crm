@@ -17,6 +17,10 @@ const TeacherDetailPage: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [assignedIds, setAssignedIds] = useState<string[]>([]);
+  const [assigning, setAssigning] = useState(false);
+  const [assignStudentId, setAssignStudentId] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   // Attendance state
@@ -49,8 +53,13 @@ const TeacherDetailPage: React.FC = () => {
     const progNames = (assigns||[]).map((a:any)=> a.service_id ? svcById[a.service_id] : (a.service_name||'')).filter(Boolean);
 
     // Fetch students that match any of the program names; filtering by batch_no if provided
-    const { data: allStudents } = await supabase.from('dashboard_students').select('*');
-    const matched = (allStudents||[]).filter((st:any) => {
+    const { data: allSt } = await supabase.from('dashboard_students').select('*');
+    setAllStudents((allSt||[]) as any);
+    // explicit mappings
+    const { data: mapped } = await supabase.from('dashboard_teacher_student').select('student_id').eq('teacher_id', id);
+    const mapIds: string[] = (mapped||[]).map((m:any)=> m.student_id);
+    setAssignedIds(mapIds);
+    const matched = (allSt||[]).filter((st:any) => {
       const program = (st.program_title||'').toString();
       const okProg = progNames.includes(program);
       if (!okProg) return false;
@@ -59,7 +68,8 @@ const TeacherDetailPage: React.FC = () => {
       if (relevantAssigns.some((a:any)=> !a.batch_no)) return true;
       return relevantAssigns.some((a:any)=> (a.batch_no||'') === (st.batch_no||''));
     });
-    setStudents(matched);
+    const extras = (allSt||[]).filter((st:any)=> mapIds.includes(st.id) && !matched.some((m:any)=> m.id===st.id));
+    setStudents([...(matched as any), ...extras]);
 
     // Load existing attendance for the date
     const { data: att } = await supabase.from('dashboard_attendance')
@@ -102,6 +112,31 @@ const TeacherDetailPage: React.FC = () => {
 
   const uniqueBatches = useMemo(() => Array.from(new Set(students.map(s=>s.batch_no||''))).filter(Boolean), [students]);
 
+  const assignableStudents = useMemo(() => {
+    const currentIds = new Set(students.map(s=>s.id));
+    return (allStudents||[])
+      .filter((s:any)=> (s.status||'Active')==='Active' && !s.archived)
+      .filter((s:any)=> !currentIds.has(s.id))
+      .map((s:any)=> ({ id: s.id, name: s.full_name || `${s.first_name||''} ${s.last_name||''}`.trim(), label: `${s.full_name || `${s.first_name||''} ${s.last_name||''}`.trim()} — ${s.program_title||''}${s.batch_no?` (${s.batch_no})`:''}` }));
+  }, [students, allStudents]);
+
+  const assignStudent = async () => {
+    if (!id || !assignStudentId) return;
+    setAssigning(true);
+    try {
+      await supabase.from('dashboard_teacher_student').insert([{ teacher_id: id, student_id: assignStudentId }]);
+      setAssignStudentId('');
+      await load();
+    } catch (e:any) {
+      alert(e.message||String(e));
+    } finally { setAssigning(false); }
+  };
+
+  const unassignStudent = async (studentId: string) => {
+    if (!id) return;
+    try { await supabase.from('dashboard_teacher_student').delete().eq('teacher_id', id).eq('student_id', studentId); await load(); } catch {}
+  };
+
   const saveAttendance = async () => {
     if (!id) return;
     const rows = filteredStudents.map(st => ({ teacher_id: id, student_id: st.id, attendance_date: date, status: attendance[st.id] || 'Absent' }));
@@ -130,9 +165,16 @@ const TeacherDetailPage: React.FC = () => {
           <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] mt-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg font-bold">{teacher?.full_name || 'Teacher'} — Students</h2>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="flex items-center gap-2">Date <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="border rounded p-1"/></label>
                 <label className="flex items-center gap-2">Batch <select value={batchFilter} onChange={e=>setBatchFilter(e.target.value)} className="border rounded p-1"><option>All</option>{uniqueBatches.map(b=><option key={b}>{b}</option>)}</select></label>
+                <div className="flex items-center gap-2">
+                  <select value={assignStudentId} onChange={e=>setAssignStudentId(e.target.value)} className="border rounded p-1 min-w-[240px]">
+                    <option value="">Assign student...</option>
+                    {assignableStudents.map(s=> <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </select>
+                  <button disabled={!assignStudentId || assigning} onClick={assignStudent} className="px-3 py-2 rounded bg-gray-800 text-white disabled:opacity-50">{assigning?'Assigning...':'Assign'}</button>
+                </div>
                 <button onClick={saveAttendance} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">Save Attendance</button>
               </div>
             </div>
@@ -159,7 +201,7 @@ const TeacherDetailPage: React.FC = () => {
                     const pct = total>0 ? Math.round((attended/total)*100) : 0;
                     return (
                       <tr key={st.id} className="border-b align-top">
-                        <td className="py-2 pr-4 font-semibold">{full}</td>
+                        <td className="py-2 pr-4 font-semibold">{full}{assignedIds.includes(st.id) && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Explicit</span>}</td>
                         <td className="py-2 pr-4">{prog}{batch?` (${batch})`:''}</td>
                         <td className="py-2 pr-4">{pct}%</td>
                         <td className="py-2 pr-4">
@@ -176,6 +218,7 @@ const TeacherDetailPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <input placeholder="Add remark" value={remarkText[st.id]||''} onChange={e=>setRemarkText(prev=>({ ...prev, [st.id]: e.target.value }))} className="border rounded p-2 flex-1"/>
                               <button className="px-3 py-1 rounded bg-gray-800 text-white" onClick={()=>addRemark(st.id)}>Add</button>
+                                {assignedIds.includes(st.id) && <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={()=>unassignStudent(st.id)}>Unassign</button>}
                             </div>
                             <div className="text-xs text-text-secondary max-h-24 overflow-auto">
                               {(remarks[st.id]||[]).slice(0,3).map((r,i)=>(

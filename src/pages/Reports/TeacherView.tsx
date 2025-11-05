@@ -41,12 +41,28 @@ const TeacherView: React.FC = () => {
           const clauses = pairs.map(([s,b]) => `program_title.eq.${s},batch_no.eq.${b}`).join('|');
           // OR is limited; fallback to fetch all and filter client-side
           const { data: stu } = await supabase.from('dashboard_students').select('id, full_name, program_title, batch_no').limit(500);
-          const list = (stu||[]).filter((st:any)=> pairs.some(([s,b]) => st.program_title===s && st.batch_no===b)).map((st:any)=>({ id: st.id, name: st.full_name }));
+          let list = (stu||[]).filter((st:any)=> pairs.some(([s,b]) => st.program_title===s && st.batch_no===b)).map((st:any)=>({ id: st.id, name: st.full_name }));
+          // union with explicit mappings
+          const { data: mapped } = await supabase.from('dashboard_teacher_student').select('student_id').eq('teacher_id', tid);
+          const mapIds: string[] = (mapped||[]).map((m:any)=> m.student_id);
+          const extraIds = mapIds.filter(id => !list.some(s => s.id === id));
+          if (extraIds.length) {
+            const { data: extras } = await supabase.from('dashboard_students').select('id, full_name').in('id', extraIds);
+            list = [...list, ...((extras||[]) as any[]).map(s=>({ id: s.id, name: s.full_name }))];
+          }
           setStudents(list);
         } else {
-          // fallback: all students (limited)
+          // fallback: all students (limited) + explicit mappings
           const { data: stu } = await supabase.from('dashboard_students').select('id, full_name').limit(200);
-          setStudents(((stu||[]) as any[]).map(s=>({ id: s.id, name: s.full_name })));
+          let list = ((stu||[]) as any[]).map(s=>({ id: s.id, name: s.full_name }));
+          const { data: mapped } = await supabase.from('dashboard_teacher_student').select('student_id').eq('teacher_id', tid);
+          const mapIds: string[] = (mapped||[]).map((m:any)=> m.student_id);
+          const extraIds = mapIds.filter(id => !list.some(s => s.id === id));
+          if (extraIds.length) {
+            const { data: extras } = await supabase.from('dashboard_students').select('id, full_name').in('id', extraIds);
+            list = [...list, ...((extras||[]) as any[]).map(s=>({ id: s.id, name: s.full_name }))];
+          }
+          setStudents(list);
         }
       }
     })();
