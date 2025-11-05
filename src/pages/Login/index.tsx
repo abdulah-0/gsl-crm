@@ -41,24 +41,20 @@ const Login = () => {
     } catch (e: any) {
       try {
         const { supabase } = await import('../../lib/supabaseClient');
-        // If this email exists in app users, auto-provision the Auth user client-side
-        const { data: exists } = await supabase.from('dashboard_users').select('full_name, role').eq('email', email).maybeSingle();
-        if (exists) {
-          const { data: su, error: se } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: (exists as any).full_name, role: (exists as any).role } }
-          });
-          if (se) throw se;
-          if (su?.session) {
-            navigate('/dashboard');
-            return;
-          }
-          setError('Account created. Please check your email to confirm, then sign in.');
-          return;
-        }
+        // Ask server to provision Auth user if this email exists in app users
+        const resp = await fetch('/api/admin/create-auth-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const j = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(j.error || 'Invalid login credentials');
+        // Try sign-in again
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        if (data.session) { navigate('/dashboard'); return; }
       } catch (e2: any) {
-        setError(e2?.message || e?.message || 'Sign in failed');
+        setError(e2?.message || e?.message || 'Invalid login credentials');
         return;
       }
       setError(e?.message || 'Invalid login credentials');

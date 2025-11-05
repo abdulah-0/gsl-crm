@@ -163,12 +163,31 @@ const UsersPage: React.FC = () => {
       if (rows.length) {
         await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
       }
-      // Send a magic login link to activate the account (client-side safe)
-      try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch {}
+      // Try to provision an Auth account immediately (secure serverless)
+      const pwd = (nPassword||'').trim();
+      let provisioned = false;
+      if (pwd) {
+        try {
+          const resp = await fetch('/api/admin/create-auth-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: nEmail, password: pwd, full_name: nFull, role: nRole })
+          });
+          const j = await resp.json().catch(() => ({}));
+          if (!resp.ok) throw new Error(j.error || 'Failed to create account');
+          provisioned = true;
+        } catch (e) {
+          console.error('Auth provision failed', e);
+        }
+      }
+      if (!provisioned) {
+        // Fallback: send a magic login link
+        try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch {}
+      }
       // Reset
       setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=> emptyPermMap());
       await load();
-      alert('User added. Invitation email sent (if email auth is configured).');
+      alert(provisioned ? 'User added and Auth account created.' : 'User added. Invitation email sent (if email auth is configured).');
     } catch (err: any) {
       alert(err.message || String(err));
     } finally {
