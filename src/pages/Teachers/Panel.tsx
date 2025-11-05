@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
+import { useNavigate } from 'react-router-dom';
+
 import { supabase } from '../../lib/supabaseClient';
 
 // Minimal shapes
@@ -11,8 +13,11 @@ type Assignment = { service_id?: string|null; service_name?: string|null; batch_
 type Student = { id: string; full_name?: string; first_name?: string; last_name?: string; program_title?: string; batch_no?: string|null; created_at?: string; status?: string };
 type Material = { id?: number; title: string; description?: string; file_url?: string|null; link_url?: string|null; service_id?: string|null; batch_no?: string|null };
 
+
 const TeachersPanel: React.FC = () => {
   const [role, setRole] = useState<'super'|'admin'|'teacher'|'other'|'loading'>('loading');
+  const navigate = useNavigate();
+
   const [meEmail, setMeEmail] = useState<string>('');
   const [teacherId, setTeacherId] = useState<string>('');
   const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
@@ -46,7 +51,7 @@ const TeachersPanel: React.FC = () => {
       const { data: sess } = await supabase.auth.getUser();
       const email = sess.user?.email || '';
       setMeEmail(email);
-      const { data: me } = await supabase.from('dashboard_users').select('role').eq('email', email).maybeSingle();
+      const { data: me } = await supabase.from('dashboard_users').select('role,full_name').eq('email', email).maybeSingle();
       const r = (me?.role || (sess.user as any)?.app_metadata?.role || (sess.user as any)?.user_metadata?.role || '').toString().toLowerCase();
       if (r.includes('super')) setRole('super');
       else if (r.includes('admin')) setRole('admin');
@@ -56,6 +61,17 @@ const TeachersPanel: React.FC = () => {
       // Determine teacher id
       const { data: thisTeacher } = await supabase.from('dashboard_teachers').select('*').eq('email', email).maybeSingle();
       if (thisTeacher?.id) setTeacherId(thisTeacher.id);
+      // If teacher not found but the user is a teacher, auto-create a teacher profile for convenience
+      if (!thisTeacher?.id && r.includes('teacher')) {
+        try {
+          await supabase.from('dashboard_teachers').upsert([
+            { id: `TEA${Date.now().toString().slice(-8)}`, full_name: (me as any)?.full_name || (email.split('@')[0]||'').toUpperCase(), email, status: 'Active' }
+          ], { onConflict: 'email' } as any);
+          const { data: t2 } = await supabase.from('dashboard_teachers').select('*').eq('email', email).maybeSingle();
+          if (t2?.id) setTeacherId(t2.id);
+        } catch (e) { console.warn('auto-create teacher profile failed', e); }
+      }
+
       if (r.includes('super') || r.includes('admin')) {
         const { data: list } = await supabase.from('dashboard_teachers').select('id,full_name,email').order('full_name');
         setAllTeachers((list||[]) as any);
@@ -214,6 +230,12 @@ const TeachersPanel: React.FC = () => {
               <div>Attendance Today: <span className="font-bold">{Object.values(att).filter(s=>s==='Present').length}</span></div>
               <div>Materials Uploaded: <span className="font-bold">{materials.length}</span></div>
             </div>
+            {teacherId && (
+              <button onClick={()=>navigate(`/teachers/${teacherId}`)} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">
+                Assign Students
+              </button>
+            )}
+
           </div>
         </div>
 
