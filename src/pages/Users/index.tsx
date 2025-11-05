@@ -74,7 +74,7 @@ const UsersPage: React.FC = () => {
   const [nEmail, setNEmail] = useState('');
   const [nPassword, setNPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [nRole, setNRole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Custom'>('Staff');
+  const [nRole, setNRole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Teacher'|'Custom'>('Staff');
   const [eAccess, setEAccess] = useState<Record<string, ModulePermissions>>({});
 
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
@@ -86,7 +86,7 @@ const UsersPage: React.FC = () => {
   const [eEmail, setEEmail] = useState('');
   const [ePassword, setEPassword] = useState('');
   const [eShowPw, setEShowPw] = useState(false);
-  const [eRole, setERole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Custom'>('Staff');
+  const [eRole, setERole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Teacher'|'Custom'>('Staff');
   const [eStatus, setEStatus] = useState<'Active'|'Inactive'|'Dormant'>('Active');
   const [ePerms, setEPerms] = useState<string[]>([]);
 
@@ -156,6 +156,14 @@ const UsersPage: React.FC = () => {
       const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
       await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray }]);
+      // If role is Teacher, ensure a teacher profile exists as well (matched by email)
+      if (nRole === 'Teacher') {
+        try {
+          await supabase.from('dashboard_teachers').upsert([
+            { id: `TEA${Date.now().toString().slice(-8)}`, full_name: nFull, email: nEmail, status: 'Active' }
+          ], { onConflict: 'email' } as any);
+        } catch (e) { console.warn('teacher upsert (new) failed', e); }
+      }
       // Upsert granular permissions
       const rows = nRole === 'Super Admin'
         ? ALL_TABS.map(t => ({ user_email: nEmail, module: normalizeModule(t.id), access: 'CRUD' as const, can_add: true, can_edit: true, can_delete: true }))
@@ -236,6 +244,19 @@ const UsersPage: React.FC = () => {
       const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
       await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray }).eq('id', editing.id);
+      // Ensure teacher profile reflects role/status
+      try {
+        if (eRole === 'Teacher') {
+          // Update by previous email if exists, then upsert by new email to ensure presence
+          await supabase.from('dashboard_teachers').update({ full_name: eFull, email: eEmail, status: eStatus }).eq('email', editing.email);
+          await supabase.from('dashboard_teachers').upsert([
+            { id: `TEA${Date.now().toString().slice(-8)}`, full_name: eFull, email: eEmail, status: eStatus }
+          ], { onConflict: 'email' } as any);
+        } else if ((editing.role||'').toString() === 'Teacher') {
+          // Role changed away from Teacher — mark teacher record inactive
+          await supabase.from('dashboard_teachers').update({ status: 'Inactive' }).eq('email', editing.email);
+        }
+      } catch (e) { console.warn('teacher upsert (edit) failed', e); }
       // Replace granular permissions
       await supabase.from('user_permissions').delete().eq('user_email', editing.email);
       const rows = eRole === 'Super Admin'
