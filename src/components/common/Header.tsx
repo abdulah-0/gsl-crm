@@ -66,7 +66,7 @@ const Header = ({
       }
 
       // subscribe to name/avatar changes and new notifications
-      let chan = supabase
+      chan = supabase
         .channel('rt:header_user')
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'dashboard_users' }, (payload) => {
           const row: any = payload.new;
