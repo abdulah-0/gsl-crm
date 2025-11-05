@@ -45,20 +45,21 @@ const Header = ({
       try {
         const { data: ns, error: nErr } = await supabase
           .from('notifications')
-          .select('id,title,body,created_at,read_at,recipient_email,recipient_role')
+          .select('*')
           .order('created_at', { ascending: false })
           .limit(50);
         if (nErr) throw nErr;
         const filtered = (ns || []).filter((n:any) => {
-          const rr = (n.recipient_role || '').toString().toLowerCase();
-          const byRole = wantedRoles.some(w => rr.includes(w));
-          return n.recipient_email === em || byRole;
+          const rr = (n.recipient_role || n.role || '').toString().toLowerCase();
+          const byRole = wantedRoles.some((w:string) => rr.includes(w));
+          const targetEmail = n.recipient_email || n.email;
+          return targetEmail === em || byRole;
         });
         const list = filtered.map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
         setNotifs(list as any);
-        setNotifCount(filtered.filter((n:any)=>!n.read_at && (n.recipient_email === em)).length);
+        setNotifCount(filtered.filter((n:any)=>(("read_at" in n) ? !n.read_at : true) && ((n.recipient_email || n.email) === em)).length);
       } catch (_) {
-        notificationsReady = false; // Table likely missing in this environment; skip realtime for it
+        notificationsReady = false; // Table/columns may vary in this environment; skip realtime for it
         setNotifs([]);
         setNotifCount(0);
       }
@@ -76,11 +77,12 @@ const Header = ({
       if (notificationsReady) {
         chan = chan.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
           const row: any = payload.new;
-          const rr = (row?.recipient_role || '').toString().toLowerCase();
-          const byRole = wantedRoles.some(w => rr.includes(w));
-          if (row?.recipient_email === em || byRole) {
+          const rr = (row?.recipient_role || row?.role || '').toString().toLowerCase();
+          const byRole = wantedRoles.some((w:string) => rr.includes(w));
+          const targetEmail = row?.recipient_email || row?.email;
+          if (targetEmail === em || byRole) {
             setNotifs(prev => [{ id: row.id, title: row.title, body: row.body, created_at: row.created_at }, ...prev].slice(0, 10));
-            if (row?.recipient_email === em) setNotifCount(c => c + 1);
+            if (targetEmail === em) setNotifCount(c => c + 1);
           }
         });
       }
