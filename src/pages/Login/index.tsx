@@ -39,7 +39,29 @@ const Login = () => {
         navigate('/dashboard');
       }
     } catch (e: any) {
-      setError(e?.message || 'Sign in failed');
+      try {
+        const { supabase } = await import('../../lib/supabaseClient');
+        // If this email exists in app users, auto-provision the Auth user client-side
+        const { data: exists } = await supabase.from('dashboard_users').select('full_name, role').eq('email', email).maybeSingle();
+        if (exists) {
+          const { data: su, error: se } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { full_name: (exists as any).full_name, role: (exists as any).role } }
+          });
+          if (se) throw se;
+          if (su?.session) {
+            navigate('/dashboard');
+            return;
+          }
+          setError('Account created. Please check your email to confirm, then sign in.');
+          return;
+        }
+      } catch (e2: any) {
+        setError(e2?.message || e?.message || 'Sign in failed');
+        return;
+      }
+      setError(e?.message || 'Invalid login credentials');
     } finally {
       setIsLoading(false);
     }

@@ -163,10 +163,12 @@ const UsersPage: React.FC = () => {
       if (rows.length) {
         await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
       }
+      // Send a magic login link to activate the account (client-side safe)
+      try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch {}
       // Reset
       setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=> emptyPermMap());
       await load();
-      alert('User added');
+      alert('User added. Invitation email sent (if email auth is configured).');
     } catch (err: any) {
       alert(err.message || String(err));
     } finally {
