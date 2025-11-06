@@ -540,43 +540,18 @@ const HRMPage: React.FC = () => {
       const { data: au } = await supabase.auth.getUser();
       const me = au?.user?.email || '';
 
-      // 1) Resolve or create employees.id for this email (legacy schema requires employee_id)
+      // 1) Ensure we have an employees.id for this email (legacy schema requires employee_id)
+      // Avoid touching public.users due to RLS; create a lightweight employees row if none found
       let employeeId: number | null = null;
       try {
-        const display = rows.find(r => (r.email||'') === target);
-        // Step A: ensure a row exists in legacy public.users for this email
-        let userId: number | null = null;
-        const { data: uSel } = await supabase.from('users').select('id').eq('email', target).maybeSingle();
-        if (uSel?.id) {
-          userId = Number(uSel.id);
-        } else {
-          const placeholder = 'ph_' + Math.random().toString(36).slice(2) + '_' + Date.now();
-          const { data: uIns } = await supabase
-            .from('users')
-            .insert({ email: target, name: display?.full_name || target.split('@')[0], password_hash: placeholder })
-            .select('id')
-            .single();
-          if (uIns?.id) userId = Number(uIns.id);
-          if (!userId) {
-            // Race or unique constraint: try select again
-            const { data: uSel2 } = await supabase.from('users').select('id').eq('email', target).maybeSingle();
-            if (uSel2?.id) userId = Number(uSel2.id);
-          }
-        }
-        // Step B: ensure an employees row exists for that user_id
-        if (userId) {
-          const { data: eSel } = await supabase.from('employees').select('id').eq('user_id', userId).maybeSingle();
-          if (eSel?.id) {
-            employeeId = Number(eSel.id);
-          } else {
-            const { data: eIns } = await supabase
-              .from('employees')
-              .insert({ user_id: userId, joined_on: new Date().toISOString().slice(0,10) })
-              .select('id')
-              .single();
-            if (eIns?.id) employeeId = Number(eIns.id);
-          }
-        }
+        // Best-effort: try to find an existing employees row via a heuristic is not possible (no email column)
+        // So we directly create a new employees row (user_id left null; allowed by schema)
+        const { data: eIns, error: eErr } = await supabase
+          .from('employees')
+          .insert({ joined_on: new Date().toISOString().slice(0,10) })
+          .select('id')
+          .single();
+        if (!eErr && eIns?.id) employeeId = Number(eIns.id);
       } catch {}
 
       // Common fields
