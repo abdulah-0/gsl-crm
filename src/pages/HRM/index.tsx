@@ -427,14 +427,30 @@ const HRMPage: React.FC = () => {
 
 
   const loadLeaves = async () => {
-    let q = supabase
-
-
+    // Build base query
+    let q: any = supabase
       .from('leaves')
       .select('id, employee_email, type, start_date, end_date, status, reason, branch, created_at, manager_approved_by, hr_approved_by, ceo_approved_by')
       .order('created_at', { ascending: false });
     if (role !== 'super') q = q.eq('branch', myBranch);
-    if (lEmail) q = q.ilike('employee_email', `%${lEmail}%`);
+
+    // Enhanced search: support name or email
+    const term = (lEmail || '').trim();
+    if (term) {
+      if (term.includes('@')) {
+        q = q.ilike('employee_email', `%${term}%`);
+      } else {
+        // Lookup matching emails by name/email first
+        let uQ: any = supabase.from('dashboard_users').select('email');
+        if (role !== 'super') uQ = uQ.eq('branch', myBranch);
+        uQ = uQ.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`);
+        const { data: us } = await uQ;
+        const emails = (us || []).map((u: any) => u.email);
+        if (!emails.length) { setLeaves([]); return; }
+        q = q.in('employee_email', emails);
+      }
+    }
+
     if (lType) q = q.eq('type', lType);
     if (lStatus) q = q.eq('status', lStatus);
     if (lFrom) q = q.gte('start_date', lFrom);
@@ -442,7 +458,17 @@ const HRMPage: React.FC = () => {
     const { data } = await q;
     setLeaves((data as any) || []);
   };
+  // Load on filters/tab/role/branch change
   useEffect(() => { if (tab==='leaves' && (role==='super' || myBranch!==null)) loadLeaves(); }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
+  // Realtime subscription to reflect inserts/updates/deletes
+  useEffect(() => {
+    if (tab !== 'leaves') return;
+    const ch = supabase
+      .channel('realtime:hrm-leaves')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, () => { loadLeaves(); })
+      .subscribe();
+    return () => { try { supabase.removeChannel(ch); } catch {} };
+  }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
 
   const approveAsManager = async (id: number) => {
     const { data: au } = await supabase.auth.getUser();
@@ -757,7 +783,7 @@ const HRMPage: React.FC = () => {
             {tab==='leaves' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={lEmail} onChange={e=>setLEmail(e.target.value)} />
+                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Search by name or email" value={lEmail} onChange={e=>setLEmail(e.target.value)} />
                   <select className="border rounded px-2 py-2" value={lType} onChange={e=>setLType(e.target.value)}>
                     <option value="">All Types</option>
                     <option value="CL">Casual Leave (CL)</option>
