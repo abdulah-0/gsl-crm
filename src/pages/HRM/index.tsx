@@ -629,9 +629,6 @@ const HRMPage: React.FC = () => {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
-                  {isAdmin && (
-                    <button onClick={openAdd} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Employee</button>
-                  )}
                   {!isAdmin && myBranch && (
                     <div className="ml-auto text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
                   )}
