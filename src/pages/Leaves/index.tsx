@@ -55,6 +55,25 @@ import { supabase } from '../../lib/supabaseClient';
   const [reqReason, setReqReason] = useState<string>('');
   const [reqForEmail, setReqForEmail] = useState<string>(''); // admin only
   const [submitting, setSubmitting] = useState(false);
+  // Autocomplete for admin selecting employee (by name or email)
+  const [showEmpSuggest, setShowEmpSuggest] = useState(false);
+  const suggestBoxRef = useRef<HTMLDivElement | null>(null);
+  const empSuggestions = useMemo(() => {
+    const q = reqForEmail.trim().toLowerCase();
+    if (!q) return [] as Employee[];
+    return employees
+      .filter(e => ((e.full_name || e.email) || '').toLowerCase().includes(q) || e.email.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [employees, reqForEmail]);
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!suggestBoxRef.current) return;
+      if (!suggestBoxRef.current.contains(e.target as Node)) setShowEmpSuggest(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
 
   // Manage modal (approve/reject)
   const [manageEmail, setManageEmail] = useState<string | null>(null);
@@ -326,9 +345,32 @@ import { supabase } from '../../lib/supabaseClient';
           <form onSubmit={onSubmitRequest} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-lg space-y-3">
             <div className="text-lg font-semibold">New Leave Request</div>
             {isAdmin && (
-              <div>
-                <label className="text-sm font-semibold">For (email)</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" placeholder="employee@example.com" value={reqForEmail} onChange={e=>setReqForEmail(e.target.value)} />
+              <div className="relative" ref={suggestBoxRef as any}>
+                <label className="text-sm font-semibold">For (name or email)</label>
+                <input
+                  className="mt-1 w-full border rounded px-2 py-1"
+                  placeholder="Search name or email"
+                  value={reqForEmail}
+                  onChange={e=>{ setReqForEmail(e.target.value); setShowEmpSuggest(true); }}
+                  onFocus={()=> setShowEmpSuggest(true)}
+                />
+                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length>0 && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow max-h-60 overflow-auto">
+                    {empSuggestions.map(emp => (
+                      <div key={emp.email}
+                        className="px-2 py-1 hover:bg-gray-50 cursor-pointer text-sm"
+                        onClick={()=>{ setReqForEmail(emp.email); setShowEmpSuggest(false); }}>
+                        <span className="font-medium">{emp.full_name || emp.email}</span>
+                        {emp.full_name && <span className="text-text-secondary"> — {emp.email}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length===0 && (
+                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow px-2 py-2 text-sm text-text-secondary">
+                    No matches
+                  </div>
+                )}
               </div>
             )}
             <div>
