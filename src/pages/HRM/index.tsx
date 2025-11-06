@@ -528,7 +528,7 @@ const HRMPage: React.FC = () => {
     }
   };
 
-  // HRM -> Leaves: Add new leave
+  // HRM -> Leaves: Add new leave (supports both schemas: employee_id and employee_email)
   const onAddLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin) { alert('Only Admin/Super Admin can add leaves'); return; }
@@ -539,30 +539,88 @@ const HRMPage: React.FC = () => {
     try {
       const { data: au } = await supabase.auth.getUser();
       const me = au?.user?.email || '';
+
+      // 1) Try to resolve employees.id for this email (old schema requires employee_id)
+      let employeeId: number | null = null;
+      try {
+        // Prefer join lookup
+        const { data: empJoin } = await supabase
+          .from('employees')
+          .select('id, user:users(email)')
+          .eq('user.email', target)
+          .maybeSingle();
+        if ((empJoin as any)?.id) employeeId = Number((empJoin as any).id);
+        if (!employeeId) {
+          // Fallback: two-step via users -> employees
+          const { data: u } = await supabase.from('users').select('id').eq('email', target).maybeSingle();
+          if (u?.id) {
+            const { data: emp2 } = await supabase.from('employees').select('id').eq('user_id', u.id).maybeSingle();
+            if ((emp2 as any)?.id) employeeId = Number((emp2 as any).id);
+          }
+        }
+      } catch {}
+
+      // Common fields
+      const statusInit = 'Pending';
+      const reasonVal = addReason || null;
       const emp = rows.find(r => (r.email||'') === target);
       const branchVal = role !== 'super' ? (myBranch || null) : (emp?.branch || null);
-      const basePayload: any = {
-        employee_email: target,
-        type: addType,
-        start_date: addStart,
-        end_date: addEnd,
-        status: 'Pending',
-        reason: addReason || null,
-        branch: branchVal,
+
+      // Attempt insert function with graceful fallbacks for missing columns/status case-sensitivity
+      const tryInsert = async (base: any) => {
+        // Try with full payload (include created_by, type/leave_type, branch when present)
+        const withMeta = { ...base, created_by: me, leave_type: addType, type: addType, branch: branchVal };
+        let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
+        let error = res.error as any;
+        if (error && (error.code === '42703' || String(error.message||'').toLowerCase().includes('column'))) {
+          // Drop unknown columns and retry (created_by/type/leave_type/branch)
+          const minimal = { ...base };
+          let res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
+          error = res2.error as any;
+          if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
+            // Some schemas require lowercase status
+            const lower = { ...minimal, status: String(minimal.status||'').toLowerCase() };
+            const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
+            error = res3.error as any;
+          }
+        } else if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
+          // Retry with lowercase status
+          const lower = { ...base, status: String(base.status||'').toLowerCase(), created_by: me, leave_type: addType, type: addType, branch: branchVal };
+          const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
+          error = res3.error as any;
+        }
+        return error;
       };
-      let { error } = await supabase.from('leaves').insert({ ...basePayload, created_by: me }, { returning: 'minimal' });
-      if (error && (String(error.message||'').toLowerCase().includes('created_by') || (error as any).code === '42703')) {
-        const res2 = await supabase.from('leaves').insert(basePayload, { returning: 'minimal' } as any);
-        error = res2.error as any;
+
+      // 2) Prefer employee_id variant when available
+      let err1: any = null;
+      if (employeeId) {
+        const payloadId = { employee_id: employeeId, start_date: addStart, end_date: addEnd, status: statusInit, reason: reasonVal };
+        err1 = await tryInsert(payloadId);
       }
-      if (error) throw error;
+
+      // 3) Fallback to employee_email variant (newer schema)
+      let err2: any = null;
+      if (!employeeId || err1) {
+        const payloadEmail = { employee_email: target, start_date: addStart, end_date: addEnd, status: statusInit, reason: reasonVal };
+        err2 = await tryInsert(payloadEmail);
+      }
+
+      const finalErr = employeeId ? err1 && err2 : err2;
+      if (finalErr) throw finalErr;
+
       setAddLeaveOpen(false);
       setAddForEmail(''); setAddType('CL'); setAddStart(''); setAddEnd(''); setAddReason('');
       await loadLeaves();
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error('HRM Add Leave failed', { message: err?.message, code: err?.code, details: err?.details });
-      alert(err?.message || 'Failed to add leave');
+      // Specific guidance when schema requires employee_id but mapping is missing
+      if (String(err?.message||'').toLowerCase().includes('employee_id') && String(err?.message||'').toLowerCase().includes('not-null')) {
+        alert('This database requires employee_id. Please ensure the person exists in Employees and is linked to a user. Then try again.');
+      } else {
+        alert(err?.message || 'Failed to add leave');
+      }
     } finally {
       setAddSubmitting(false);
     }
