@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
@@ -59,6 +59,33 @@ const HRMPage: React.FC = () => {
   const [lStatus, setLStatus] = useState('');
   const [lFrom, setLFrom] = useState('');
   const [lTo, setLTo] = useState('');
+
+  // HRM -> Leaves: Add Leave modal state
+  const [addLeaveOpen, setAddLeaveOpen] = useState(false);
+  const [addForEmail, setAddForEmail] = useState('');
+  const [addType, setAddType] = useState<'CL'|'SL'|'AL'>('CL');
+  const [addStart, setAddStart] = useState('');
+  const [addEnd, setAddEnd] = useState('');
+  const [addReason, setAddReason] = useState('');
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  // Autocomplete for selecting employee in branch scope
+  const [showAddSuggest, setShowAddSuggest] = useState(false);
+  const addSuggestRef = React.useRef<HTMLDivElement | null>(null);
+  const addSuggestions = useMemo(() => {
+    const q = addForEmail.trim().toLowerCase();
+    if (!q) return [] as EmpRow[];
+    return rows
+      .filter(r => ((r.full_name || r.email || '').toLowerCase().includes(q) || (r.email||'').toLowerCase().includes(q)))
+      .slice(0, 8);
+  }, [rows, addForEmail]);
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (!addSuggestRef.current) return;
+      if (!addSuggestRef.current.contains(e.target as Node)) setShowAddSuggest(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
 
 	  interface LeaveBalance {
 	    employee_email: string;
@@ -501,6 +528,46 @@ const HRMPage: React.FC = () => {
     }
   };
 
+  // HRM -> Leaves: Add new leave
+  const onAddLeaveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin) { alert('Only Admin/Super Admin can add leaves'); return; }
+    const target = addForEmail.trim();
+    if (!target) { alert('Please select an employee'); return; }
+    if (!addStart || !addEnd) { alert('Please select start and end dates'); return; }
+    setAddSubmitting(true);
+    try {
+      const { data: au } = await supabase.auth.getUser();
+      const me = au?.user?.email || '';
+      const emp = rows.find(r => (r.email||'') === target);
+      const branchVal = role !== 'super' ? (myBranch || null) : (emp?.branch || null);
+      const basePayload: any = {
+        employee_email: target,
+        type: addType,
+        start_date: addStart,
+        end_date: addEnd,
+        status: 'Pending',
+        reason: addReason || null,
+        branch: branchVal,
+      };
+      let { error } = await supabase.from('leaves').insert({ ...basePayload, created_by: me }, { returning: 'minimal' });
+      if (error && (String(error.message||'').toLowerCase().includes('created_by') || (error as any).code === '42703')) {
+        const res2 = await supabase.from('leaves').insert(basePayload, { returning: 'minimal' } as any);
+        error = res2.error as any;
+      }
+      if (error) throw error;
+      setAddLeaveOpen(false);
+      setAddForEmail(''); setAddType('CL'); setAddStart(''); setAddEnd(''); setAddReason('');
+      await loadLeaves();
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error('HRM Add Leave failed', { message: err?.message, code: err?.code, details: err?.details });
+      alert(err?.message || 'Failed to add leave');
+    } finally {
+      setAddSubmitting(false);
+    }
+  };
+
   const approveAsCEO = async (id: number) => {
     if (!isSuper) return alert('Not allowed');
     const { data: au } = await supabase.auth.getUser();
@@ -800,6 +867,9 @@ const HRMPage: React.FC = () => {
                   <span className="text-text-secondary">to</span>
                   <input type="date" className="border rounded px-2 py-2" value={lTo} onChange={e=>setLTo(e.target.value)} />
                   <button onClick={loadLeaves} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Apply</button>
+                  {isAdmin && (
+                    <button onClick={()=>setAddLeaveOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Leave</button>
+                  )}
                 </div>
 
 	                {lb && (
@@ -1107,6 +1177,69 @@ const HRMPage: React.FC = () => {
           </form>
         </div>
       )}
+      {/* Add Leave Modal */}
+      {addLeaveOpen && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+          <form onSubmit={onAddLeaveSubmit} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
+            <div className="text-lg font-semibold">Add Leave</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="md:col-span-2 relative" ref={addSuggestRef as any}>
+                <label className="text-sm font-semibold">For (name or email)</label>
+                <input
+                  className="mt-1 w-full border rounded px-2 py-1"
+                  placeholder="Search name or email"
+                  value={addForEmail}
+                  onChange={e=>{ setAddForEmail(e.target.value); setShowAddSuggest(true); }}
+                  onFocus={()=>setShowAddSuggest(true)}
+                />
+                {showAddSuggest && addForEmail.trim() && (
+                  addSuggestions.length>0 ? (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow max-h-60 overflow-auto">
+                      {addSuggestions.map(emp => (
+                        <div key={emp.email}
+                          className="px-2 py-1 hover:bg-gray-50 cursor-pointer text-sm"
+                          onClick={()=>{ setAddForEmail(emp.email); setShowAddSuggest(false); }}>
+                          <span className="font-medium">{emp.full_name || emp.email}</span>
+                          {emp.full_name && <span className="text-text-secondary"> — {emp.email}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow px-2 py-2 text-sm text-text-secondary">
+                      No matches
+                    </div>
+                  )
+                )}
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Type</label>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={addType} onChange={e=>setAddType(e.target.value as any)}>
+                  <option value="CL">CL</option>
+                  <option value="SL">SL</option>
+                  <option value="AL">AL</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-semibold">Start date</label>
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addStart} onChange={e=>setAddStart(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-semibold">End date</label>
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addEnd} onChange={e=>setAddEnd(e.target.value)} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm font-semibold">Reason</label>
+                <input className="mt-1 w-full border rounded px-2 py-1" value={addReason} onChange={e=>setAddReason(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={()=>setAddLeaveOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
+              {isAdmin && <button disabled={addSubmitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{addSubmitting? 'Saving...' : 'Save'}</button>}
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Add/Edit Time Record Modal */}
       {showTRModal && editTR && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
