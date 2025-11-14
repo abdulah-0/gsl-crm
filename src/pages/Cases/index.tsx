@@ -6,8 +6,24 @@ import { supabase } from '../../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
 // Types
+const CASE_STAGES = [
+  'Initial Stage',
+  'Offer Applied',
+  'Offer Received',
+  'Fee Paid',
+  'Interview',
+  'CAS Applied',
+  'CAS Received',
+  'Visa Applied',
+  'Visa Received',
+  'Backout',
+  'Visa Rejected',
+] as const;
+
+type CaseStage = typeof CASE_STAGES[number];
+
 type Priority = 'Low' | 'Medium' | 'High';
-type Status = 'Todo' | 'In Progress' | 'In Review' | 'Done';
+type TaskStatus = 'Todo' | 'In Progress' | 'In Review' | 'Done';
 
 type Task = {
   id: string;
@@ -16,14 +32,14 @@ type Task = {
   spentMins: number;
   assignee: { name: string; avatar?: string };
   priority: Priority;
-  status: Status;
+  status: TaskStatus;
   description?: string;
 };
 
 type CaseItem = {
   caseId: string; // e.g., PN001245
   title: string; // student/case title
-  status?: 'Pending' | 'In Progress' | 'Completed';
+  status?: CaseStage;
   branch?: string;
   type?: string;
   employee?: string;
@@ -52,11 +68,31 @@ const PRIORITY_STYLES: Record<Priority, { text: string; bg: string; arrow: '↑'
   Low: { text: 'text-emerald-700', bg: 'bg-emerald-100', arrow: '↓', border: 'border-emerald-200' },
 };
 
-const STATUS_STYLES: Record<Status, { text: string; bg: string; dot: string }> = {
+const TASK_STATUS_STYLES: Record<TaskStatus, { text: string; bg: string; dot: string }> = {
   'Done': { text: 'text-emerald-700', bg: 'bg-emerald-100', dot: 'bg-emerald-500' },
   'In Progress': { text: 'text-blue-700', bg: 'bg-blue-100', dot: 'bg-blue-500' },
   'In Review': { text: 'text-purple-700', bg: 'bg-purple-100', dot: 'bg-purple-500' },
   'Todo': { text: 'text-gray-700', bg: 'bg-gray-100', dot: 'bg-gray-400' },
+};
+
+const normalizeCaseStage = (raw?: string | null): CaseStage => {
+  const val = (raw || '').toString().trim().toLowerCase();
+  const match = CASE_STAGES.find(s => s.toLowerCase() === val);
+  return match || 'Initial Stage';
+};
+
+const CASE_STAGE_COLORS: Record<CaseStage, string> = {
+  'Initial Stage': 'bg-amber-100 text-amber-700',
+  'Offer Applied': 'bg-cyan-100 text-cyan-700',
+  'Offer Received': 'bg-sky-100 text-sky-700',
+  'Fee Paid': 'bg-lime-100 text-lime-700',
+  'Interview': 'bg-purple-100 text-purple-700',
+  'CAS Applied': 'bg-blue-100 text-blue-700',
+  'CAS Received': 'bg-indigo-100 text-indigo-700',
+  'Visa Applied': 'bg-emerald-100 text-emerald-700',
+  'Visa Received': 'bg-green-100 text-green-700',
+  'Backout': 'bg-orange-100 text-orange-700',
+  'Visa Rejected': 'bg-red-100 text-red-700',
 };
 
 const Cases: React.FC = () => {
@@ -101,13 +137,13 @@ const Cases: React.FC = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, branch, type, created_at')
+        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at')
         .order('created_at', { ascending: false });
       if (!error) {
         const mapped: CaseItem[] = (data ?? []).map((row: any) => ({
           caseId: row.case_number || String(row.id),
           title: row.title || 'Untitled',
-          status: row.status || 'In Progress',
+          status: normalizeCaseStage(row.stage || row.status),
           branch: row.branch || undefined,
           type: row.type || undefined,
           employee: row.employee || undefined,
@@ -134,7 +170,7 @@ const Cases: React.FC = () => {
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
   const [contentMode, setContentMode] = useState<'cases' | 'tasks'>('cases');
 
-  const [boardDropCol, setBoardDropCol] = useState<'Pending'|'In Progress'|'Completed'|null>(null);
+  const [boardDropCol, setBoardDropCol] = useState<CaseStage | null>(null);
 
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
@@ -148,7 +184,7 @@ const Cases: React.FC = () => {
 
   // Filters
   const [filterBranch, setFilterBranch] = useState<string>('All');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<CaseStage | 'All'>('All');
   const [filterType, setFilterType] = useState<string>('All');
   const [search, setSearch] = useState<string>('');
 
@@ -204,7 +240,7 @@ const Cases: React.FC = () => {
   const [tfName, setTfName] = useState('');
   const [tfEstimate, setTfEstimate] = useState(60);
   const [tfPriority, setTfPriority] = useState<Priority>('Medium');
-  const [tfStatus, setTfStatus] = useState<Status>('Todo');
+  const [tfStatus, setTfStatus] = useState<TaskStatus>('Todo');
   const [tfArea, setTfArea] = useState<'Active'|'Backlog'>('Active');
   const [tfAssignee, setTfAssignee] = useState('');
   const [tfAvatar, setTfAvatar] = useState('');
@@ -216,7 +252,7 @@ const Cases: React.FC = () => {
   // Derived filters
   const branches = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.branch).filter(Boolean))) as string[]], [cases]);
   const types = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.type).filter(Boolean))) as string[]], [cases]);
-  const statuses = ['All','Pending','In Progress','Completed'];
+  const statuses: (CaseStage | 'All')[] = ['All', ...CASE_STAGES];
   const filteredCases = useMemo(() => {
     const term = search.trim().toLowerCase();
     return cases.filter(c => {
@@ -231,8 +267,8 @@ const Cases: React.FC = () => {
   const activeCase = useMemo(() => cases.find(c => c.caseId === activeCaseId) || cases[0], [cases, activeCaseId]);
   const tasks = tab === 'Active' ? activeCase?.active || [] : activeCase?.backlog || [];
 
-  const BOARD_COLUMNS: Status[] = ['Todo', 'In Progress', 'In Review', 'Done'];
-  const displayStatus = (s: Status) => (s === 'Todo' ? 'To Do' : s);
+  const BOARD_COLUMNS: TaskStatus[] = ['Todo', 'In Progress', 'In Review', 'Done'];
+  const displayStatus = (s: TaskStatus) => (s === 'Todo' ? 'To Do' : s);
 
   // Load tasks for active case from Supabase and keep in sync
   const loadTasksForCase = async (caseId: string) => {
@@ -252,7 +288,7 @@ const Cases: React.FC = () => {
         spentMins: row.spent_mins ?? 0,
         assignee: { name: row.assignee_name || 'Unassigned', avatar: row.assignee_avatar || undefined },
         priority: (row.priority || 'Medium') as Priority,
-        status: (row.status || 'Todo') as Status,
+        status: (row.status || 'Todo') as TaskStatus,
         description: row.description || undefined,
       };
       if (row.is_backlog) back.push(t); else act.push(t);
@@ -273,7 +309,7 @@ const Cases: React.FC = () => {
     return () => { if (chan) supabase.removeChannel(chan); };
   }, [activeCase?.caseId]);
 
-  const updateTaskStatus = async (taskId: string, next: Status) => {
+  const updateTaskStatus = async (taskId: string, next: TaskStatus) => {
     if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
     // Optimistic UI
@@ -286,7 +322,7 @@ const Cases: React.FC = () => {
     await supabase.from('dashboard_tasks').update({ status: next }).eq('id', taskId).eq('case_number', activeCaseId || '');
   };
 
-  const moveTask = async (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: Status }) => {
+  const moveTask = async (payload: { id: string; from: 'active'|'backlog' }, to: { area: 'active'|'backlog'; status?: TaskStatus }) => {
     if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
     // Optimistic UI
@@ -307,7 +343,7 @@ const Cases: React.FC = () => {
         const updated = { ...task, status: to.status ?? task.status } as Task;
         active = [updated, ...active];
       } else {
-        const updated = { ...task, status: 'Todo' as Status } as Task;
+        const updated = { ...task, status: 'Todo' as TaskStatus } as Task;
         backlog = [updated, ...backlog];
       }
       return { ...c, active, backlog };
@@ -320,41 +356,41 @@ const Cases: React.FC = () => {
     }
   };
 
-  // Drag-and-drop: change case status on board
+  // Drag-and-drop: change case stage on board
   const handleCaseCardDragStart = (caseId: string) => (e: React.DragEvent) => {
     try {
       e.dataTransfer.setData('text/case', caseId);
       e.dataTransfer.effectAllowed = 'move';
     } catch {}
   };
-  const handleDropCaseToStatus = (next: 'Pending'|'In Progress'|'Completed') => async (e: React.DragEvent) => {
+  const handleDropCaseToStatus = (next: CaseStage) => async (e: React.DragEvent) => {
     e.preventDefault();
     try {
       const id = e.dataTransfer.getData('text/case');
-    if (!canEdit) { showToast('Not permitted', 'error'); return; }
+      if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
       if (!id) return;
-      let prevStatus: 'Pending'|'In Progress'|'Completed'|undefined;
+      let prevStatus: CaseStage | undefined;
       // Optimistic UI update and capture previous
       setCases(prev => prev.map(c => {
         if (c.caseId === id) {
-          prevStatus = (c.status || 'In Progress') as any;
+          prevStatus = (c.status || 'Initial Stage') as CaseStage;
           return { ...c, status: next };
         }
         return c;
       }));
-      const { error } = await supabase.from('dashboard_cases').update({ status: next }).eq('case_number', id);
+      const { error } = await supabase.from('dashboard_cases').update({ stage: next, status: next }).eq('case_number', id);
       if (error) {
         // revert
         setCases(prev => prev.map(c => c.caseId === id ? { ...c, status: prevStatus } : c));
-        showToast('Failed to update status', 'error');
+        showToast('Failed to update stage', 'error');
       } else {
         setJustDroppedId(id);
         setTimeout(() => setJustDroppedId(null), 500);
         showToast(`Moved case ${id} to ${next}`);
       }
     } catch {
-      showToast('Failed to update status', 'error');
+      showToast('Failed to update stage', 'error');
     }
   };
 
@@ -362,7 +398,7 @@ const Cases: React.FC = () => {
   const handleDragStart = (t: Task, from: 'active'|'backlog') => (e: React.DragEvent) => {
     e.dataTransfer.setData('text/plain', JSON.stringify({ id: t.id, from }));
   };
-  const handleDropToStatus = (status: Status) => (e: React.DragEvent) => {
+  const handleDropToStatus = (status: TaskStatus) => (e: React.DragEvent) => {
     e.preventDefault();
     try {
       const payload = JSON.parse(e.dataTransfer.getData('text/plain')) as { id: string; from: 'active'|'backlog' };
@@ -388,7 +424,8 @@ const Cases: React.FC = () => {
     const payload: any = {
       title,
       assignees,
-      status: 'In Progress',
+      status: 'Initial Stage',
+      stage: 'Initial Stage',
       student_id: selectedStudentId || null,
       student_info: { ...sf, student: sel ? { id: sel.id, full_name: sel.full_name, cnic: sel.cnic, batch_no: sel.batch_no, phone: sel.phone, program_title: sel.program_title } : undefined }
     };
@@ -587,7 +624,7 @@ const Cases: React.FC = () => {
                                 <div className="col-span-3 text-sm">{t.assignee.name}</div>
                                 <div className="col-span-2 text-sm">{fmtDur(t.estimateMins)}</div>
                                 <div className="col-span-2 text-right">
-                                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>
+                                  <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${TASK_STATUS_STYLES[t.status].bg} ${TASK_STATUS_STYLES[t.status].text}`}>
                                     <span>{displayStatus(t.status)}</span>
                                   </span>
                                 </div>
@@ -607,7 +644,7 @@ const Cases: React.FC = () => {
                                 <div key={t.id} className="text-left bg-white rounded-lg border p-3 shadow-sm">
                                   <div className="flex items-center justify-between">
                                     <div className="text-xs text-text-secondary">{t.assignee.name}</div>
-                                    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${STATUS_STYLES[t.status].bg} ${STATUS_STYLES[t.status].text}`}>
+                                    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${TASK_STATUS_STYLES[t.status].bg} ${TASK_STATUS_STYLES[t.status].text}`}>
                                       <span>{displayStatus(t.status)}</span>
                                     </span>
                                   </div>
@@ -665,7 +702,7 @@ const Cases: React.FC = () => {
                       <div className="col-span-2">Branch</div>
                       <div className="col-span-2">Type</div>
                       <div className="col-span-2">Assignees</div>
-                      <div className="col-span-1 text-right">Status</div>
+                      <div className="col-span-1 text-right">Stage</div>
                     </div>
 
                     {/* Cases list */}
@@ -674,11 +711,8 @@ const Cases: React.FC = () => {
                         <div className="py-8 text-center text-text-secondary">No cases found.</div>
                       )}
                       {filteredCases.map(c => {
-                        const sStyle = {
-                          'Pending': 'bg-yellow-100 text-yellow-800',
-                          'In Progress': 'bg-blue-100 text-blue-700',
-                          'Completed': 'bg-emerald-100 text-emerald-700',
-                        }[c.status || 'In Progress'] as string;
+                        const stage = (c.status || 'Initial Stage') as CaseStage;
+                        const sStyle = CASE_STAGE_COLORS[stage];
                         return (
                           <button key={c.caseId} onClick={()=>navigate(`/cases/${c.caseId}`)} className="w-full text-left py-3 px-2 hover:bg-gray-50">
                             <div className="grid grid-cols-12 items-center gap-2">
@@ -689,7 +723,7 @@ const Cases: React.FC = () => {
                               <div className="col-span-2 truncate text-sm">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</div>
                               <div className="col-span-1 text-right">
                                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${sStyle}`}>
-                                  <span>{c.status || 'In Progress'}</span>
+                                  <span>{stage}</span>
                                 </span>
                               </div>
                             </div>
@@ -712,9 +746,14 @@ const Cases: React.FC = () => {
                                 <div className="flex items-center gap-2 text-xs text-text-secondary">
                                   <span className="font-mono">{c.caseId}</span>
                                 </div>
-                                <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${c.status==='Completed'?'bg-emerald-100 text-emerald-700':c.status==='Pending'?'bg-yellow-100 text-yellow-800':'bg-blue-100 text-blue-700'}`}>
-                                  <span>{c.status || 'In Progress'}</span>
-                                </span>
+                                {(() => {
+                                  const stage = (c.status || 'Initial Stage') as CaseStage;
+                                  return (
+                                    <span className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded ${CASE_STAGE_COLORS[stage]}`}>
+                                      <span>{stage}</span>
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               <div className="mt-1 font-semibold">{c.title}</div>
                               <div className="mt-2 flex items-center justify-between text-xs text-text-secondary">
@@ -731,42 +770,45 @@ const Cases: React.FC = () => {
                   <>
                     {/* Cases Kanban Board by status */}
                     <div className="mt-3">
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        {(['Pending','In Progress','Completed'] as const).map((col) => {
-                          const colCases = filteredCases.filter(c => (c.status || 'In Progress') === col);
-                          return (
-                            <div key={col}
-                              onDragOver={(e)=>e.preventDefault()}
-                              onDragEnter={(e)=>{ if (Array.from(e.dataTransfer.types||[]).includes('text/case')) setBoardDropCol(col); }}
-                              onDragLeave={(e)=>{ setBoardDropCol(prev => prev===col ? null : prev); }}
-                              onDrop={(e)=>{ handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
-                              className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="font-semibold">{col}</div>
-                                <span className="text-xs text-text-secondary">{colCases.length}</span>
+                      <div className="mt-2 overflow-x-auto">
+                        <div className="flex gap-3 pb-2" style={{ minWidth: 'max-content' }}>
+                          {CASE_STAGES.map((col) => {
+                            const colCases = filteredCases.filter(c => (c.status || 'Initial Stage') === col);
+                            return (
+                              <div
+                                key={col}
+                                onDragOver={(e)=>e.preventDefault()}
+                                onDragEnter={(e)=>{ if (Array.from(e.dataTransfer.types||[]).includes('text/case')) setBoardDropCol(col); }}
+                                onDragLeave={(e)=>{ setBoardDropCol(prev => prev===col ? null : prev); }}
+                                onDrop={(e)=>{ handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
+                                className={`w-72 rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                              >
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="font-semibold">{col}</div>
+                                  <span className="text-xs text-text-secondary">{colCases.length}</span>
+                                </div>
+                                <div className="space-y-2">
+                                  {colCases.map(c => (
+                                    <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className={`w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition ${justDroppedId===c.caseId ? 'ring-2 ring-[#ffa332] animate-pulse' : ''}`}>
+                                      <div className="flex items-center justify-between text-xs text-text-secondary">
+                                        <span className="font-mono">{c.caseId}</span>
+                                        <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
+                                      </div>
+                                      <div className="mt-1 font-semibold text-sm">{c.title}</div>
+                                      <div className="mt-2 flex items-center justify-between text-xs">
+                                        <span className="text-text-secondary">{c.branch || '\u2014'} • {c.type || '\u2014'}</span>
+                                        <span className="text-text-secondary">{(c.createdAt && new Date(c.createdAt).toLocaleDateString()) || ''}</span>
+                                      </div>
+                                    </button>
+                                  ))}
+                                  {colCases.length===0 && (
+                                    <div className="text-xs text-text-secondary text-center py-4">No cases</div>
+                                  )}
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                {colCases.map(c => (
-                                  <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className={`w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition ${justDroppedId===c.caseId ? 'ring-2 ring-[#ffa332] animate-pulse' : ''}`}>
-                                    <div className="flex items-center justify-between text-xs text-text-secondary">
-                                      <span className="font-mono">{c.caseId}</span>
-                                      <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
-                                    </div>
-                                    <div className="mt-1 font-semibold text-sm">{c.title}</div>
-                                    <div className="mt-2 flex items-center justify-between text-xs">
-                                      <span className="text-text-secondary">{c.branch || '\u2014'} • {c.type || '\u2014'}</span>
-                                      <span className="text-text-secondary">{(c.createdAt && new Date(c.createdAt).toLocaleDateString()) || ''}</span>
-                                    </div>
-                                  </button>
-                                ))}
-                                {colCases.length===0 && (
-                                  <div className="text-xs text-text-secondary text-center py-4">No cases</div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   </>
@@ -964,7 +1006,7 @@ const Cases: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Status</span>
-                <select value={tfStatus} onChange={e=>setTfStatus(e.target.value as Status)} className="mt-1 w-full border rounded p-2" disabled={tfArea==='Backlog'}>
+                <select value={tfStatus} onChange={e=>setTfStatus(e.target.value as TaskStatus)} className="mt-1 w-full border rounded p-2" disabled={tfArea==='Backlog'}>
                   <option>Todo</option>
                   <option>In Progress</option>
                   <option>In Review</option>
@@ -1034,8 +1076,8 @@ const Cases: React.FC = () => {
                 <div className="font-semibold">{(detailsCase.assignees||[]).join(', ') || detailsCase.employee || 'Unassigned'}</div>
               </div>
               <div>
-                <div className="text-text-secondary">Status</div>
-                <div className="font-semibold">{detailsCase.status || 'In Progress'}</div>
+                <div className="text-text-secondary">Stage</div>
+                <div className="font-semibold">{detailsCase.status || 'Initial Stage'}</div>
               </div>
               <div className="sm:col-span-2">
                 <div className="text-text-secondary">Created At</div>
@@ -1069,7 +1111,7 @@ const Cases: React.FC = () => {
             <div className="mt-4 flex items-center gap-3">
               <label className="text-sm">
                 <span className="text-text-secondary">Status</span>
-                <select value={selectedTask.task.status} onChange={(e)=>{ const v = e.target.value as Status; updateTaskStatus(selectedTask.task.id, v); setSelectedTask(s=> s ? { ...s, task: { ...s.task, status: v } } : s); }} className="ml-2 border rounded p-2">
+                <select value={selectedTask.task.status} onChange={(e)=>{ const v = e.target.value as TaskStatus; updateTaskStatus(selectedTask.task.id, v); setSelectedTask(s=> s ? { ...s, task: { ...s.task, status: v } } : s); }} className="ml-2 border rounded p-2">
                   <option>Todo</option>
                   <option>In Progress</option>
                   <option>In Review</option>

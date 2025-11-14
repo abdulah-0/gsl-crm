@@ -8,7 +8,31 @@ import Header from '../../components/common/Header';
 interface StatCard { label: string; value: number | string; delta?: number; prefix?: string; suffix?: string; }
 interface EmployeePerf { id: string; name: string; cases: number; successRate: number; active: number; status: 'Active' | 'Inactive'; }
 interface Activity { id: string; text: string; at: string; }
-interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: 'Pending' | 'In Progress' | 'Completed'; createdAt?: string; email?: string; }
+
+const CASE_STAGES = [
+  'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
+  'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected',
+] as const;
+
+type CaseStage = typeof CASE_STAGES[number];
+
+interface CaseItem { id: string; student: string; branch: string; type: string; employee: string; status: CaseStage; createdAt?: string; email?: string; }
+
+
+const normalizeCaseStage = (row: { stage?: string | null; status?: string | null; type?: string | null }): CaseStage => {
+  const stageVal = (row.stage || '').toString().trim();
+  if (stageVal) {
+    const match = CASE_STAGES.find(s => s.toLowerCase() === stageVal.toLowerCase());
+    if (match) return match;
+  }
+  const status = (row.status || '').toString();
+  const type = (row.type || '').toString();
+  if (status.toLowerCase().includes('completed')) return 'Visa Received';
+  if (type.toLowerCase().includes('visa')) return 'Visa Applied';
+  if (type.toLowerCase().includes('cas')) return 'CAS Applied';
+  if (type.toLowerCase().includes('offer') && status.toLowerCase().includes('appl')) return 'Offer Applied';
+  return 'Initial Stage';
+};
 
 // Realtime state (replaces mocks)
 const BRANCHES = ['All Branches', 'F-8 Branch', 'I-8 Branch', 'PWD Branch', 'Peshawar Branch'] as const;
@@ -215,7 +239,7 @@ const SuperAdmin: React.FC = () => {
   const [formBranch, setFormBranch] = useState('IG Branch');
   const [formType, setFormType] = useState<'Visa' | 'Fee' | 'CAS' | 'Completed'>('Visa');
   const [formEmployee, setFormEmployee] = useState('');
-  const [formStatus, setFormStatus] = useState<'Pending' | 'In Progress' | 'Completed'>('In Progress');
+  const [formStatus, setFormStatus] = useState<CaseStage>('Initial Stage');
   const [savingCase, setSavingCase] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -241,26 +265,31 @@ const SuperAdmin: React.FC = () => {
         cases = res2.data as any;
       }
       const casesRows = cases ?? [];
+      const casesWithStage = (casesRows as any[]).map((c) => ({
+        ...c,
+        _stage: normalizeCaseStage(c),
+      }));
 
-      setRecentCases(casesRows.map((c: any) => ({
+      setRecentCases(casesWithStage.map((c: any) => ({
         id: String(c.id),
         student: c.title,
         branch: c.branch ?? '—',
         type: c.type ?? 'Visa',
         employee: c.employee ?? '—',
-        status: c.status ?? 'Pending',
+        status: c._stage as CaseStage,
         createdAt: c.created_at,
         email: c.email ?? undefined
       })));
 
       // Employees performance derived from cases
       const byEmp = new Map<string, { cases: number; completed: number; active: number }>();
-      for (const c of casesRows) {
-        const name = c.employee ?? 'Unassigned';
+      for (const c of casesWithStage) {
+        const name = (c as any).employee ?? 'Unassigned';
         const stat = byEmp.get(name) || { cases: 0, completed: 0, active: 0 };
         stat.cases += 1;
-        if (c.status === 'Completed') stat.completed += 1;
-        if (c.status === 'In Progress') stat.active += 1;
+        const stage = (c as any)._stage as CaseStage;
+        if (stage === 'Visa Received') stat.completed += 1;
+        if (stage !== 'Visa Received' && stage !== 'Backout' && stage !== 'Visa Rejected') stat.active += 1;
         byEmp.set(name, stat);
       }
       const empPerf: EmployeePerf[] = Array.from(byEmp.entries()).map(([name, v], idx) => ({
@@ -274,11 +303,8 @@ const SuperAdmin: React.FC = () => {
       setEmployeesPerf(empPerf);
 
       // Pipeline by stage (11 stages) with branch filtering
-      const pipelineStages = [
-        'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
-        'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected'
-      ] as const;
-      const stageColors: Record<string, string> = {
+      const pipelineStages = CASE_STAGES;
+      const stageColors: Record<CaseStage, string> = {
         'Initial Stage': '#f59e0b',
         'Offer Applied': '#06b6d4',
         'Offer Received': '#0ea5e9',
@@ -291,14 +317,15 @@ const SuperAdmin: React.FC = () => {
         'Backout': '#f97316',
         'Visa Rejected': '#ef4444',
       };
-      const casesForPipeline = branch === 'All Branches' ? casesRows : casesRows.filter((c:any)=> (c.branch||'') === branch);
+      const casesForPipeline = branch === 'All Branches'
+        ? casesWithStage
+        : casesWithStage.filter((c: any) => (c.branch || '') === branch);
       const counts = new Map<string, number>();
       for (const s of pipelineStages) counts.set(s, 0);
       for (const c of casesForPipeline) {
-        const stg = (c as any).stage || '';
-        const norm = pipelineStages.find(s => s.toLowerCase() === String(stg).toLowerCase());
-        const key = norm || 'Initial Stage';
-        counts.set(key, (counts.get(key)||0) + 1);
+        const stage = (c as any)._stage as CaseStage;
+        const key = pipelineStages.includes(stage) ? stage : 'Initial Stage';
+        counts.set(key, (counts.get(key) || 0) + 1);
       }
       const pipelineArr = (pipelineStages as readonly string[]).map((name) => ({ name, value: counts.get(name) || 0, color: stageColors[name] }));
       setPipeline(pipelineArr);
@@ -384,8 +411,14 @@ const SuperAdmin: React.FC = () => {
         const cur2 = new Date();
         return d.getFullYear() === cur2.getFullYear() && d.getMonth() === cur2.getMonth();
       }).length;
-      const inProgress = casesRows.filter((c: any) => c.status === 'In Progress').length;
-      const visaSuccess = casesRows.filter((c: any) => c.type === 'Visa' && c.status === 'Completed').length;
+      const inProgress = (casesWithStage as any[]).filter((c: any) => {
+        const stage = c._stage as CaseStage;
+        return stage !== 'Visa Received' && stage !== 'Backout' && stage !== 'Visa Rejected';
+      }).length;
+      const visaSuccess = (casesWithStage as any[]).filter((c: any) => {
+        const stage = c._stage as CaseStage;
+        return (c.type || '').toString().toLowerCase().includes('visa') && stage === 'Visa Received';
+      }).length;
       const revenueK = Number((inSum / 1000).toFixed(1));
       setStatCards([
         { label: 'Visa Successes', value: visaSuccess, delta: 0 },
@@ -448,7 +481,7 @@ const SuperAdmin: React.FC = () => {
     setFormBranch('IG Branch');
     setFormType('Visa');
     setFormEmployee('');
-    setFormStatus('In Progress');
+    setFormStatus('Initial Stage');
     setFormError(null);
     setShowAddCase(true);
   };
@@ -459,13 +492,14 @@ const SuperAdmin: React.FC = () => {
     setSavingCase(true);
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .insert([{ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus }])
-      .select('id, case_number, title, branch, type, employee, status, created_at')
+      .insert([{ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus, stage: formStatus }])
+      .select('id, case_number, title, branch, type, employee, status, stage, created_at')
       .single();
     setSavingCase(false);
     if (error) { setFormError(error.message); return; }
     if (data) {
-      setRecentCases(prev => [{ id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }, ...prev]);
+      const stage = normalizeCaseStage(data as any);
+      setRecentCases(prev => [{ id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: stage }, ...prev]);
       // Log activity (fire-and-forget)
       await supabase.from('activity_log').insert([{ entity: 'dashboard_case', action: `Created case ${data.case_number} for ${formStudent.trim()} in ${formBranch}`, detail: { case_number: data.case_number, student: formStudent.trim(), branch: formBranch } }]);
     }
@@ -490,15 +524,16 @@ const SuperAdmin: React.FC = () => {
     setSavingCase(true);
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .update({ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus })
+      .update({ title: formStudent.trim(), branch: formBranch, type: formType, employee: formEmployee.trim(), status: formStatus, stage: formStatus })
       .eq('id', editCaseId)
-      .select('id, title, branch, type, employee, status, created_at')
+      .select('id, title, branch, type, employee, status, stage, created_at')
       .single();
     setSavingCase(false);
     if (error) { setFormError(error.message); return; }
     if (data) {
+      const stage = normalizeCaseStage(data as any);
       setRecentCases(prev => prev.map(rc => rc.id === String(data.id)
-        ? { id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: data.status ?? 'Pending' }
+        ? { id: String(data.id), student: data.title, branch: data.branch ?? '—', type: data.type ?? 'Visa', employee: data.employee ?? '—', status: stage }
         : rc
       ));
     }
@@ -870,11 +905,11 @@ const SuperAdmin: React.FC = () => {
                 <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
               </label>
               <label className="text-sm">
-                <span className="text-text-secondary">Status</span>
-                <select value={formStatus} onChange={e=>setFormStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
-                  <option>In Progress</option>
-                  <option>Pending</option>
-                  <option>Completed</option>
+                <span className="text-text-secondary">Stage</span>
+                <select value={formStatus} onChange={e => setFormStatus(e.target.value as CaseStage)} className="mt-1 w-full border rounded p-2">
+                  {CASE_STAGES.map(stage => (
+                    <option key={stage} value={stage}>{stage}</option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -926,11 +961,11 @@ const SuperAdmin: React.FC = () => {
                 <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
               </label>
               <label className="text-sm">
-                <span className="text-text-secondary">Status</span>
-                <select value={formStatus} onChange={e=>setFormStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
-                  <option>In Progress</option>
-                  <option>Pending</option>
-                  <option>Completed</option>
+                <span className="text-text-secondary">Stage</span>
+                <select value={formStatus} onChange={e => setFormStatus(e.target.value as CaseStage)} className="mt-1 w-full border rounded p-2">
+                  {CASE_STAGES.map(stage => (
+                    <option key={stage} value={stage}>{stage}</option>
+                  ))}
                 </select>
               </label>
             </div>

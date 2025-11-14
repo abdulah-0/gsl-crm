@@ -117,13 +117,19 @@ const Dashboard = () => {
     const loadCases = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, created_at, status, all_tasks, active_tasks, assignees')
+        .select('id, case_number, title, created_at, stage, status, all_tasks, active_tasks, assignees')
         .order('created_at', { ascending: false })
         .limit(3);
       if (!error && data) {
         const mapped: CaseData[] = data.map((c: any) => {
-          const status: string = c.status || 'Pending';
-          const prio: 'low'|'medium'|'high' = status === 'In Progress' ? 'medium' : status === 'Pending' ? 'low' : 'low';
+          const stage: string = (c.stage || c.status || 'Initial Stage') as string;
+          const highStages = ['Visa Applied','Visa Received','CAS Applied','CAS Received','Interview'];
+          const mediumStages = ['Offer Applied','Offer Received','Fee Paid'];
+          const prio: 'low' | 'medium' | 'high' = highStages.includes(stage)
+            ? 'high'
+            : mediumStages.includes(stage)
+              ? 'medium'
+              : 'low';
           const created = new Date(c.created_at);
           return {
             id: String(c.id),
