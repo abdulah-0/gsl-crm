@@ -186,56 +186,22 @@ import { supabase } from '../../lib/supabaseClient';
       const { data: auth } = await supabase.auth.getUser();
       const me = auth.user?.email || '';
       const target = isAdmin && reqForEmail ? reqForEmail : me;
+      if (!target) {
+        alert('Could not determine employee email. Please sign out and sign in again.');
+        return;
+      }
 
-      const base = {
+      const { error } = await supabase.from('leaves').insert({
+        employee_email: target,
         start_date: reqStart,
         end_date: reqEnd,
         status: 'Pending' as LeaveStatus,
         reason: reqReason || null,
-      };
+        created_by: me,
+        type: reqType,
+      } as any, { returning: 'minimal' } as any);
 
-      // Helper to try insert with robust fallbacks
-      const tryInsert = async (payload: any) => {
-        let res = await supabase.from('leaves').insert({ ...payload, created_by: me, type: reqType }, { returning: 'minimal' } as any);
-        let error = res.error as any;
-        if (error && (error.code === '42703' || String(error.message||'').toLowerCase().includes('column'))) {
-          // Drop unknown columns and retry
-          const minimal = { ...payload };
-          let res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
-          error = res2.error as any;
-          if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
-            const lower = { ...minimal, status: String(minimal.status||'').toLowerCase() };
-            const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
-            error = res3.error as any;
-          }
-        } else if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
-          const lower = { ...payload, status: String(payload.status||'').toLowerCase(), created_by: me, type: reqType };
-          const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
-          error = res3.error as any;
-        }
-        return error;
-      };
-
-      // 1) Try modern schema (employee_email)
-      let err1 = await tryInsert({ employee_email: target, ...base });
-
-      // 2) If failed, fallback to legacy schema: create a minimal employees row and use employee_id
-      if (err1) {
-        let employeeId: number | null = null;
-        try {
-          const { data: eIns, error: eErr } = await supabase
-            .from('employees')
-            .insert({ joined_on: new Date().toISOString().slice(0,10) })
-            .select('id')
-            .single();
-          if (!eErr && eIns?.id) employeeId = Number(eIns.id);
-        } catch {}
-        if (employeeId) {
-          err1 = await tryInsert({ employee_id: employeeId, ...base });
-        }
-      }
-
-      if (err1) throw err1;
+      if (error) throw error;
 
       setRequestOpen(false);
       setReqStart(''); setReqEnd(''); setReqReason(''); setReqForEmail(''); setReqType('Sick');
