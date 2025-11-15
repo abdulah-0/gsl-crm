@@ -4,6 +4,8 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
+import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
+
 
 // Types
 const CASE_STAGES = [
@@ -30,7 +32,7 @@ type Task = {
   name: string;
   estimateMins: number;
   spentMins: number;
-  assignee: { name: string; avatar?: string };
+  assignee: { id?: string; name: string; avatar?: string };
   priority: Priority;
   status: TaskStatus;
   description?: string;
@@ -242,6 +244,7 @@ const Cases: React.FC = () => {
   const [tfPriority, setTfPriority] = useState<Priority>('Medium');
   const [tfStatus, setTfStatus] = useState<TaskStatus>('Todo');
   const [tfArea, setTfArea] = useState<'Active'|'Backlog'>('Active');
+  const [tfAssigneeId, setTfAssigneeId] = useState('');
   const [tfAssignee, setTfAssignee] = useState('');
   const [tfAvatar, setTfAvatar] = useState('');
   const [tfDesc, setTfDesc] = useState('');
@@ -274,7 +277,7 @@ const Cases: React.FC = () => {
   const loadTasksForCase = async (caseId: string) => {
     const { data, error } = await supabase
       .from('dashboard_tasks')
-      .select('id, case_number, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, is_backlog, description, created_at')
+      .select('id, case_number, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, assignee_id, priority, status, is_backlog, description, created_at')
       .eq('case_number', caseId)
       .order('created_at', { ascending: false });
     if (error) return;
@@ -286,7 +289,7 @@ const Cases: React.FC = () => {
         name: row.name,
         estimateMins: row.estimate_mins ?? 0,
         spentMins: row.spent_mins ?? 0,
-        assignee: { name: row.assignee_name || 'Unassigned', avatar: row.assignee_avatar || undefined },
+        assignee: { id: row.assignee_id || undefined, name: row.assignee_name || 'Unassigned', avatar: row.assignee_avatar || undefined },
         priority: (row.priority || 'Medium') as Priority,
         status: (row.status || 'Todo') as TaskStatus,
         description: row.description || undefined,
@@ -359,14 +362,17 @@ const Cases: React.FC = () => {
   // Drag-and-drop: change case stage on board
   const handleCaseCardDragStart = (caseId: string) => (e: React.DragEvent) => {
     try {
+      e.stopPropagation();
       e.dataTransfer.setData('text/case', caseId);
+      e.dataTransfer.setData('text/plain', caseId);
       e.dataTransfer.effectAllowed = 'move';
     } catch {}
   };
   const handleDropCaseToStatus = (next: CaseStage) => async (e: React.DragEvent) => {
     e.preventDefault();
     try {
-      const id = e.dataTransfer.getData('text/case');
+      const rawId = e.dataTransfer.getData('text/case') || e.dataTransfer.getData('text/plain');
+      const id = rawId && String(rawId);
       if (!canEdit) { showToast('Not permitted', 'error'); return; }
 
       if (!id) return;
@@ -464,13 +470,23 @@ const Cases: React.FC = () => {
     const spent_mins = 0;
     const assignee_name = tfAssignee.trim() || 'Unassigned';
     const assignee_avatar = tfAvatar.trim() || undefined;
+    const assignee_id = tfAssigneeId || null;
     const priority = tfPriority;
     const status = tfArea === 'Backlog' ? 'Todo' : tfStatus;
     const description = tfDesc.trim() || undefined;
     const is_backlog = tfArea === 'Backlog';
 
     // Optimistic UI
-    const task: Task = { id, name, estimateMins: estimate_mins, spentMins: spent_mins, assignee: { name: assignee_name, avatar: assignee_avatar }, priority, status, description };
+    const task: Task = {
+      id,
+      name,
+      estimateMins: estimate_mins,
+      spentMins: spent_mins,
+      assignee: { id: assignee_id || undefined, name: assignee_name, avatar: assignee_avatar },
+      priority,
+      status,
+      description,
+    };
     setCases(prev => prev.map(c => {
       if (c.caseId !== activeCaseId) return c;
       if (!is_backlog) return { ...c, active: [task, ...c.active] };
@@ -478,10 +494,31 @@ const Cases: React.FC = () => {
     }));
 
     // Persist
-    await supabase.from('dashboard_tasks').insert([{ id, case_number: activeCaseId, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, is_backlog, description }]);
+    await supabase.from('dashboard_tasks').insert([{
+      id,
+      case_number: activeCaseId,
+      name,
+      estimate_mins,
+      spent_mins,
+      assignee_name,
+      assignee_avatar,
+      assignee_id,
+      priority,
+      status,
+      is_backlog,
+      description,
+    }]);
 
     setShowAddTask(false);
-    setTfName(''); setTfEstimate(60); setTfPriority('Medium'); setTfStatus('Todo'); setTfArea('Active'); setTfAssignee(''); setTfAvatar(''); setTfDesc('');
+    setTfName('');
+    setTfEstimate(60);
+    setTfPriority('Medium');
+    setTfStatus('Todo');
+    setTfArea('Active');
+    setTfAssigneeId('');
+    setTfAssignee('');
+    setTfAvatar('');
+    setTfDesc('');
   };
 
   return (
@@ -789,7 +826,16 @@ const Cases: React.FC = () => {
                                 </div>
                                 <div className="space-y-2">
                                   {colCases.map(c => (
-                                    <button key={c.caseId} draggable onDragStart={handleCaseCardDragStart(c.caseId)} onClick={()=>navigate(`/cases/${c.caseId}`)} className={`w-full text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition ${justDroppedId===c.caseId ? 'ring-2 ring-[#ffa332] animate-pulse' : ''}`}>
+                                    <div
+                                      key={c.caseId}
+                                      role="button"
+                                      tabIndex={0}
+                                      draggable
+                                      onDragStart={handleCaseCardDragStart(c.caseId)}
+                                      onClick={()=>navigate(`/cases/${c.caseId}`)}
+                                      onKeyDown={(e)=>{ if (e.key==='Enter' || e.key===' ') navigate(`/cases/${c.caseId}`); }}
+                                      className={`w-full cursor-pointer text-left bg-white rounded-md border p-2 shadow-sm hover:shadow transition ${justDroppedId===c.caseId ? 'ring-2 ring-[#ffa332] animate-pulse' : ''}`}
+                                    >
                                       <div className="flex items-center justify-between text-xs text-text-secondary">
                                         <span className="font-mono">{c.caseId}</span>
                                         <span className="truncate">{(c.assignees||[]).join(', ') || c.employee || 'Unassigned'}</span>
@@ -799,7 +845,7 @@ const Cases: React.FC = () => {
                                         <span className="text-text-secondary">{c.branch || '\u2014'} • {c.type || '\u2014'}</span>
                                         <span className="text-text-secondary">{(c.createdAt && new Date(c.createdAt).toLocaleDateString()) || ''}</span>
                                       </div>
-                                    </button>
+                                    </div>
                                   ))}
                                   {colCases.length===0 && (
                                     <div className="text-xs text-text-secondary text-center py-4">No cases</div>
@@ -1025,14 +1071,16 @@ const Cases: React.FC = () => {
                   <option>High</option>
                 </select>
               </label>
-              <label className="text-sm">
-                <span className="text-text-secondary">Assignee</span>
-                <input value={tfAssignee} onChange={e=>setTfAssignee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Name (optional)" />
-              </label>
-              <label className="text-sm">
-                <span className="text-text-secondary">Avatar URL</span>
-                <input value={tfAvatar} onChange={e=>setTfAvatar(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="https://... (optional)" />
-              </label>
+              <div className="text-sm">
+                <span className="text-text-secondary">Assignee (teacher)</span>
+                <div className="mt-1">
+                  <TeacherSearchDropdown
+                    value={tfAssigneeId}
+                    onChange={(id, name, avatar)=>{ setTfAssigneeId(id); setTfAssignee(name); setTfAvatar(avatar || ''); }}
+                    placeholder="Search teacher by name or email"
+                  />
+                </div>
+              </div>
               <label className="text-sm sm:col-span-2">
                 <span className="text-text-secondary">Description</span>
                 <textarea value={tfDesc} onChange={e=>setTfDesc(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} placeholder="Optional"></textarea>

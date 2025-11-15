@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from '../../components/common/Sidebar';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
+import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
+
 
 // Shared types (keep in sync with index.tsx)
 type Priority = 'Low' | 'Medium' | 'High';
@@ -13,7 +15,7 @@ type Task = {
   name: string;
   estimateMins: number;
   spentMins: number;
-  assignee: { name: string; avatar?: string };
+  assignee: { id?: string; name: string; avatar?: string };
   priority: Priority;
   status: Status;
   description?: string;
@@ -71,6 +73,7 @@ const CaseTaskDetailPage: React.FC = () => {
   const [tfEstimate, setTfEstimate] = useState(60);
   const [tfPriority, setTfPriority] = useState<Priority>('Medium');
   const [tfStatus, setTfStatus] = useState<Status>('Todo');
+  const [tfAssigneeId, setTfAssigneeId] = useState('');
   const [tfAssignee, setTfAssignee] = useState('');
   const [tfAvatar, setTfAvatar] = useState('');
   const [tfDesc, setTfDesc] = useState('');
@@ -124,7 +127,7 @@ const CaseTaskDetailPage: React.FC = () => {
     if (!caseNumber || !taskId) { setTask(null); setTaskDescDraft(''); return; }
     const { data, error } = await supabase
       .from('dashboard_tasks')
-      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, description, created_at, is_backlog')
+      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, assignee_id, priority, status, description, created_at, is_backlog')
       .eq('case_number', caseNumber)
       .eq('id', taskId)
       .single();
@@ -134,7 +137,7 @@ const CaseTaskDetailPage: React.FC = () => {
         name: data.name,
         estimateMins: data.estimate_mins ?? 0,
         spentMins: data.spent_mins ?? 0,
-        assignee: { name: data.assignee_name || 'Unassigned', avatar: data.assignee_avatar || undefined },
+        assignee: { id: data.assignee_id || undefined, name: data.assignee_name || 'Unassigned', avatar: data.assignee_avatar || undefined },
         priority: (data.priority || 'Medium') as Priority,
         status: (data.status || 'Todo') as Status,
         description: data.description || '',
@@ -149,7 +152,7 @@ const CaseTaskDetailPage: React.FC = () => {
     if (!caseNumber) { setCaseTasks([]); return; }
     const { data } = await supabase
       .from('dashboard_tasks')
-      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, priority, status, description, created_at, is_backlog')
+      .select('id, name, estimate_mins, spent_mins, assignee_name, assignee_avatar, assignee_id, priority, status, description, created_at, is_backlog')
       .eq('case_number', caseNumber)
       .order('created_at', { ascending: false });
     const mapped: Task[] = (data||[]).map((r:any)=>({
@@ -157,7 +160,7 @@ const CaseTaskDetailPage: React.FC = () => {
       name: r.name,
       estimateMins: r.estimate_mins ?? 0,
       spentMins: r.spent_mins ?? 0,
-      assignee: { name: r.assignee_name || 'Unassigned', avatar: r.assignee_avatar || undefined },
+      assignee: { id: r.assignee_id || undefined, name: r.assignee_name || 'Unassigned', avatar: r.assignee_avatar || undefined },
       priority: (r.priority || 'Medium') as Priority,
       status: (r.status || 'Todo') as Status,
       description: r.description || '',
@@ -241,14 +244,32 @@ const CaseTaskDetailPage: React.FC = () => {
     e.preventDefault();
     if (!caseNumber) return;
     const id = `TS${Date.now().toString().slice(-8)}`;
+    const assignee_name = tfAssignee.trim() || 'Unassigned';
+    const assignee_avatar = tfAvatar.trim() || undefined;
+    const assignee_id = tfAssigneeId || null;
     await supabase.from('dashboard_tasks').insert([{
-      id, case_number: caseNumber, name: tfName.trim() || 'Untitled Task',
-      estimate_mins: Math.max(0, Number(tfEstimate)||0), spent_mins: 0,
-      assignee_name: tfAssignee.trim() || 'Unassigned', assignee_avatar: tfAvatar.trim() || undefined,
-      priority: tfPriority, status: tfStatus, is_backlog: false, description: tfDesc.trim() || undefined
+      id,
+      case_number: caseNumber,
+      name: tfName.trim() || 'Untitled Task',
+      estimate_mins: Math.max(0, Number(tfEstimate)||0),
+      spent_mins: 0,
+      assignee_name,
+      assignee_avatar,
+      assignee_id,
+      priority: tfPriority,
+      status: tfStatus,
+      is_backlog: false,
+      description: tfDesc.trim() || undefined,
     }]);
     setShowAddTask(false);
-    setTfName(''); setTfEstimate(60); setTfPriority('Medium'); setTfStatus('Todo'); setTfAssignee(''); setTfAvatar(''); setTfDesc('');
+    setTfName('');
+    setTfEstimate(60);
+    setTfPriority('Medium');
+    setTfStatus('Todo');
+    setTfAssigneeId('');
+    setTfAssignee('');
+    setTfAvatar('');
+    setTfDesc('');
   };
 
   const logTime = async () => {
@@ -524,8 +545,16 @@ const CaseTaskDetailPage: React.FC = () => {
               <label className="text-sm"><span className="text-text-secondary">Status</span><select value={tfStatus} onChange={e=>setTfStatus(e.target.value as Status)} className="mt-1 w-full border rounded p-2"><option>Todo</option><option>In Progress</option><option>In Review</option><option>Done</option></select></label>
               <label className="text-sm"><span className="text-text-secondary">Estimate (minutes)</span><input type="number" min={0} value={tfEstimate} onChange={e=>setTfEstimate(Number(e.target.value))} className="mt-1 w-full border rounded p-2"/></label>
               <label className="text-sm"><span className="text-text-secondary">Priority</span><select value={tfPriority} onChange={e=>setTfPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2"><option>Low</option><option>Medium</option><option>High</option></select></label>
-              <label className="text-sm"><span className="text-text-secondary">Assignee</span><input value={tfAssignee} onChange={e=>setTfAssignee(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-              <label className="text-sm"><span className="text-text-secondary">Avatar URL</span><input value={tfAvatar} onChange={e=>setTfAvatar(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+              <div className="text-sm">
+                <span className="text-text-secondary">Assignee (teacher)</span>
+                <div className="mt-1">
+                  <TeacherSearchDropdown
+                    value={tfAssigneeId}
+                    onChange={(id, name, avatar)=>{ setTfAssigneeId(id); setTfAssignee(name); setTfAvatar(avatar || ''); }}
+                    placeholder="Search teacher by name or email"
+                  />
+                </div>
+              </div>
               <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Description</span><textarea value={tfDesc} onChange={e=>setTfDesc(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3}/></label>
             </div>
             <div className="mt-5 text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save Task</button></div>
