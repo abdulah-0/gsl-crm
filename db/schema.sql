@@ -607,7 +607,7 @@ CREATE TABLE IF NOT EXISTS dashboard_cases (
   case_number  text NOT NULL UNIQUE,
   title        text NOT NULL,
   type         text NOT NULL DEFAULT 'Visa' CHECK (type IN ('Visa','Fee','CAS','Completed')),
-  status       text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','In Progress','Completed')),
+  status       text NOT NULL DEFAULT 'Initial Stage' CHECK (status IN ('Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview','CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected')),
   branch       text,
   employee     text,
   all_tasks    int  NOT NULL DEFAULT 0,
