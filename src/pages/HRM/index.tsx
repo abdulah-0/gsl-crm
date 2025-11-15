@@ -46,6 +46,7 @@ const HRMPage: React.FC = () => {
     id: number;
     employee_email: string;
     type: string | null;
+    leave_type?: string | null;
     start_date: string | null;
     end_date: string | null;
     status: string | null;
@@ -56,7 +57,7 @@ const HRMPage: React.FC = () => {
   const [leaves, setLeaves] = useState<LeaveRow[]>([]);
   const [lEmail, setLEmail] = useState('');
   const [lType, setLType] = useState('');
-  const [lStatus, setLStatus] = useState('');
+  const [lStatus, setLStatus] = useState<string>('Pending');
   const [lFrom, setLFrom] = useState('');
   const [lTo, setLTo] = useState('');
 
@@ -457,7 +458,7 @@ const HRMPage: React.FC = () => {
     // Build base query
     let q: any = supabase
       .from('leaves')
-      .select('id, employee_email, type, start_date, end_date, status, reason, branch, created_at, manager_approved_by, hr_approved_by, ceo_approved_by')
+      .select('id, employee_email, type, leave_type, start_date, end_date, status, reason, branch, created_at, manager_approved_by, hr_approved_by, ceo_approved_by')
       .order('created_at', { ascending: false });
     if (role !== 'super') q = q.eq('branch', myBranch);
 
@@ -478,7 +479,10 @@ const HRMPage: React.FC = () => {
       }
     }
 
-    if (lType) q = q.eq('type', lType);
+    if (lType) {
+      const legacyType = lType === 'CL' ? 'Sick' : lType === 'SL' ? 'Remote' : 'Vacation';
+      q = q.or(`leave_type.eq.${lType},type.eq.${legacyType}`);
+    }
     if (lStatus) q = q.eq('status', lStatus);
     if (lFrom) q = q.gte('start_date', lFrom);
     if (lTo) q = q.lte('end_date', lTo);
@@ -559,11 +563,12 @@ const HRMPage: React.FC = () => {
       const reasonVal = addReason || null;
       const emp = rows.find(r => (r.email||'') === target);
       const branchVal = role !== 'super' ? (myBranch || null) : (emp?.branch || null);
+      const typeLegacy = addType === 'CL' ? 'Sick' : addType === 'SL' ? 'Remote' : 'Vacation';
 
       // Attempt insert function with graceful fallbacks for missing columns/status case-sensitivity
       const tryInsert = async (base: any) => {
         // Try with full payload (include created_by, type/leave_type, branch when present)
-        const withMeta = { ...base, created_by: me, leave_type: addType, type: addType, branch: branchVal };
+        const withMeta = { ...base, created_by: me, leave_type: addType, type: typeLegacy, branch: branchVal };
         let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
         let error = res.error as any;
         if (error && (error.code === '42703' || String(error.message||'').toLowerCase().includes('column'))) {
@@ -579,7 +584,7 @@ const HRMPage: React.FC = () => {
           }
         } else if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
           // Retry with lowercase status
-          const lower = { ...base, status: String(base.status||'').toLowerCase(), created_by: me, leave_type: addType, type: addType, branch: branchVal };
+          const lower = { ...base, status: String(base.status||'').toLowerCase(), created_by: me, leave_type: addType, type: typeLegacy, branch: branchVal };
           const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
           error = res3.error as any;
         }
@@ -620,6 +625,17 @@ const HRMPage: React.FC = () => {
     }
   };
 
+  const approveLeave = async (id: number) => {
+    if (!isAdmin) { alert('Only Admin/Super Admin can approve leaves'); return; }
+    const { data: au } = await supabase.auth.getUser();
+    const me = au?.user?.email || '';
+    const { error } = await supabase.from('leaves').update({ status: 'Approved' }).eq('id', id);
+    if (error) alert(error.message); else {
+      await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'Approved', detail: { leave_id: id, approved_by: me } }]);
+      loadLeaves();
+    }
+  };
+
   const approveAsCEO = async (id: number) => {
     if (!isSuper) return alert('Not allowed');
     const { data: au } = await supabase.auth.getUser();
@@ -635,6 +651,7 @@ const HRMPage: React.FC = () => {
   };
 
   const rejectLeave = async (id: number) => {
+    if (!isAdmin) { alert('Only Admin/Super Admin can reject leaves'); return; }
     const { data: au } = await supabase.auth.getUser();
     const me = au?.user?.email || '';
     const { error } = await supabase.from('leaves').update({ status: 'Rejected' }).eq('id', id);
@@ -924,6 +941,28 @@ const HRMPage: React.FC = () => {
                   )}
                 </div>
 
+                <div className="mt-2 inline-flex bg-white border rounded-lg p-1">
+                  <button
+                    onClick={() => setLStatus('Pending')}
+                    className={`px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Pending' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                  >
+                    Pending
+                  </button>
+                  <button
+                    onClick={() => setLStatus('Approved')}
+                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Approved' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                  >
+                    Approved
+                  </button>
+                  <button
+                    onClick={() => setLStatus('Rejected')}
+                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Rejected' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                  >
+                    Rejected
+                  </button>
+                </div>
+
+
 	                {lb && (
 	                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
 	                    <div className="font-semibold mb-1">Leave Entitlements</div>
@@ -953,9 +992,6 @@ const HRMPage: React.FC = () => {
                         <th className="p-2">Status</th>
                         <th className="p-2">Reason</th>
                         {role==='super' && <th className="p-2">Branch</th>}
-                        <th className="p-2">Manager</th>
-                        <th className="p-2">HR</th>
-                        <th className="p-2">CEO</th>
                         <th className="p-2 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -963,35 +999,42 @@ const HRMPage: React.FC = () => {
                       {leaves.map(l => (
                         <tr key={l.id}>
                           <td className="p-2 font-semibold text-text-primary">{l.employee_email}</td>
-                          <td className="p-2">{l.type || '-'}</td>
+                          <td className="p-2">{l.leave_type || l.type || '-'}</td>
                           <td className="p-2">{l.start_date || '-'}</td>
                           <td className="p-2">{l.end_date || '-'}</td>
-                          <td className="p-2">{l.status || '-'}</td>
+                          <td className="p-2">
+                            {l.status ? (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                  l.status === 'Approved'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : l.status === 'Rejected'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-amber-100 text-amber-700'
+                                }`}
+                              >
+                                {l.status}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
                           <td className="p-2">{l.reason || '-'}</td>
                           {role==='super' && <td className="p-2">{l.branch || '-'}</td>}
-                          <td className="p-2">{(l as any).manager_approved_by || '-'}</td>
-                          <td className="p-2">{(l as any).hr_approved_by || '-'}</td>
-                          <td className="p-2">{(l as any).ceo_approved_by || '-'}</td>
                           <td className="p-2 text-right">
-                            <div className="inline-flex items-center gap-3">
-                              {!(l as any).manager_approved_by && (isAdmin || isHR || (myRoleText||'').includes('manager')) && (
-                                <button onClick={()=>approveAsManager(l.id)} className="text-amber-700 hover:underline">Approve as Manager</button>
-                              )}
-                              {(l as any).manager_approved_by && !(l as any).hr_approved_by && isHR && (
-                                <button onClick={()=>approveAsHR(l.id)} className="text-green-700 hover:underline">Approve as HR</button>
-                              )}
-                              {(l as any).hr_approved_by && !(l as any).ceo_approved_by && isSuper && (
-                                <button onClick={()=>approveAsCEO(l.id)} className="text-blue-700 hover:underline">Approve as CEO</button>
-                              )}
-                              {(isAdmin || isHR || isSuper) && (
+                            {isAdmin && l.status === 'Pending' ? (
+                              <div className="inline-flex items-center gap-3">
+                                <button onClick={()=>approveLeave(l.id)} className="text-green-700 hover:underline">Approve</button>
                                 <button onClick={()=>rejectLeave(l.id)} className="text-red-600 hover:underline">Reject</button>
-                              )}
-                            </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-text-secondary">No actions</span>
+                            )}
                           </td>
                         </tr>
                       ))}
                       {leaves.length===0 && (
-                        <tr><td colSpan={role==='super'?11:10} className="p-4 text-center text-text-secondary">No leaves</td></tr>
+                        <tr><td colSpan={role==='super'?8:7} className="p-4 text-center text-text-secondary">No leaves</td></tr>
                       )}
                     </tbody>
                   </table>
