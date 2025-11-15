@@ -59,6 +59,58 @@ const STATUS_STYLES: Record<Status, { text: string; bg: string; dot: string }> =
   'Todo': { text: 'text-gray-700', bg: 'bg-gray-100', dot: 'bg-gray-400' },
 };
 
+
+type CaseStage =
+  | 'Initial Stage'
+  | 'Offer Applied'
+  | 'Offer Received'
+  | 'Fee Paid'
+  | 'Interview'
+  | 'CAS Applied'
+  | 'CAS Received'
+  | 'Visa Applied'
+  | 'Visa Received'
+  | 'Backout'
+  | 'Visa Rejected';
+
+const CASE_STAGES: CaseStage[] = [
+  'Initial Stage',
+  'Offer Applied',
+  'Offer Received',
+  'Fee Paid',
+  'Interview',
+  'CAS Applied',
+  'CAS Received',
+  'Visa Applied',
+  'Visa Received',
+  'Backout',
+  'Visa Rejected',
+];
+
+const CASE_STAGE_COLORS: Record<CaseStage, string> = {
+  'Initial Stage': 'bg-gray-100 text-gray-800',
+  'Offer Applied': 'bg-blue-50 text-blue-800',
+  'Offer Received': 'bg-indigo-50 text-indigo-800',
+  'Fee Paid': 'bg-emerald-50 text-emerald-800',
+  'Interview': 'bg-yellow-50 text-yellow-800',
+  'CAS Applied': 'bg-sky-50 text-sky-800',
+  'CAS Received': 'bg-sky-100 text-sky-900',
+  'Visa Applied': 'bg-purple-50 text-purple-800',
+  'Visa Received': 'bg-green-100 text-green-800',
+  'Backout': 'bg-gray-200 text-gray-700',
+  'Visa Rejected': 'bg-red-100 text-red-800',
+};
+
+type ApplicationHistoryItem = {
+  id: string;
+  detailsTimestamp: string | null;
+  status: CaseStage;
+  comment: string | null;
+  commentBy: string | null;
+  commentByName: string | null;
+};
+
+
 const CaseTaskDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { caseNumber, taskId } = useParams();
@@ -87,6 +139,14 @@ const CaseTaskDetailPage: React.FC = () => {
   // Attachments
   const [caseFiles, setCaseFiles] = useState<any[]>([]);
   const [taskFiles, setTaskFiles] = useState<any[]>([]);
+
+	  // Application history
+	  const [appHistory, setAppHistory] = useState<ApplicationHistoryItem[]>([]);
+	  const [showAddHistory, setShowAddHistory] = useState(false);
+	  const [histStatus, setHistStatus] = useState<CaseStage>('Initial Stage');
+	  const [histComment, setHistComment] = useState('');
+	  const [savingHistory, setSavingHistory] = useState(false);
+
 
   const loadCase = useCallback(async () => {
     if (!caseNumber) return;
@@ -170,6 +230,32 @@ const CaseTaskDetailPage: React.FC = () => {
     setCaseTasks(mapped);
   }, [caseNumber]);
 
+	  const loadApplicationHistory = useCallback(async () => {
+	    if (!caseNumber) {
+	      setAppHistory([]);
+	      return;
+	    }
+	    const { data, error } = await supabase
+	      .from('application_history')
+	      .select('id, case_number, details_timestamp, comment, status, comment_by, comment_by_name, created_at')
+	      .eq('case_number', caseNumber)
+	      .order('details_timestamp', { ascending: false })
+	      .order('created_at', { ascending: false });
+	    if (!error && data) {
+	      const mapped: ApplicationHistoryItem[] = (data as any[]).map((r: any) => ({
+	        id: r.id,
+	        detailsTimestamp: r.details_timestamp || r.created_at,
+	        status: r.status as CaseStage,
+	        comment: r.comment ?? null,
+	        commentBy: r.comment_by ?? null,
+	        commentByName: r.comment_by_name ?? null,
+	      }));
+	      setAppHistory(mapped);
+	    }
+	  }, [caseNumber]);
+
+
+
 
   const listCaseFiles = useCallback(async () => {
     if (!caseNumber) return;
@@ -196,6 +282,35 @@ const CaseTaskDetailPage: React.FC = () => {
       .subscribe();
     return () => { mounted = false; supabase.removeChannel(chanTasks); };
   }, [caseNumber, taskId, loadCase, loadTask, loadCaseTasks, listCaseFiles, listTaskFiles]);
+
+	  // Load & subscribe to application history separately so the panel stays live
+	  useEffect(() => {
+	    if (!caseNumber) {
+	      setAppHistory([]);
+	      return;
+	    }
+	    let mounted = true;
+	    (async () => {
+	      if (mounted) {
+	        await loadApplicationHistory();
+	      }
+	    })();
+	    const chanHistory = supabase
+	      .channel(`detail:application_history:${caseNumber}`)
+	      .on(
+	        'postgres_changes',
+	        { event: '*', schema: 'public', table: 'application_history', filter: `case_number=eq.${caseNumber}` },
+	        () => {
+	          loadApplicationHistory();
+	        }
+	      )
+	      .subscribe();
+	    return () => {
+	      mounted = false;
+	      supabase.removeChannel(chanHistory);
+	    };
+	  }, [caseNumber, loadApplicationHistory]);
+
   const saveCaseDescription = async () => {
     if (!caseNumber) return;
     // Merge description into student_info JSON instead of non-existent column
@@ -215,6 +330,33 @@ const CaseTaskDetailPage: React.FC = () => {
     setTask({ ...task, description: taskDescDraft });
     await supabase.from('activity_log').insert([{ type: 'task_update', entity: 'task', case_number: caseNumber, task_id: task.id, message: 'Updated task description' }]).catch(()=>{});
   };
+
+	  const addApplicationHistory = async (e: React.FormEvent) => {
+	    e.preventDefault();
+	    if (!caseNumber || !histStatus) return;
+	    setSavingHistory(true);
+	    try {
+	      const payload = {
+	        case_number: caseNumber,
+	        status: histStatus,
+	        comment: histComment.trim() || null,
+	      };
+	      const { error } = await supabase.from('application_history').insert([payload]);
+	      if (error) {
+	        console.error('Failed to add application history', error);
+	        alert('Could not save application update. Please try again.');
+	      } else {
+	        setHistComment('');
+	        setHistStatus('Initial Stage');
+	        setShowAddHistory(false);
+	        await loadApplicationHistory();
+	      }
+	    } finally {
+	      setSavingHistory(false);
+	    }
+	  };
+
+
 
 
   const onUploadCaseFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -528,12 +670,134 @@ const CaseTaskDetailPage: React.FC = () => {
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-text-secondary">No task selected.</div>
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div className="text-xs text-text-secondary uppercase tracking-wide">Application History</div>
+                      <div className="text-sm text-text-secondary">
+                        {appHistory.length ? `${appHistory.length} update${appHistory.length === 1 ? '' : 's'}` : 'No updates yet'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddHistory(true)}
+                      className="px-3 py-1.5 rounded-full bg-[#ffa332] text-white text-xs font-semibold hover:opacity-95"
+                    >
+                      + Add Update
+                    </button>
+                  </div>
+                  <div className="mt-1 space-y-3 overflow-auto">
+                    {appHistory.length === 0 && (
+                      <div className="text-xs text-text-secondary">
+                        No application history yet. Use \"Add Update\" to log the next step.
+                      </div>
+                    )}
+                    {appHistory.map((h) => (
+                      <div
+                        key={h.id}
+                        className="border rounded-lg px-3 py-2 text-xs bg-gray-50"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-[11px] text-text-secondary">
+                            {h.detailsTimestamp
+                              ? new Date(h.detailsTimestamp).toLocaleString('en-GB', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })
+                              : '—'
+                            }
+                          </div>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] ${CASE_STAGE_COLORS[h.status]}`}
+                          >
+                            {h.status}
+                          </span>
+                        </div>
+                        {h.comment && (
+                          <div className="mt-1 text-[13px] leading-snug">
+                            {h.comment}
+                          </div>
+                        )}
+                        <div className="mt-1 text-[11px] text-text-secondary">
+                          Comment by:{' '}
+                          <span className="font-medium">
+                            {h.commentByName || h.commentBy || 'Unknown'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </aside>
           </div>
         </section>
       </div>
+
+
+      {/* Add Application Update Modal */}
+      {showAddHistory && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={addApplicationHistory} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold">Add Application Update</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddHistory(false)}
+                className="text-text-secondary"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <label className="text-sm block">
+                <span className="text-text-secondary">Status</span>
+                <select
+                  value={histStatus}
+                  onChange={(e) => setHistStatus(e.target.value as CaseStage)}
+                  className="mt-1 w-full border rounded p-2 text-sm"
+                  required
+                >
+                  {CASE_STAGES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm block">
+                <span className="text-text-secondary">Comment</span>
+                <textarea
+                  value={histComment}
+                  onChange={(e) => setHistComment(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full border rounded p-2 text-sm"
+                  placeholder="Optional details for this step..."
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAddHistory(false)}
+                className="px-3 py-1.5 rounded border text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingHistory}
+                className="px-4 py-2 rounded bg-[#ffa332] text-white text-xs font-semibold disabled:opacity-60"
+              >
+                {savingHistory ? 'Saving...' : 'Save Update'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Add Task Modal */}
       {showAddTask && (
