@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
   amount_unpaid numeric(14,2),
   due_date      date,
   pdf_url       text,
-  branch_id     uuid REFERENCES branches(id),
+  branch_id     uuid,
   created_by    bigint REFERENCES users(id) ON DELETE SET NULL,
   created_at    timestamptz NOT NULL DEFAULT now()
 );

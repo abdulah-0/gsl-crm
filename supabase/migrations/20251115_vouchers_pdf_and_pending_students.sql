@@ -14,7 +14,7 @@ alter table if exists public.vouchers
   add column if not exists amount_unpaid numeric(14,2),
   add column if not exists due_date date,
   add column if not exists pdf_url text,
-  add column if not exists branch_id uuid references public.branches(id);
+  add column if not exists branch_id uuid;
 
 create index if not exists idx_vouchers_student on public.vouchers(student_id);
 create index if not exists idx_vouchers_branch_id on public.vouchers(branch_id);
