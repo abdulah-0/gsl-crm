@@ -1,24 +1,7 @@
 -- Align dashboard_cases.status with the new 11-stage case pipeline
 BEGIN;
 
--- 1) If stage column exists, copy its values into status so existing rows pass the new constraint
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name   = 'dashboard_cases'
-      AND column_name  = 'stage'
-  ) THEN
-    UPDATE public.dashboard_cases
-    SET status = stage
-    WHERE stage IS NOT NULL;
-  END IF;
-END
-$$;
-
--- 2) Drop any existing CHECK constraint attached to the status column
+-- 1) Drop any existing CHECK constraint attached to the status column
 DO $$
 DECLARE c RECORD;
 BEGIN
@@ -35,6 +18,46 @@ BEGIN
   LOOP
     EXECUTE format('ALTER TABLE public.dashboard_cases DROP CONSTRAINT %I', c.conname);
   END LOOP;
+END
+$$;
+
+-- 2) Normalise all existing status values into the 11 allowed stages
+--    so that adding the CHECK constraint cannot fail on old rows.
+DO $$
+DECLARE
+  has_stage boolean;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name   = 'dashboard_cases'
+      AND column_name  = 'stage'
+  ) INTO has_stage;
+
+  IF has_stage THEN
+    UPDATE public.dashboard_cases
+    SET status = CASE
+      WHEN stage IN (
+        'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
+        'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected'
+      ) THEN stage
+      WHEN status IN (
+        'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
+        'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected'
+      ) THEN status
+      ELSE 'Initial Stage'
+    END;
+  ELSE
+    UPDATE public.dashboard_cases
+    SET status = CASE
+      WHEN status IN (
+        'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
+        'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected'
+      ) THEN status
+      ELSE 'Initial Stage'
+    END;
+  END IF;
 END
 $$;
 

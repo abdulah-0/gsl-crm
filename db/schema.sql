@@ -213,16 +213,25 @@ CREATE TABLE IF NOT EXISTS accounts_transactions (
 
 -- 5b) Vouchers (for Finance tab)
 CREATE TABLE IF NOT EXISTS vouchers (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code        text UNIQUE NOT NULL,
-  vtype       text NOT NULL CHECK (vtype IN ('cash_in','cash_out','online','bank','transfer')),
-  amount      numeric(14,2) NOT NULL,
-  branch      text NOT NULL,
-  occurred_at timestamptz NOT NULL DEFAULT now(),
-  status      text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved','Rejected')),
-  description text,
-  created_by  bigint REFERENCES users(id) ON DELETE SET NULL,
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code          text UNIQUE NOT NULL,
+  vtype         text NOT NULL CHECK (vtype IN ('cash_in','cash_out','online','bank','transfer')),
+  amount        numeric(14,2) NOT NULL,
+  branch        text NOT NULL,
+  occurred_at   timestamptz NOT NULL DEFAULT now(),
+  status        text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved','Rejected')),
+  description   text,
+  student_id    text REFERENCES dashboard_students(id) ON DELETE SET NULL,
+  voucher_type  text,
+  service_type  text,
+  discount      numeric(14,2),
+  amount_paid   numeric(14,2),
+  amount_unpaid numeric(14,2),
+  due_date      date,
+  pdf_url       text,
+  branch_id     uuid REFERENCES branches(id),
+  created_by    bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
 );
 
 

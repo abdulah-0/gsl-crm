@@ -14,6 +14,14 @@ type VoucherStatus = 'Approved' | 'Pending' | 'Rejected';
 
 type VoucherType = 'Cash Receipt' | 'Cash Payment' | 'Online Payment' | 'Bank Deposit' | 'Transfer';
 
+
+type VoucherCategory =
+  | 'Admission / Enrollment Voucher'
+  | 'Installment Voucher'
+  | 'Consultancy Payment Voucher'
+  | 'Test Fee Voucher'
+  | 'Miscellaneous Voucher';
+
 type VoucherRow = {
   id: string;
   type: 'Cash In' | 'Cash Out' | 'Online' | 'Bank' | 'Transfer';
@@ -23,6 +31,7 @@ type VoucherRow = {
   status: VoucherStatus;
   description?: string;
   uploaded_bill?: string; // storage path
+  pdf_url?: string;       // stored PDF path in vouchers bucket
 };
 
 type DBVoucher = {
@@ -35,6 +44,29 @@ type DBVoucher = {
   status: VoucherStatus;
   description?: string | null;
   uploaded_bill?: string | null;
+  pdf_url?: string | null;
+  student_id?: string | null;
+  voucher_type?: string | null;
+  service_type?: string | null;
+  discount?: number | null;
+  amount_paid?: number | null;
+  amount_unpaid?: number | null;
+  due_date?: string | null;
+  branch_id?: string | null;
+};
+
+type PendingStudent = {
+  student_id: string;
+  registration_no: string;
+  full_name: string;
+  batch_no: string | null;
+  program_title: string | null;
+  phone: string | null;
+  total_fee: number;
+  amount_paid: number;
+  remaining_amount: number;
+  total_discount: number;
+  next_due_date: string | null;
 };
 
 function mapDbToRow(v: DBVoucher): VoucherRow {
@@ -50,6 +82,7 @@ function mapDbToRow(v: DBVoucher): VoucherRow {
     status: v.status,
     description: v.description ?? undefined,
     uploaded_bill: (v as any).uploaded_bill ?? undefined,
+    pdf_url: (v as any).pdf_url ?? undefined,
   };
 }
 
@@ -182,6 +215,79 @@ function generateVoucherPDF(row: VoucherRow) {
   }
 }
 
+// Generate voucher PDF and upload to Supabase Storage, returning storage path
+async function generateVoucherPDFToStorage(
+  row: VoucherRow,
+  opts?: { pending?: PendingStudent | null; category?: VoucherCategory | '' }
+): Promise<string | null> {
+  try {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('GSL Pakistan - Voucher', 14, 18);
+
+    const lines: [string, string][] = [
+      ['Voucher ID', row.id],
+      ['Voucher Type', row.type],
+      ['Category', (opts?.category as string) || '-'],
+      ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount >= 0 ? '(In)' : '(Out)'}`],
+      ['Branch', row.branch],
+      ['Date', new Date(row.date).toLocaleString()],
+      ['Status', row.status],
+    ];
+
+    if (opts?.pending) {
+      const p = opts.pending;
+      lines.push(
+        ['Student Name', p.full_name],
+        ['Registration No', p.registration_no],
+        ['Batch No', p.batch_no || '-'],
+        ['Course / Service', p.program_title || '-'],
+        ['Total Fee', `Rs ${Number(p.total_fee || 0).toLocaleString()}`],
+        ['Amount Paid', `Rs ${Number(p.amount_paid || 0).toLocaleString()}`],
+        ['Remaining Balance', `Rs ${Number(p.remaining_amount || 0).toLocaleString()}`],
+        ['Discount Applied', `Rs ${Number(p.total_discount || 0).toLocaleString()}`],
+        ['Next Due Date', p.next_due_date ? new Date(p.next_due_date).toLocaleDateString() : '-']
+      );
+    }
+
+    if (row.description) {
+      lines.push(['Description', row.description]);
+    }
+
+    (autoTable as any)(doc, {
+      head: [['Field', 'Value']],
+      body: lines,
+      startY: 26,
+      styles: { fontSize: 11 },
+      headStyles: { fillColor: [255, 163, 50] },
+    });
+
+    const blob = doc.output('blob');
+    const path = `vouchers/${row.id}-${Date.now()}.pdf`;
+
+    const upload = await supabase.storage
+      .from('vouchers')
+      .upload(path, blob, {
+        upsert: true,
+        cacheControl: '3600',
+        contentType: 'application/pdf',
+      });
+
+    if (upload.error) {
+      console.error('Voucher PDF upload error', upload.error);
+      alert('Failed to upload voucher PDF.');
+      return null;
+    }
+
+    return path;
+  } catch (e) {
+    console.error('Voucher PDF generate/upload error', e);
+    alert('Failed to generate voucher PDF.');
+    return null;
+  }
+}
+
+
 async function openBill(path: string) {
   try {
     const { data, error } = await supabase.storage.from('attachments').createSignedUrl(path, 60);
@@ -200,8 +306,22 @@ const Finances: React.FC = () => {
 
   // Row actions state
   const [viewVoucher, setViewVoucher] = useState<VoucherRow | null>(null);
+
+  const [viewPdfUrl, setViewPdfUrl] = useState<string | null>(null);
+  const [viewPdfLoading, setViewPdfLoading] = useState(false);
+  const [viewPdfError, setViewPdfError] = useState<string | null>(null);
+
   const [editVoucher, setEditVoucher] = useState<VoucherRow | null>(null);
   const [editStatus, setEditStatus] = useState<VoucherStatus>('Pending');
+
+  const [voucherCategory, setVoucherCategory] = useState<VoucherCategory | ''>('');
+
+  const [pendingSearch, setPendingSearch] = useState('');
+  const [pendingResults, setPendingResults] = useState<PendingStudent[]>([]);
+  const [pendingSelected, setPendingSelected] = useState<PendingStudent | null>(null);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
   const [editDescription, setEditDescription] = useState<string>('');
 
 
@@ -231,12 +351,15 @@ const Finances: React.FC = () => {
 
   const isValid = useMemo(() => {
     const amt = Number(amount);
+    const hasStudent = !!pendingSelected;
+    const categoryOk = !hasStudent || voucherCategory !== '';
     return (
       voucherType !== '' &&
+      categoryOk &&
       !Number.isNaN(amt) && amt > 0 &&
       branch && description.trim().length > 0
     );
-  }, [voucherType, amount, branch, description]);
+  }, [voucherType, voucherCategory, amount, branch, description, pendingSelected]);
 
   // Derive branches from data for filters/charts
   const branchList = useMemo(() => {
@@ -282,6 +405,12 @@ const Finances: React.FC = () => {
 	        }
 	      } catch {
 	        // ignore
+	      }
+	    })();
+	  }, []);
+
+
+
 
   // Accounts (payment breakdown by student)
   useEffect(() => {
@@ -318,9 +447,67 @@ const Finances: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
-	      }
-	    })();
-	  }, []);
+  // Pending students search (debounced)
+  useEffect(() => {
+    let cancelled = false;
+
+    const term = pendingSearch.trim();
+    if (!term) {
+      setPendingResults([]);
+      setPendingLoading(false);
+      setPendingError(null);
+      return;
+    }
+
+    const handle = setTimeout(async () => {
+      try {
+        setPendingLoading(true);
+        setPendingError(null);
+        const { data, error } = await supabase
+          .from('pending_students')
+          .select('*')
+          .or(
+            `full_name.ilike.%${term}%,registration_no.ilike.%${term}%,batch_no.ilike.%${term}%,phone.ilike.%${term}%`
+          )
+          .limit(20);
+        if (cancelled) return;
+        if (error) {
+          console.error('pending_students search error', error);
+          setPendingError('Failed to load pending students');
+          setPendingResults([]);
+          return;
+        }
+        setPendingResults((data as any as PendingStudent[]) || []);
+      } catch (e) {
+        if (cancelled) return;
+        console.error('pending_students search error', e);
+        setPendingError('Failed to load pending students');
+        setPendingResults([]);
+      } finally {
+        if (!cancelled) setPendingLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [pendingSearch]);
+
+  const handleSelectPendingStudent = (s: PendingStudent) => {
+    setPendingSelected(s);
+    if (!voucherCategory) {
+      setVoucherCategory('Installment Voucher');
+    }
+    if (!description) {
+      setDescription(`Fee voucher for ${s.full_name} (${s.registration_no})`);
+    }
+    if (!amount && s.remaining_amount != null) {
+      setAmount(String(s.remaining_amount));
+    }
+  };
+
+
 
   const qValid = useMemo(()=>{
     const amt = Number(qAmount);
@@ -337,36 +524,110 @@ const Finances: React.FC = () => {
     const dbType = voucherTypeToDbType(voucherType as VoucherType);
     const amt = Number(amount);
     const signedAmt = rowType === 'Cash Out' ? -Math.abs(amt) : Math.abs(amt);
-    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;
     const occurred_at = new Date().toISOString();
 
-    // Optimistic UI update (will be reconciled by realtime)
-    setVouchers(prev => ([
-      { id: code, type: rowType, amount: signedAmt, branch, date: occurred_at, status, description },
-      ...prev
-    ]));
+    const branchRow = branches.find(b => b.branch_name === branch);
+    const branchId = branchRow?.id ?? null;
 
-    const { error } = await supabase.from('vouchers').insert([
-      { code, vtype: dbType, amount: signedAmt, branch, occurred_at, status, description }
-    ]);
+    const optimisticRow: VoucherRow = {
+      id: code,
+      type: rowType,
+      amount: signedAmt,
+      branch,
+      date: occurred_at,
+      status,
+      description,
+      pdf_url: undefined,
+    };
+
+    // Optimistic UI update (will be reconciled by realtime)
+    setVouchers(prev => ([optimisticRow, ...prev]));
+
+    const payload: any = {
+      code,
+      vtype: dbType,
+      amount: signedAmt,
+      branch,
+      occurred_at,
+      status,
+      description,
+      branch_id: branchId,
+    };
+
+    if (pendingSelected) {
+      payload.student_id = pendingSelected.student_id;
+      payload.voucher_type = voucherCategory || 'Installment Voucher';
+      payload.service_type = pendingSelected.program_title || null;
+      payload.discount = pendingSelected.total_discount ?? null;
+      payload.amount_paid = pendingSelected.amount_paid ?? null;
+      payload.amount_unpaid = pendingSelected.remaining_amount ?? null;
+      payload.due_date = pendingSelected.next_due_date ?? null;
+    } else if (voucherCategory) {
+      payload.voucher_type = voucherCategory;
+    }
+
+    const { error } = await supabase.from('vouchers').insert([payload]);
     if (error) {
       // rollback optimistic add if failed
       setVouchers(prev => prev.filter(v => v.id !== code));
       alert(`Failed to create voucher: ${error.message}`);
-
       return;
     }
 
-    // Generate printable PDF for the created voucher
-    generateVoucherPDF({ id: code, type: rowType, amount: signedAmt, branch, date: occurred_at, status, description });
+    const pdfPath = await generateVoucherPDFToStorage(optimisticRow, {
+      pending: pendingSelected,
+      category: voucherCategory,
+    });
 
-    // reset minimal
+    if (pdfPath) {
+      await supabase.from('vouchers').update({ pdf_url: pdfPath }).eq('code', code);
+      setVouchers(prev => prev.map(v => (v.id === code ? { ...v, pdf_url: pdfPath } : v)));
+    }
+
+    // reset all form fields
     setAmount('');
     setDescription('');
+    setPendingSelected(null);
+    setPendingSearch('');
+    setPendingResults([]);
+    setVoucherCategory('');
   };
 
   // Row action handlers
-  const onView = (r: VoucherRow) => setViewVoucher(r);
+  const closeViewModal = () => {
+    setViewVoucher(null);
+    setViewPdfUrl(null);
+    setViewPdfError(null);
+    setViewPdfLoading(false);
+  };
+
+  const onView = async (r: VoucherRow) => {
+    setViewVoucher(r);
+    setViewPdfUrl(null);
+    setViewPdfError(null);
+
+    if (!r.pdf_url) {
+      return;
+    }
+
+    try {
+      setViewPdfLoading(true);
+      const { data, error } = await supabase.storage.from('vouchers').createSignedUrl(r.pdf_url, 60 * 5);
+      if (error || !data?.signedUrl) {
+        console.error('Voucher PDF signed URL error', error);
+        setViewPdfError('Unable to open voucher PDF');
+        return;
+      }
+      setViewPdfUrl(data.signedUrl);
+    } catch (e) {
+      console.error('Voucher PDF open error', e);
+      setViewPdfError('Unable to open voucher PDF');
+    } finally {
+      setViewPdfLoading(false);
+    }
+  };
+
   const onEdit = (r: VoucherRow) => { setEditVoucher(r); setEditStatus(r.status); setEditDescription(r.description ?? ''); };
   const onDelete = async (r: VoucherRow) => {
     if (!canDelete) { alert('Not permitted'); return; }
@@ -438,19 +699,39 @@ const Finances: React.FC = () => {
     const dbType: DBVoucher['vtype'] = 'cash_out';
     const amt = Number(qAmount);
     const signedAmt = -Math.abs(amt);
-    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+    const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 100000)).padStart(5, '0')}`;
     const occurred_at = new Date().toISOString();
 
     const desc = qDescription?.trim() ? qDescription : qCategory;
 
-    setVouchers(prev => ([
-      { id: code, type: rowType, amount: signedAmt, branch: qBranch, date: occurred_at, status, description: desc },
-      ...prev
-    ]));
+    const branchRow = branches.find(b => b.branch_name === qBranch);
+    const branchId = branchRow?.id ?? null;
 
-    const { error } = await supabase.from('vouchers').insert([
-      { code, vtype: dbType, amount: signedAmt, branch: qBranch, occurred_at, status, description: desc }
-    ]);
+    const optimisticRow: VoucherRow = {
+      id: code,
+      type: rowType,
+      amount: signedAmt,
+      branch: qBranch,
+      date: occurred_at,
+      status,
+      description: desc,
+      pdf_url: undefined,
+    };
+
+    setVouchers(prev => ([optimisticRow, ...prev]));
+
+    const payload: any = {
+      code,
+      vtype: dbType,
+      amount: signedAmt,
+      branch: qBranch,
+      occurred_at,
+      status,
+      description: desc,
+      branch_id: branchId,
+    };
+
+    const { error } = await supabase.from('vouchers').insert([payload]);
     if (error) {
       setVouchers(prev => prev.filter(v => v.id !== code));
       alert(`Failed to create voucher: ${error.message}`);
@@ -460,7 +741,7 @@ const Finances: React.FC = () => {
     // Optional bill upload
     if (qBillFile) {
       const file = qBillFile;
-      const allowed = ['application/pdf','image/jpeg','image/png'];
+      const allowed = ['application/pdf', 'image/jpeg', 'image/png'];
       if (!allowed.includes(file.type)) {
         setQBillError('Only PDF, JPG, or PNG allowed');
       } else if (file.size > 5 * 1024 * 1024) {
@@ -482,8 +763,11 @@ const Finances: React.FC = () => {
       }
     }
 
-
-    generateVoucherPDF({ id: code, type: rowType, amount: signedAmt, branch: qBranch, date: occurred_at, status, description: desc });
+    const pdfPath = await generateVoucherPDFToStorage(optimisticRow);
+    if (pdfPath) {
+      await supabase.from('vouchers').update({ pdf_url: pdfPath }).eq('code', code);
+      setVouchers(prev => prev.map(v => (v.id === code ? { ...v, pdf_url: pdfPath } : v)));
+    }
 
     setQAmount('');
     setQBranch('');
@@ -669,6 +953,61 @@ const Finances: React.FC = () => {
               {/* Left: Form (span 2) */}
               <form onSubmit={handleGenerate} className="lg:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
                 <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Generate Voucher</h2>
+
+                {/* Pending students search */}
+                <div className="mt-4">
+                  <label className="text-sm font-semibold text-text-secondary">Pending Students</label>
+                  <input
+                    type="text"
+                    value={pendingSearch}
+                    onChange={(e) => setPendingSearch(e.target.value)}
+                    placeholder="Search by name, registration no, batch, phone"
+                    className="mt-1 w-full border rounded-lg p-2"
+                  />
+                  {pendingError && (
+                    <p className="mt-1 text-xs text-red-600">{pendingError}</p>
+                  )}
+                  {pendingLoading && !pendingError && (
+                    <p className="mt-1 text-xs text-text-secondary">Loading pending students...</p>
+                  )}
+                  {!pendingLoading && !pendingError && pendingResults.length > 0 && (
+                    <div className="mt-1 max-h-40 overflow-auto border rounded-lg bg-white shadow-sm text-sm">
+                      {pendingResults.map(s => (
+                        <button
+                          key={s.student_id}
+                          type="button"
+                          onClick={() => handleSelectPendingStudent(s)}
+                          className={`w-full text-left px-3 py-2 hover:bg-gray-50 ${pendingSelected?.student_id === s.student_id ? 'bg-orange-50' : ''}`}
+                        >
+                          <div className="font-semibold">{s.full_name}</div>
+                          <div className="text-xs text-text-secondary">
+                            {s.registration_no}  b7 {s.batch_no || 'No batch'}  b7 {s.phone || 'No phone'}
+                          </div>
+                          <div className="text-xs text-green-700">
+                            Remaining: Rs {s.remaining_amount.toLocaleString()}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pendingSelected && (
+                    <div className="mt-2 text-xs border rounded-lg p-2 bg-gray-50">
+                      <div className="font-semibold">{pendingSelected.full_name}</div>
+                      <div className="text-text-secondary">
+                        Reg: {pendingSelected.registration_no}  b7 Batch: {pendingSelected.batch_no || '-'}
+                      </div>
+                      <div className="text-green-700">
+                        Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
+                      </div>
+                      {pendingSelected.next_due_date && (
+                        <div className="text-text-secondary">
+                          Due Date: {new Date(pendingSelected.next_due_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-semibold text-text-secondary">Voucher Type</label>
@@ -681,6 +1020,27 @@ const Finances: React.FC = () => {
                       <option>Transfer</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="text-sm font-semibold text-text-secondary">Voucher Category</label>
+                    <select
+                      value={voucherCategory as string}
+                      onChange={(e) => setVoucherCategory(e.target.value as VoucherCategory | '')}
+                      className="mt-1 w-full border rounded-lg p-2"
+                    >
+                      <option value="">Select...</option>
+                      <option>Admission / Enrollment Voucher</option>
+                      <option>Installment Voucher</option>
+                      <option>Consultancy Payment Voucher</option>
+                      <option>Test Fee Voucher</option>
+                      <option>Miscellaneous Voucher</option>
+                    </select>
+                    {pendingSelected && (
+                      <p className="mt-1 text-xs text-text-secondary">
+                        Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
                     <input type="number" min={0} placeholder="0" value={amount} onChange={(e)=>setAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
@@ -912,26 +1272,103 @@ const Finances: React.FC = () => {
       {/* View Modal */}
       {viewVoucher && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-xl p-5 w-full max-w-3xl shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Voucher #{viewVoucher.id}</h3>
-              <button type="button" onClick={()=>setViewVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button
+                type="button"
+                onClick={closeViewModal}
+                className="text-text-secondary hover:opacity-70"
+              >
+                ✕
+              </button>
             </div>
+
+            {/* Basic info */}
             <div className="mt-3 text-sm space-y-1">
               <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
-              <div><span className="text-text-secondary">Amount:</span> Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount>=0? '(In)':'(Out)'}</div>
+              <div>
+                <span className="text-text-secondary">Amount:</span>{' '}
+                Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount >= 0 ? '(In)' : '(Out)'}
+              </div>
               <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
               <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
               <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
-              {viewVoucher.description && <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>}
+              {viewVoucher.description && (
+                <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>
+              )}
               {viewVoucher.uploaded_bill && (
                 <div>
-                  <span className="text-text-secondary">Bill:</span> <button type="button" onClick={()=>openBill(viewVoucher.uploaded_bill!)} className="text-green-700 underline">Open</button>
+                  <span className="text-text-secondary">Bill:</span>{' '}
+                  <button
+                    type="button"
+                    onClick={() => openBill(viewVoucher.uploaded_bill!)}
+                    className="text-green-700 underline"
+                  >
+                    Open
+                  </button>
                 </div>
               )}
             </div>
+
+            {/* PDF viewer */}
+            {viewVoucher.pdf_url ? (
+              <div className="mt-4">
+                {viewPdfLoading && (
+                  <p className="text-sm text-text-secondary">Loading voucher PDF...</p>
+                )}
+                {viewPdfError && (
+                  <p className="text-sm text-red-600">{viewPdfError}</p>
+                )}
+                {viewPdfUrl && !viewPdfLoading && !viewPdfError && (
+                  <>
+                    <div className="mt-2 border rounded-lg overflow-hidden h-96">
+                      <iframe
+                        src={viewPdfUrl}
+                        title={`Voucher ${viewVoucher.id} PDF`}
+                        className="w-full h-full"
+                      />
+                    </div>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => window.open(viewPdfUrl!, '_blank')}
+                        className="px-3 py-2 border rounded hover:bg-gray-50 text-sm"
+                      >
+                        Open in new tab
+                      </button>
+                      <a
+                        href={viewPdfUrl!}
+                        download={`voucher-${viewVoucher.id}.pdf`}
+                        className="px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
+                      >
+                        Download PDF
+                      </a>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 text-sm text-text-secondary">
+                <p>No stored PDF found for this voucher yet.</p>
+                <button
+                  type="button"
+                  onClick={() => generateVoucherPDF(viewVoucher!)}
+                  className="mt-2 px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
+                >
+                  Download PDF
+                </button>
+              </div>
+            )}
+
             <div className="mt-4 text-right">
-              <button type="button" onClick={()=>setViewVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Close</button>
+              <button
+                type="button"
+                onClick={closeViewModal}
+                className="px-3 py-2 border rounded hover:bg-gray-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
