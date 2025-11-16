@@ -15,14 +15,14 @@ type VoucherStatus = 'Approved' | 'Pending' | 'Rejected';
 type VoucherType = 'Cash Receipt' | 'Cash Payment' | 'Online Payment' | 'Bank Deposit' | 'Transfer';
 
 
-type VoucherCategory =
+export type VoucherCategory =
   | 'Admission / Enrollment Voucher'
   | 'Installment Voucher'
   | 'Consultancy Payment Voucher'
   | 'Test Fee Voucher'
   | 'Miscellaneous Voucher';
 
-type VoucherRow = {
+export type VoucherRow = {
   id: string;
   type: 'Cash In' | 'Cash Out' | 'Online' | 'Bank' | 'Transfer';
   amount: number; // positive for in/online/bank, negative for out
@@ -55,7 +55,7 @@ type DBVoucher = {
   branch_id?: string | null;
 };
 
-type PendingStudent = {
+export type PendingStudent = {
   student_id: string;
   registration_no: string;
   full_name: string;
@@ -216,51 +216,132 @@ function generateVoucherPDF(row: VoucherRow) {
 }
 
 // Generate voucher PDF and upload to Supabase Storage, returning storage path
-async function generateVoucherPDFToStorage(
+export async function generateVoucherPDFToStorage(
   row: VoucherRow,
   opts?: { pending?: PendingStudent | null; category?: VoucherCategory | '' }
 ): Promise<string | null> {
   try {
+    const isEnrollmentVoucher = opts?.category === 'Admission / Enrollment Voucher';
+    const hasPending = !!opts?.pending;
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('GSL Pakistan - Voucher', 14, 18);
 
-    const lines: [string, string][] = [
-      ['Voucher ID', row.id],
-      ['Voucher Type', row.type],
-      ['Category', (opts?.category as string) || '-'],
-      ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount >= 0 ? '(In)' : '(Out)'}`],
-      ['Branch', row.branch],
-      ['Date', new Date(row.date).toLocaleString()],
-      ['Status', row.status],
-    ];
+    if (isEnrollmentVoucher && hasPending) {
+      const p = opts!.pending!;
+      const fmtDate = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB') : '-');
 
-    if (opts?.pending) {
-      const p = opts.pending;
-      lines.push(
-        ['Student Name', p.full_name],
-        ['Registration No', p.registration_no],
-        ['Batch No', p.batch_no || '-'],
-        ['Course / Service', p.program_title || '-'],
-        ['Total Fee', `Rs ${Number(p.total_fee || 0).toLocaleString()}`],
-        ['Amount Paid', `Rs ${Number(p.amount_paid || 0).toLocaleString()}`],
-        ['Remaining Balance', `Rs ${Number(p.remaining_amount || 0).toLocaleString()}`],
-        ['Discount Applied', `Rs ${Number(p.total_discount || 0).toLocaleString()}`],
-        ['Next Due Date', p.next_due_date ? new Date(p.next_due_date).toLocaleDateString() : '-']
+      const rawProgram = (p.program_title || '').toString();
+      let admissionType: string = 'Course';
+      if (/consultancy/i.test(rawProgram)) admissionType = 'Consultancy';
+      else if (/test/i.test(rawProgram)) admissionType = 'Test';
+
+      const totalFee = Number(p.total_fee ?? 0);
+      const amountPaid = Number(p.amount_paid ?? 0);
+      const remaining = Number(p.remaining_amount ?? Math.max(0, totalFee - amountPaid));
+      const paymentStatus = remaining <= 0 ? 'Fully Paid' : amountPaid > 0 ? 'Partially Paid' : 'Pending';
+
+      const commonLines: [string, string][] = [
+        ['Voucher No', row.id],
+        ['Name', p.full_name],
+        ['Admission Type', admissionType],
+        ['Course / Consultancy / Test Name', rawProgram || '-'],
+        ['Branch', row.branch],
+        ['Total Fee', `Rs ${totalFee.toLocaleString()}`],
+        ['Amount Received', `Rs ${amountPaid.toLocaleString()}`],
+        ['Payment Date', fmtDate(row.date)],
+        ['Mode of Payment', row.type === 'Cash In' ? 'Cash' : row.type],
+        ['Payment Status', paymentStatus],
+        ['Due Amount', `Rs ${remaining.toLocaleString()}`],
+        ['Due Date for Remaining Amount', fmtDate(p.next_due_date)],
+        ['Authorized Sign & Stamp', ''],
+      ];
+
+      // --- Student Copy ---
+      doc.setFontSize(14);
+      doc.text('ENROLLMENT VOUCHER – Student Copy', 105, 18, { align: 'center' });
+      doc.setFontSize(11);
+      doc.text('Gateway Study Links (SMC-PVT) LTD', 105, 24, { align: 'center' });
+      doc.text(
+        'Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234',
+        105,
+        29,
+        { align: 'center' }
       );
-    }
 
-    if (row.description) {
-      lines.push(['Description', row.description]);
-    }
+      (autoTable as any)(doc, {
+        head: [['Field', 'Value']],
+        body: commonLines,
+        startY: 36,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
 
-    (autoTable as any)(doc, {
-      head: [['Field', 'Value']],
-      body: lines,
-      startY: 26,
-      styles: { fontSize: 11 },
-      headStyles: { fillColor: [255, 163, 50] },
-    });
+      const firstTable = (doc as any).lastAutoTable;
+      const dividerY = firstTable ? firstTable.finalY + 6 : 120;
+      doc.setDrawColor(200);
+      doc.line(14, dividerY, 196, dividerY);
+
+      // --- Office Copy ---
+      const officeStartY = dividerY + 10;
+      doc.setFontSize(14);
+      doc.text('ENROLLMENT VOUCHER – Office Copy', 105, officeStartY, { align: 'center' });
+      doc.setFontSize(11);
+      doc.text('Gateway Study Links (SMC-PVT) LTD', 105, officeStartY + 6, { align: 'center' });
+      doc.text(
+        'Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234',
+        105,
+        officeStartY + 11,
+        { align: 'center' }
+      );
+
+      (autoTable as any)(doc, {
+        head: [['Field', 'Value']],
+        body: commonLines,
+        startY: officeStartY + 18,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+    } else {
+      // Fallback: generic voucher layout
+      doc.setFontSize(16);
+      doc.text('GSL Pakistan - Voucher', 14, 18);
+
+      const lines: [string, string][] = [
+        ['Voucher ID', row.id],
+        ['Voucher Type', row.type],
+        ['Category', (opts?.category as string) || '-'],
+        ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount >= 0 ? '(In)' : '(Out)'}`],
+        ['Branch', row.branch],
+        ['Date', new Date(row.date).toLocaleString()],
+        ['Status', row.status],
+      ];
+
+      if (opts?.pending) {
+        const p = opts.pending;
+        lines.push(
+          ['Student Name', p.full_name],
+          ['Registration No', p.registration_no],
+          ['Batch No', p.batch_no || '-'],
+          ['Course / Service', p.program_title || '-'],
+          ['Total Fee', `Rs ${Number(p.total_fee || 0).toLocaleString()}`],
+          ['Amount Paid', `Rs ${Number(p.amount_paid || 0).toLocaleString()}`],
+          ['Remaining Balance', `Rs ${Number(p.remaining_amount || 0).toLocaleString()}`],
+          ['Discount Applied', `Rs ${Number(p.total_discount || 0).toLocaleString()}`],
+          ['Next Due Date', p.next_due_date ? new Date(p.next_due_date).toLocaleDateString() : '-']
+        );
+      }
+
+      if (row.description) {
+        lines.push(['Description', row.description]);
+      }
+
+      (autoTable as any)(doc, {
+        head: [['Field', 'Value']],
+        body: lines,
+        startY: 26,
+        styles: { fontSize: 11 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+    }
 
     const blob = doc.output('blob');
     const path = `vouchers/${row.id}-${Date.now()}.pdf`;

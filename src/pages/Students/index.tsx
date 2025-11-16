@@ -4,6 +4,8 @@ import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { generateVoucherPDFToStorage, type VoucherRow, type PendingStudent, type VoucherCategory } from '../Finances';
+
 
 // Types
 type EnrollmentType = 'course' | 'consultancy' | 'test';
@@ -65,14 +67,14 @@ const defaultStudent: Omit<Student, 'id'> = {
 };
 
 const defaultConsultancyForm: any = {
-  basic_name:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'', basic_student_sign:'',
+  basic_name:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'',
   ug_olevels:false, ug_olevels_year:'', ug_olevels_grades:'', ug_alevels:false, ug_alevels_year:'', ug_alevels_grades:'', ug_matric:false, ug_matric_year:'', ug_matric_grades:'', ug_hssc:false, ug_hssc_year:'', ug_hssc_grades:'', ug_other:'',
   pg_bachelors:false, pg_bachelors_university:'', pg_bachelors_course:'', pg_bachelors_year:'', pg_bachelors_grades:'', pg_masters:false, pg_masters_university:'', pg_masters_course:'', pg_masters_year:'', pg_masters_grades:'',
   eng_ielts:false, eng_toefl:false, eng_pte:false, eng_duolingo:false, eng_other:'', eng_score:'',
   work_exp:'',
   coi_uk:false, coi_usa:false, coi_canada:false, coi_malaysia:false, coi_germany:false, coi_australia:false, coi_others:'',
   add_course_or_uni:'', add_travel_history:'', add_visa_refusal:'', add_asylum_family:'',
-  office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_counsellor_sign:'', office_next_follow_up_date:'',
+  office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_next_follow_up_date:'',
 };
 
 const defaultTestForm: TestEnrollmentForm = {
@@ -142,7 +144,16 @@ const StudentsPage: React.FC = () => {
   },[]);
   useEffect(()=>{ if(tab==='add' && !canAdd) setTab('list'); }, [tab, canAdd]);
 
-
+  // Auto-fill Consultancy Date field with today's date when applicable
+  useEffect(() => {
+    if (enrollmentType === 'consultancy') {
+      const today = new Date().toISOString().slice(0, 10);
+      setConsultSf(prev => ({
+        ...prev,
+        basic_date: prev.basic_date || today,
+      }));
+    }
+  }, [enrollmentType]);
 
   // Invoice modal state (post-creation)
   const [invoiceOpen, setInvoiceOpen] = useState(false);
@@ -214,8 +225,23 @@ const StudentsPage: React.FC = () => {
   };
 
   const validateConsultancyForm = (): string | null => {
-    if (!consultSf.basic_name) return 'Student Name is required for Consultancy enrollment';
-    if (!consultSf.basic_phone) return 'Phone is required for Consultancy enrollment';
+    const name = (consultSf.basic_name || '').trim();
+    const phone = (consultSf.basic_phone || '').trim();
+    const email = (consultSf.basic_email || '').trim();
+    const address = (consultSf.basic_address || '').trim();
+    const nationality = (consultSf.basic_nationality || '').trim();
+    const date = (consultSf.basic_date || '').trim();
+
+    if (!name) return 'Student Name is required for Consultancy enrollment';
+    if (!phone) return 'Phone is required for Consultancy enrollment';
+    if (!/^\+?[0-9]{10,15}$/.test(phone)) return 'Invalid phone number format for Consultancy enrollment';
+    if (!email) return 'Email is required for Consultancy enrollment';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Invalid email format for Consultancy enrollment';
+    if (!address) return 'Address is required for Consultancy enrollment';
+    if (!nationality) return 'Nationality is required for Consultancy enrollment';
+    if (!date) return 'Date is required for Consultancy enrollment';
+    const today = new Date().toISOString().slice(0, 10);
+    if (date < today) return 'Date cannot be earlier than today';
     return null;
   };
 
@@ -432,17 +458,22 @@ const StudentsPage: React.FC = () => {
   const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!lastCreatedStudent) return;
+
     const reg = Number(invReg) || 0;
     const svc = Number(invSvc) || 0;
     const disc = Number(invDisc) || 0;
     const pre = reg + svc;
     const total = invDiscType === 'percent' ? pre - (pre * disc / 100) : pre - disc;
     const totalSafe = Math.max(0, Math.round(total * 100) / 100);
-    const amtPaid = paymentOption === 'full' ? totalSafe : Math.max(0, Math.min(totalSafe, Number(amountPaidNow) || 0));
+    const amtPaid =
+      paymentOption === 'full'
+        ? totalSafe
+        : Math.max(0, Math.min(totalSafe, Number(amountPaidNow) || 0));
     const remaining = Math.max(0, totalSafe - amtPaid);
-    const payment_status: 'Paid' | 'Partially Paid' | 'Unpaid' = amtPaid >= totalSafe ? 'Paid' : (amtPaid > 0 ? 'Partially Paid' : 'Unpaid');
+    const payment_status: 'Paid' | 'Partially Paid' | 'Unpaid' =
+      amtPaid >= totalSafe ? 'Paid' : amtPaid > 0 ? 'Partially Paid' : 'Unpaid';
 
-    const payload = {
+    const invoicePayload = {
       student_id: lastCreatedStudent.id,
       registration_fee: reg,
       service_fee: svc,
@@ -452,34 +483,95 @@ const StudentsPage: React.FC = () => {
       amount_paid: amtPaid,
       remaining_amount: remaining,
       payment_status,
-      due_date: (paymentOption === 'partial' && remaining > 0 && dueDate) ? dueDate : null,
+      due_date: paymentOption === 'partial' && remaining > 0 && dueDate ? dueDate : null,
       status: payment_status === 'Paid' ? 'Paid' : 'Pending',
-      service_items: [{ name: lastCreatedStudent.program_title || 'Service', amount: svc }]
+      service_items: [{ name: lastCreatedStudent.program_title || 'Service', amount: svc }],
     } as any;
 
-    const { error } = await supabase.from('invoices').insert([payload]);
-    if (error) { alert(`Failed to create invoice: ${error.message}`); return; }
+    const { error: invErr } = await supabase.from('invoices').insert([invoicePayload]);
+    if (invErr) {
+      alert(`Failed to create invoice: ${invErr.message}`);
+      return;
+    }
 
     // Also record a Cash In voucher for the amount paid now so it reflects in Finances/SuperAdmin dashboards
     if (amtPaid > 0) {
       try {
-        const code = `VCH-${new Date().getFullYear()}-${String(Math.floor(Math.random()*100000)).padStart(5,'0')}`;
+        const voucherCode = `GSL-${new Date().getFullYear()}-${String(
+          Math.floor(Math.random() * 10000)
+        ).padStart(4, '0')}`;
         const occurred_at = new Date().toISOString();
-        let branchName = 'Main Branch';
-        try {
-          const { data: au } = await supabase.auth.getUser();
-          const em = au.user?.email || '';
-          if (em) {
-            const { data: du } = await supabase.from('dashboard_users').select('branch').eq('email', em).maybeSingle();
-            if ((du as any)?.branch) branchName = (du as any).branch as string;
+        const branchName = currentBranch || 'Main Branch';
+        const description = `Enrollment payment for ${lastCreatedStudent.full_name} (${lastCreatedStudent.id})`;
+
+        const voucherPayload: any = {
+          code: voucherCode,
+          vtype: 'cash_in',
+          amount: amtPaid,
+          branch: branchName,
+          occurred_at,
+          status: 'Approved',
+          description,
+          student_id: lastCreatedStudent.id,
+          voucher_type: 'Admission / Enrollment Voucher',
+          service_type: lastCreatedStudent.program_title || null,
+          discount: disc,
+          amount_paid: amtPaid,
+          amount_unpaid: remaining,
+          due_date:
+            paymentOption === 'partial' && remaining > 0 && dueDate ? dueDate : null,
+        };
+
+        const { error: vErr } = await supabase.from('vouchers').insert([voucherPayload]);
+        if (vErr) {
+          console.warn('Failed to create cash-in voucher for invoice payment:', vErr.message);
+        } else {
+          const voucherRow: VoucherRow = {
+            id: voucherCode,
+            type: 'Cash In',
+            amount: amtPaid,
+            branch: branchName,
+            date: occurred_at,
+            status: 'Approved',
+            description,
+          };
+
+          const baseProgramTitle = lastCreatedStudent.program_title || '';
+          const programWithType =
+            enrollmentType === 'course'
+              ? `Course - ${baseProgramTitle}`
+              : enrollmentType === 'consultancy'
+              ? `Consultancy - ${baseProgramTitle}`
+              : enrollmentType === 'test'
+              ? `Test - ${baseProgramTitle}`
+              : baseProgramTitle;
+
+          const pendingForPdf: PendingStudent = {
+            student_id: lastCreatedStudent.id,
+            registration_no: lastCreatedStudent.id,
+            full_name: lastCreatedStudent.full_name,
+            batch_no: lastCreatedStudent.batch_no || '',
+            program_title: programWithType || null,
+            phone: null,
+            total_fee: totalSafe,
+            amount_paid: amtPaid,
+            remaining_amount: remaining,
+            total_discount: disc,
+            next_due_date:
+              paymentOption === 'partial' && remaining > 0 && dueDate ? dueDate : null,
+          };
+
+          const pdfPath = await generateVoucherPDFToStorage(voucherRow, {
+            pending: pendingForPdf,
+            category: 'Admission / Enrollment Voucher' as VoucherCategory,
+          });
+
+          if (pdfPath) {
+            await supabase
+              .from('vouchers')
+              .update({ pdf_url: pdfPath })
+              .eq('code', voucherCode);
           }
-        } catch {}
-        const desc = `Invoice payment for ${lastCreatedStudent.full_name} (${lastCreatedStudent.id})`;
-        const vErr = await supabase.from('vouchers').insert([
-          { code, vtype: 'cash_in', amount: amtPaid, branch: branchName, occurred_at, status: 'Approved', description: desc }
-        ]);
-        if ((vErr as any)?.error) {
-          console.warn('Failed to create cash-in voucher for invoice payment:', (vErr as any).error?.message || vErr);
         }
       } catch (e) {
         console.warn('Voucher creation error for invoice payment', e);
@@ -703,12 +795,11 @@ const StudentsPage: React.FC = () => {
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                         <label><span className="text-text-secondary">Name</span><input value={consultSf.basic_name} onChange={e=>setConsultSf(prev=>({...prev, basic_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                         <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e=>setConsultSf(prev=>({...prev, basic_dob:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Date</span><input type="date" value={consultSf.basic_date} onChange={e=>setConsultSf(prev=>({...prev, basic_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e=>setConsultSf(prev=>({...prev, basic_address:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e=>setConsultSf(prev=>({...prev, basic_email:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e=>setConsultSf(prev=>({...prev, basic_nationality:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e=>setConsultSf(prev=>({...prev, basic_phone:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label className="sm:col-span-2 lg:col-span-1"><span className="text-text-secondary">Student Sign</span><input value={consultSf.basic_student_sign} onChange={e=>setConsultSf(prev=>({...prev, basic_student_sign:e.target.value}))} className="mt-1 w-full border rounded p-2" placeholder="Signature text"/></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e=>setConsultSf(prev=>({...prev, basic_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e=>setConsultSf(prev=>({...prev, basic_address:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e=>setConsultSf(prev=>({...prev, basic_email:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e=>setConsultSf(prev=>({...prev, basic_nationality:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e=>setConsultSf(prev=>({...prev, basic_phone:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                       </div>
                     </div>
 
@@ -721,7 +812,7 @@ const StudentsPage: React.FC = () => {
                         <input placeholder="Grades" value={consultSf.ug_olevels_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
                         <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_alevels} onChange={e=>setConsultSf(prev=>({...prev, ug_alevels:e.target.checked}))}/>A-Levels</label>
                         <input placeholder="Year" value={consultSf.ug_alevels_year} onChange={e=>setConsultSf(prev=>({...prev, ug_alevels_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_alevels_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
+                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
                         <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_matric} onChange={e=>setConsultSf(prev=>({...prev, ug_matric:e.target.checked}))}/>Matric</label>
                         <input placeholder="Year" value={consultSf.ug_matric_year} onChange={e=>setConsultSf(prev=>({...prev, ug_matric_year:e.target.value}))} className="border rounded p-2"/>
                         <input placeholder="Grades" value={consultSf.ug_matric_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_matric_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
@@ -766,7 +857,7 @@ const StudentsPage: React.FC = () => {
                     {/* Work Experience */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Work Experience</h4>
-                      <textarea value={consultSf.work_exp} onChange={e=>setConsultSf(prev=>({...prev, work_exp:e.target.value}))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
+                      <textarea value={consultSf.work_exp} onChange={e=>setConsultSf(prev=>({...prev, work_exp:e.target.value}))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience" required></textarea>
                     </div>
 
                     {/* Country of Interest */}
@@ -787,10 +878,10 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">Additional Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e=>setConsultSf(prev=>({...prev, add_course_or_uni:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e=>setConsultSf(prev=>({...prev, add_travel_history:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e=>setConsultSf(prev=>({...prev, add_visa_refusal:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e=>setConsultSf(prev=>({...prev, add_asylum_family:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e=>setConsultSf(prev=>({...prev, add_course_or_uni:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e=>setConsultSf(prev=>({...prev, add_travel_history:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e=>setConsultSf(prev=>({...prev, add_visa_refusal:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e=>setConsultSf(prev=>({...prev, add_asylum_family:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                       </div>
                     </div>
 
@@ -798,12 +889,11 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Office Use Only</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Date</span><input type="date" value={consultSf.office_date} onChange={e=>setConsultSf(prev=>({...prev, office_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e=>setConsultSf(prev=>({...prev, office_application_started:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e=>setConsultSf(prev=>({...prev, office_university_applied:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_name:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Counsellor Sign</span><input value={consultSf.office_counsellor_sign} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_sign:e.target.value}))} className="mt-1 w-full border rounded p-2" placeholder="Signature text"/></label>
-                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" value={consultSf.office_next_follow_up_date} onChange={e=>setConsultSf(prev=>({...prev, office_next_follow_up_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e=>setConsultSf(prev=>({...prev, office_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e=>setConsultSf(prev=>({...prev, office_application_started:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e=>setConsultSf(prev=>({...prev, office_university_applied:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e=>setConsultSf(prev=>({...prev, office_next_follow_up_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                       </div>
                     </div>
 
