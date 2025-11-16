@@ -185,21 +185,79 @@ import { supabase } from '../../lib/supabaseClient';
     try {
       const { data: auth } = await supabase.auth.getUser();
       const me = auth.user?.email || '';
-      const target = isAdmin && reqForEmail ? reqForEmail : me;
+      const target = (isAdmin && reqForEmail ? reqForEmail : me).trim();
       if (!target) {
         alert('Could not determine employee email. Please sign out and sign in again.');
         return;
       }
 
-      const { error } = await supabase.from('leaves').insert({
+      const statusInit: LeaveStatus | string = 'Pending';
+      const reasonVal = reqReason || null;
+      const typeLegacy: LeaveType | string = reqType;
+
+      const tryInsert = async (base: any) => {
+        const withMeta = { ...base, created_by: me, type: typeLegacy };
+        let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
+        let error = res.error as any;
+        const msg = String(error?.message || '').toLowerCase();
+
+        if (error && (error.code === '42703' || msg.includes('column'))) {
+          // Drop meta columns (created_by/type) and retry for legacy schemas
+          const minimal = { ...base };
+          const res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
+          error = res2.error as any;
+          const msg2 = String(error?.message || '').toLowerCase();
+          if (error && msg2.includes('status') && msg2.includes('check')) {
+            // Some schemas require lowercase status
+            const lower = { ...minimal, status: String(minimal.status || '').toLowerCase() };
+            const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
+            error = res3.error as any;
+          }
+        } else if (error && msg.includes('status') && msg.includes('check')) {
+          // Retry with lowercase status but keep meta fields when possible
+          const lower = { ...base, status: String((base as any).status || '').toLowerCase(), created_by: me, type: typeLegacy };
+          const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
+          error = res3.error as any;
+        }
+
+        return error;
+      };
+
+      // 1) Try email-based schema first (Supabase migrations)
+      const payloadEmail = {
         employee_email: target,
         start_date: reqStart,
         end_date: reqEnd,
-        status: 'Pending' as LeaveStatus,
-        reason: reqReason || null,
-        created_by: me,
-        type: reqType,
-      } as any, { returning: 'minimal' } as any);
+        status: statusInit,
+        reason: reasonVal,
+      };
+      let error = await tryInsert(payloadEmail);
+
+      // 2) If database requires employee_id (legacy schema), best-effort to create an employees row and retry
+      if (error && String(error.message || '').toLowerCase().includes('employee_id') && String(error.message || '').toLowerCase().includes('not-null')) {
+        let employeeId: number | null = null;
+        try {
+          const { data: eIns, error: eErr } = await supabase
+            .from('employees')
+            .insert({ joined_on: new Date().toISOString().slice(0, 10) })
+            .select('id')
+            .single();
+          if (!eErr && (eIns as any)?.id) employeeId = Number((eIns as any).id);
+        } catch {
+          // ignore and fall back to original error handling
+        }
+
+        if (employeeId) {
+          const payloadId = {
+            employee_id: employeeId,
+            start_date: reqStart,
+            end_date: reqEnd,
+            status: statusInit,
+            reason: reasonVal,
+          };
+          error = await tryInsert(payloadId);
+        }
+      }
 
       if (error) throw error;
 
@@ -209,7 +267,11 @@ import { supabase } from '../../lib/supabaseClient';
     } catch (err:any) {
       // eslint-disable-next-line no-console
       console.error('Leave request insert failed', { message: err?.message, code: (err as any)?.code, details: (err as any)?.details, hint: (err as any)?.hint });
-      alert(err?.message || 'Failed to submit request');
+      if (String(err?.message || '').toLowerCase().includes('employee_id') && String(err?.message || '').toLowerCase().includes('not-null')) {
+        alert('This database requires employee_id. Please ensure you are added as an employee in the Employees/HRM section, then try again.');
+      } else {
+        alert(err?.message || 'Failed to submit request');
+      }
     } finally {
       setSubmitting(false);
     }
