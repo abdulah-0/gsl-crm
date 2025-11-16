@@ -567,7 +567,11 @@ const HRMPage: React.FC = () => {
       const legacyType = lType === 'CL' ? 'Sick' : lType === 'SL' ? 'Remote' : 'Vacation';
       q = q.or(`leave_type.eq.${lType},type.eq.${legacyType}`);
     }
-    if (lStatus) q = q.eq('status', lStatus);
+    if (lStatus) {
+      // Support both legacy lowercase statuses (pending/approved/rejected) and newer capitalised ones (Pending/Approved/Rejected)
+      const variants = [lStatus, lStatus.toLowerCase(), lStatus.toUpperCase()];
+      q = q.in('status', variants);
+    }
     if (lFrom) q = q.gte('start_date', lFrom);
     if (lTo) q = q.lte('end_date', lTo);
     const { data } = await q;
