@@ -369,19 +369,103 @@ const HRMPage: React.FC = () => {
     await loadBatches();
   };
 
-  const printPayslip = (item: PayrollItem) => {
-    const w = window.open('', '_blank');
-    if (!w) return;
-    w.document.write(`<html><head><title>Payslip</title></head><body style="font-family:sans-serif;padding:24px;">
-      <h2 style="margin:0 0 12px">Payslip</h2>
-      <div>Employee: ${item.employee_email}</div>
-      <div>Amount: ${item.payable_amount ?? 0}</div>
-      <pre style="margin-top:12px;background:#f7f7f7;padding:12px;border:1px solid #eee">${JSON.stringify(item.details||{}, null, 2)}</pre>
-      <button onclick="window.print()" style="margin-top:16px;padding:8px 12px">Print</button>
-    </body></html>`);
+  const printPayslip = async (item: PayrollItem) => {
+    try {
+      const doc = new jsPDF();
+      const details = item.details || {};
+      const breakdown = details.breakdown || {};
 
+      // Company header
+      doc.setFontSize(14);
+      doc.text('Gateway Study Links (SMC-PVT) LTD', 105, 18, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text('Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234', 105, 24, { align: 'center' });
 
-    w.document.close();
+      // Main title
+      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const monthIndex = (details.month ?? 1) - 1;
+      const monthName = monthNames[monthIndex] || 'Unknown';
+      const year = details.year || new Date().getFullYear();
+      doc.setFontSize(12);
+      doc.text(`Payslip for the Month of ${monthName} ${year}`, 105, 32, { align: 'center' });
+
+      // Employee summary
+      (autoTable as any)(doc, {
+        head: [['Employee Email', 'Payment Mode']],
+        body: [[item.employee_email, details.payment_mode || '-']],
+        startY: 38,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+
+      const firstTableY = (doc as any).lastAutoTable.finalY + 6;
+
+      const fmt = (v: number | null | undefined) => `Rs ${(v ?? 0).toLocaleString()}`;
+
+      const earningsData = [
+        ['Basic Salary', fmt(breakdown.basic_salary)],
+        ['Medical Allowance', fmt(breakdown.medical_allowance)],
+        ['Work Transportation', fmt(breakdown.work_transportation)],
+        ['Other Allowances', fmt(breakdown.other_allowances)],
+        ['Arrears', fmt(breakdown.arrears)],
+        ['Bonus', fmt(breakdown.bonus)],
+        ['Total Earnings', fmt(breakdown.gross)],
+      ];
+
+      const deductionsData = [
+        ['Income Tax', fmt(breakdown.income_tax)],
+        ['Life Insurance', fmt(breakdown.life_insurance)],
+        ['Health Insurance', fmt(breakdown.health_insurance)],
+        ['Employee Loan', fmt(breakdown.employee_loan)],
+        ['Lunch Deduction', fmt(breakdown.lunch_deduction)],
+        ['Advance Salary', fmt(breakdown.advance_salary)],
+        ['ESB', fmt(breakdown.esb)],
+        ['Other Deductions', fmt(breakdown.other_deductions)],
+        ['Total Deductions', fmt(breakdown.deductions)],
+      ];
+
+      // Earnings table (left)
+      (autoTable as any)(doc, {
+        head: [['Earnings', 'Amount']],
+        body: earningsData,
+        startY: firstTableY,
+        margin: { left: 14, right: 105 },
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+
+      // Deductions table (right)
+      (autoTable as any)(doc, {
+        head: [['Deductions', 'Amount']],
+        body: deductionsData,
+        startY: firstTableY,
+        margin: { left: 105, right: 14 },
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+
+      const tablesEndY = (doc as any).lastAutoTable?.finalY ?? firstTableY;
+
+      // Net payable
+      (autoTable as any)(doc, {
+        head: [['Net Payable Amount']],
+        body: [[fmt(breakdown.net ?? item.payable_amount)]],
+        startY: tablesEndY + 6,
+        styles: { fontSize: 11, fontStyle: 'bold' },
+        headStyles: { fillColor: [255, 163, 50] },
+      });
+
+      const footerY = (doc as any).lastAutoTable.finalY + 12;
+      doc.setFontSize(8);
+      doc.text('This is a system-generated document and does not require any signature or company stamp', 105, footerY, { align: 'center' });
+
+      const pdfBlob = doc.output('blob');
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
+    } catch (e) {
+      console.error('Payslip PDF generation error', e);
+      alert('Failed to generate payslip PDF.');
+    }
   };
 
 

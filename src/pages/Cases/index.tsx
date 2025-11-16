@@ -807,8 +807,8 @@ const Cases: React.FC = () => {
                   <>
                     {/* Cases Kanban Board by status */}
                     <div className="mt-3">
-                      <div className="mt-2 overflow-x-auto">
-                        <div className="flex gap-3 pb-2" style={{ minWidth: 'max-content' }}>
+                      <div className="mt-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-2">
                           {CASE_STAGES.map((col) => {
                             const colCases = filteredCases.filter(c => (c.status || 'Initial Stage') === col);
                             return (
@@ -818,7 +818,7 @@ const Cases: React.FC = () => {
                                 onDragEnter={(e)=>{ if (Array.from(e.dataTransfer.types||[]).includes('text/case')) setBoardDropCol(col); }}
                                 onDragLeave={(e)=>{ setBoardDropCol(prev => prev===col ? null : prev); }}
                                 onDrop={(e)=>{ handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
-                                className={`w-72 rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
+                                className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol===col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
                               >
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="font-semibold">{col}</div>

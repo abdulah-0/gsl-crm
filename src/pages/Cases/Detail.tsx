@@ -346,6 +346,7 @@ const CaseTaskDetailPage: React.FC = () => {
 	        console.error('Failed to add application history', error);
 	        alert('Could not save application update. Please try again.');
 	      } else {
+	        alert('Application update saved successfully.');
 	        setHistComment('');
 	        setHistStatus('Initial Stage');
 	        setShowAddHistory(false);
