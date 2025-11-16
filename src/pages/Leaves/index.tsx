@@ -191,25 +191,39 @@ import { supabase } from '../../lib/supabaseClient';
         return;
       }
 
+      // 1) Best-effort: ensure we have employees.id for this request (legacy schema support)
+      let employeeId: number | null = null;
+      try {
+        const { data: eIns, error: eErr } = await supabase
+          .from('employees')
+          .insert({ joined_on: new Date().toISOString().slice(0, 10) })
+          .select('id')
+          .single();
+        if (!eErr && (eIns as any)?.id) employeeId = Number((eIns as any).id);
+      } catch {
+        // ignore – we'll still try email-based schema
+      }
+
       const statusInit: LeaveStatus | string = 'Pending';
       const reasonVal = reqReason || null;
       const typeLegacy: LeaveType | string = reqType;
 
       const tryInsert = async (base: any) => {
+        // include meta fields where schema supports them
         const withMeta = { ...base, created_by: me, type: typeLegacy };
         let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
         let error = res.error as any;
         const msg = String(error?.message || '').toLowerCase();
 
-        if (error && (error.code === '42703' || msg.includes('column'))) {
-          // Drop meta columns (created_by/type) and retry for legacy schemas
+        if (error && (error.code === '42703' || msg.includes('does not exist'))) {
+          // Drop unknown meta columns and retry for legacy schemas
           const minimal = { ...base };
           const res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
           error = res2.error as any;
           const msg2 = String(error?.message || '').toLowerCase();
           if (error && msg2.includes('status') && msg2.includes('check')) {
             // Some schemas require lowercase status
-            const lower = { ...minimal, status: String(minimal.status || '').toLowerCase() };
+            const lower = { ...minimal, status: String((minimal as any).status || '').toLowerCase() };
             const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
             error = res3.error as any;
           }
@@ -223,43 +237,34 @@ import { supabase } from '../../lib/supabaseClient';
         return error;
       };
 
-      // 1) Try email-based schema first (Supabase migrations)
-      const payloadEmail = {
-        employee_email: target,
-        start_date: reqStart,
-        end_date: reqEnd,
-        status: statusInit,
-        reason: reasonVal,
-      };
-      let error = await tryInsert(payloadEmail);
-
-      // 2) If database requires employee_id (legacy schema), best-effort to create an employees row and retry
-      if (error && String(error.message || '').toLowerCase().includes('employee_id') && String(error.message || '').toLowerCase().includes('not-null')) {
-        let employeeId: number | null = null;
-        try {
-          const { data: eIns, error: eErr } = await supabase
-            .from('employees')
-            .insert({ joined_on: new Date().toISOString().slice(0, 10) })
-            .select('id')
-            .single();
-          if (!eErr && (eIns as any)?.id) employeeId = Number((eIns as any).id);
-        } catch {
-          // ignore and fall back to original error handling
-        }
-
-        if (employeeId) {
-          const payloadId = {
-            employee_id: employeeId,
-            start_date: reqStart,
-            end_date: reqEnd,
-            status: statusInit,
-            reason: reasonVal,
-          };
-          error = await tryInsert(payloadId);
-        }
+      // 2) Prefer employee_id variant when we have an employees.id
+      let err1: any = null;
+      if (employeeId) {
+        const payloadId = {
+          employee_id: employeeId,
+          start_date: reqStart,
+          end_date: reqEnd,
+          status: statusInit,
+          reason: reasonVal,
+        };
+        err1 = await tryInsert(payloadId);
       }
 
-      if (error) throw error;
+      // 3) Fallback to employee_email variant (Supabase-native schema)
+      let err2: any = null;
+      if (!employeeId || err1) {
+        const payloadEmail = {
+          employee_email: target,
+          start_date: reqStart,
+          end_date: reqEnd,
+          status: statusInit,
+          reason: reasonVal,
+        };
+        err2 = await tryInsert(payloadEmail);
+      }
+
+      const finalErr = employeeId ? err1 && err2 : err2;
+      if (finalErr) throw finalErr;
 
       setRequestOpen(false);
       setReqStart(''); setReqEnd(''); setReqReason(''); setReqForEmail(''); setReqType('Sick');
@@ -267,7 +272,8 @@ import { supabase } from '../../lib/supabaseClient';
     } catch (err:any) {
       // eslint-disable-next-line no-console
       console.error('Leave request insert failed', { message: err?.message, code: (err as any)?.code, details: (err as any)?.details, hint: (err as any)?.hint });
-      if (String(err?.message || '').toLowerCase().includes('employee_id') && String(err?.message || '').toLowerCase().includes('not-null')) {
+      const msg = String(err?.message || '').toLowerCase();
+      if (msg.includes('employee_id') && (msg.includes('not-null') || msg.includes('not null'))) {
         alert('This database requires employee_id. Please ensure you are added as an employee in the Employees/HRM section, then try again.');
       } else {
         alert(err?.message || 'Failed to submit request');
