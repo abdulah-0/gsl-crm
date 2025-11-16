@@ -83,8 +83,8 @@ begin
     return new;
   end if;
 
-  -- Only notify on final decisions
-  if new.status not in ('Approved', 'Rejected') then
+  -- Only notify on final decisions (case-insensitive, supports legacy lowercase statuses)
+  if lower(new.status) not in ('approved', 'rejected') then
     return new;
   end if;
 

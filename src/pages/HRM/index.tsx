@@ -717,7 +717,13 @@ const HRMPage: React.FC = () => {
     if (!isAdmin) { alert('Only Admin/Super Admin can approve leaves'); return; }
     const { data: au } = await supabase.auth.getUser();
     const me = au?.user?.email || '';
-    const { error } = await supabase.from('leaves').update({ status: 'Approved' }).eq('id', id);
+    const attempt = async (statusValue: string) => supabase.from('leaves').update({ status: statusValue }).eq('id', id);
+    let { error } = await attempt('Approved');
+    // Legacy schema may only allow lowercase statuses via CHECK constraint
+    if (error && (error as any).code === '23514') {
+      const res2 = await attempt('approved');
+      error = res2.error;
+    }
     if (error) alert(error.message); else {
       await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'Approved', detail: { leave_id: id, approved_by: me } }]);
       loadLeaves();
@@ -742,7 +748,13 @@ const HRMPage: React.FC = () => {
     if (!isAdmin) { alert('Only Admin/Super Admin can reject leaves'); return; }
     const { data: au } = await supabase.auth.getUser();
     const me = au?.user?.email || '';
-    const { error } = await supabase.from('leaves').update({ status: 'Rejected' }).eq('id', id);
+    const attempt = async (statusValue: string) => supabase.from('leaves').update({ status: statusValue }).eq('id', id);
+    let { error } = await attempt('Rejected');
+    // Legacy schema may only allow lowercase statuses via CHECK constraint
+    if (error && (error as any).code === '23514') {
+      const res2 = await attempt('rejected');
+      error = res2.error;
+    }
     if (error) alert(error.message); else {
       await supabase.from('activity_log').insert([{ entity: 'leave', entity_id: String(id), action: 'Rejected', detail: { leave_id: id, rejected_by: me } }]);
       loadLeaves();
@@ -1110,7 +1122,7 @@ const HRMPage: React.FC = () => {
                           <td className="p-2">{l.reason || '-'}</td>
                           {role==='super' && <td className="p-2">{l.branch || '-'}</td>}
                           <td className="p-2 text-right">
-                            {isAdmin && l.status === 'Pending' ? (
+                            {isAdmin && (l.status || '').toLowerCase() === 'pending' ? (
                               <div className="inline-flex items-center gap-3">
                                 <button onClick={()=>approveLeave(l.id)} className="text-green-700 hover:underline">Approve</button>
                                 <button onClick={()=>rejectLeave(l.id)} className="text-red-600 hover:underline">Reject</button>
