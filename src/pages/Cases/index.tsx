@@ -18,6 +18,7 @@ const CASE_STAGES = [
   'CAS Received',
   'Visa Applied',
   'Visa Received',
+  'Enrollment',
   'Backout',
   'Visa Rejected',
 ] as const;
@@ -93,6 +94,7 @@ const CASE_STAGE_COLORS: Record<CaseStage, string> = {
   'CAS Received': 'bg-indigo-100 text-indigo-700',
   'Visa Applied': 'bg-emerald-100 text-emerald-700',
   'Visa Received': 'bg-green-100 text-green-700',
+  'Enrollment': 'bg-teal-100 text-teal-700',
   'Backout': 'bg-orange-100 text-orange-700',
   'Visa Rejected': 'bg-red-100 text-red-700',
 };
@@ -567,7 +569,7 @@ const Cases: React.FC = () => {
                     <select value={filterBranch} onChange={e=>setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
                       {branches.map(b => <option key={b}>{b}</option>)}
                     </select>
-                    <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value)} className="border rounded p-2 text-sm">
+                    <select value={filterStatus} onChange={e=>setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
                       {statuses.map(s => <option key={s}>{s}</option>)}
                     </select>
                     <select value={filterType} onChange={e=>setFilterType(e.target.value)} className="border rounded p-2 text-sm">

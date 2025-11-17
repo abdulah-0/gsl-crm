@@ -11,7 +11,7 @@ interface Activity { id: string; text: string; at: string; }
 
 const CASE_STAGES = [
   'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
-  'CAS Applied','CAS Received','Visa Applied','Visa Received','Backout','Visa Rejected',
+  'CAS Applied','CAS Received','Visa Applied','Visa Received','Enrollment','Backout','Visa Rejected',
 ] as const;
 
 type CaseStage = typeof CASE_STAGES[number];
@@ -314,6 +314,7 @@ const SuperAdmin: React.FC = () => {
         'CAS Received': '#60a5fa',
         'Visa Applied': '#16a34a',
         'Visa Received': '#22c55e',
+        'Enrollment': '#14b8a6',
         'Backout': '#f97316',
         'Visa Rejected': '#ef4444',
       };
@@ -327,7 +328,7 @@ const SuperAdmin: React.FC = () => {
         const key = pipelineStages.includes(stage) ? stage : 'Initial Stage';
         counts.set(key, (counts.get(key) || 0) + 1);
       }
-      const pipelineArr = (pipelineStages as readonly string[]).map((name) => ({ name, value: counts.get(name) || 0, color: stageColors[name] }));
+      const pipelineArr = pipelineStages.map((name) => ({ name, value: counts.get(name) || 0, color: stageColors[name] }));
       setPipeline(pipelineArr);
       setMaxPipeline(Math.max(1, ...pipelineArr.map(p => p.value)));
 

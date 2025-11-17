@@ -33,6 +33,7 @@ type CaseItem = {
   deadline?: string;
   createdAt?: string;
   studentId?: string;
+  googleDriveLink?: string;
 };
 
 const fmtDur = (totalMins: number) => {
@@ -70,6 +71,7 @@ type CaseStage =
   | 'CAS Received'
   | 'Visa Applied'
   | 'Visa Received'
+  | 'Enrollment'
   | 'Backout'
   | 'Visa Rejected';
 
@@ -83,6 +85,7 @@ const CASE_STAGES: CaseStage[] = [
   'CAS Received',
   'Visa Applied',
   'Visa Received',
+  'Enrollment',
   'Backout',
   'Visa Rejected',
 ];
@@ -97,6 +100,7 @@ const CASE_STAGE_COLORS: Record<CaseStage, string> = {
   'CAS Received': 'bg-sky-100 text-sky-900',
   'Visa Applied': 'bg-purple-50 text-purple-800',
   'Visa Received': 'bg-green-100 text-green-800',
+  'Enrollment': 'bg-teal-50 text-teal-800',
   'Backout': 'bg-gray-200 text-gray-700',
   'Visa Rejected': 'bg-red-100 text-red-800',
 };
@@ -131,10 +135,18 @@ const CaseTaskDetailPage: React.FC = () => {
   const [tfDesc, setTfDesc] = useState('');
   const [logMins, setLogMins] = useState(0);
 
+  const [isSuper, setIsSuper] = useState(false);
+  const [caseAccess, setCaseAccess] = useState<'CRUD' | 'VIEW' | 'NONE'>('NONE');
+  const [permFlags, setPermFlags] = useState<{ add: boolean; edit: boolean; del: boolean }>({ add: false, edit: false, del: false });
+  const canEditCaseMeta = isSuper || permFlags.edit || caseAccess === 'CRUD';
+
+
   // Editing states
   const [editingCaseDesc, setEditingCaseDesc] = useState(false);
   const [caseDescDraft, setCaseDescDraft] = useState('');
   const [taskDescDraft, setTaskDescDraft] = useState('');
+  const [editingDriveLink, setEditingDriveLink] = useState(false);
+  const [driveLinkDraft, setDriveLinkDraft] = useState('');
 
   // Attachments
   const [caseFiles, setCaseFiles] = useState<any[]>([]);
@@ -148,11 +160,53 @@ const CaseTaskDetailPage: React.FC = () => {
 	  const [savingHistory, setSavingHistory] = useState(false);
 
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email;
+        if (!email) return;
+        const { data: u } = await supabase
+          .from('dashboard_users')
+          .select('role, permissions')
+          .eq('email', email)
+          .maybeSingle();
+        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '')
+          .toString()
+          .toLowerCase();
+        if (roleStr.includes('super')) {
+          setIsSuper(true);
+          setPermFlags({ add: true, edit: true, del: true });
+          setCaseAccess('CRUD');
+          return;
+        }
+        const { data: up } = await supabase
+          .from('user_permissions')
+          .select('module, access, can_add, can_edit, can_delete')
+          .eq('user_email', email)
+          .eq('module', 'cases');
+        if (up && up.length) {
+          const row: any = up[0];
+          setPermFlags({ add: !!row.can_add, edit: !!row.can_edit, del: !!row.can_delete });
+          if (row.access) {
+            setCaseAccess(row.access === 'CRUD' ? 'CRUD' : row.access === 'VIEW' ? 'VIEW' : 'NONE');
+          }
+        } else {
+          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
+          setCaseAccess(perms.includes('cases') ? 'CRUD' : 'NONE');
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+
   const loadCase = useCallback(async () => {
     if (!caseNumber) return;
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .select('case_number, title, assignees, status, branch, type, created_at, student_info')
+      .select('case_number, title, assignees, employee, status, branch, type, created_at, student_info, google_drive_link')
       .eq('case_number', caseNumber)
       .single();
     if (!error && data) {
@@ -167,6 +221,7 @@ const CaseTaskDetailPage: React.FC = () => {
         deadline: undefined,
         createdAt: data.created_at,
         studentId: info.student_id || undefined,
+        googleDriveLink: (data as any).google_drive_link || undefined,
       };
       setCaseItem(c);
       // Load other cases by same student if possible
@@ -320,15 +375,30 @@ const CaseTaskDetailPage: React.FC = () => {
     await supabase.from('dashboard_cases').update({ student_info: nextInfo }).eq('case_number', caseNumber);
     await loadCase();
     // Log activity using standardized columns
-    await supabase.from('activity_log').insert([{ entity: 'case', action: 'Updated case description', detail: { case_number: caseNumber } }]).catch(()=>{});
+    await supabase.from('activity_log').insert([{ entity: 'case', action: 'Updated case description', detail: { case_number: caseNumber } }]);
     setEditingCaseDesc(false);
   };
+
+  const saveGoogleDriveLink = async () => {
+    if (!caseNumber || !canEditCaseMeta) return;
+    const trimmed = driveLinkDraft.trim();
+    await supabase
+      .from('dashboard_cases')
+      .update({ google_drive_link: trimmed || null })
+      .eq('case_number', caseNumber);
+    await loadCase();
+    await supabase
+      .from('activity_log')
+      .insert([{ entity: 'case', action: 'Updated Google Drive link', detail: { case_number: caseNumber } }]);
+    setEditingDriveLink(false);
+  };
+
 
   const saveTaskDescription = async () => {
     if (!caseNumber || !task) return;
     await supabase.from('dashboard_tasks').update({ description: taskDescDraft }).eq('case_number', caseNumber).eq('id', task.id);
     setTask({ ...task, description: taskDescDraft });
-    await supabase.from('activity_log').insert([{ type: 'task_update', entity: 'task', case_number: caseNumber, task_id: task.id, message: 'Updated task description' }]).catch(()=>{});
+    await supabase.from('activity_log').insert([{ type: 'task_update', entity: 'task', case_number: caseNumber, task_id: task.id, message: 'Updated task description' }]);
   };
 
 	  const addApplicationHistory = async (e: React.FormEvent) => {
@@ -367,7 +437,7 @@ const CaseTaskDetailPage: React.FC = () => {
       const path = `cases/${caseNumber}/${Date.now()}_${f.name}`;
       await supabase.storage.from('attachments').upload(path, f);
       // optional: log activity
-      await supabase.from('activity_log').insert([{ type: 'file_upload', entity: 'case', case_number: caseNumber, message: `Uploaded ${f.name}` }]).catch(()=>{});
+      await supabase.from('activity_log').insert([{ type: 'file_upload', entity: 'case', case_number: caseNumber, message: `Uploaded ${f.name}` }]);
     }
     await listCaseFiles();
   };
@@ -378,7 +448,7 @@ const CaseTaskDetailPage: React.FC = () => {
     for (const f of files) {
       const path = `cases/${caseNumber}/tasks/${taskId}/${Date.now()}_${f.name}`;
       await supabase.storage.from('attachments').upload(path, f);
-      await supabase.from('activity_log').insert([{ type: 'file_upload', entity: 'task', case_number: caseNumber, task_id: taskId, message: `Uploaded ${f.name}` }]).catch(()=>{});
+      await supabase.from('activity_log').insert([{ type: 'file_upload', entity: 'task', case_number: caseNumber, task_id: taskId, message: `Uploaded ${f.name}` }]);
     }
     await listTaskFiles();
   };
@@ -420,7 +490,7 @@ const CaseTaskDetailPage: React.FC = () => {
     const next = Math.max(0, (task.spentMins || 0) + Math.max(0, Number(logMins)||0));
     setTask({ ...task, spentMins: next });
     await supabase.from('dashboard_tasks').update({ spent_mins: next }).eq('case_number', caseNumber).eq('id', task.id);
-    await supabase.from('activity_log').insert([{ type: 'time_log', entity: 'task', case_number: caseNumber, task_id: task.id, message: `Logged ${logMins}m` }]).catch(()=>{});
+    await supabase.from('activity_log').insert([{ type: 'time_log', entity: 'task', case_number: caseNumber, task_id: task.id, message: `Logged ${logMins}m` }]);
     setLogMins(0);
   };
 
@@ -428,7 +498,7 @@ const CaseTaskDetailPage: React.FC = () => {
     if (!task || !caseNumber) return;
     setTask({ ...task, status: next });
     await supabase.from('dashboard_tasks').update({ status: next }).eq('case_number', caseNumber).eq('id', task.id);
-    await supabase.from('activity_log').insert([{ type: 'status_change', entity: 'task', case_number: caseNumber, task_id: task.id, message: `Status → ${next}` }]).catch(()=>{});
+    await supabase.from('activity_log').insert([{ type: 'status_change', entity: 'task', case_number: caseNumber, task_id: task.id, message: `Status → ${next}` }]);
   };
 
   const fileUrl = (path: string) => supabase.storage.from('attachments').getPublicUrl(path).data.publicUrl;
@@ -448,9 +518,73 @@ const CaseTaskDetailPage: React.FC = () => {
     </div>
   ), [studentCases, caseNumber, navigate]);
 
+	  if (!caseItem) return null;
+
+
   return (
     <main className="w-full min-h-screen bg-background-main flex">
       <Helmet>
+
+	                  <div className="mt-3">
+	                    <div className="flex items-center justify-between">
+	                      <span className="text-sm text-text-secondary">Google Drive Link</span>
+	                      {canEditCaseMeta && !editingDriveLink && (
+	                        <button
+	                          type="button"
+	                          onClick={() => {
+	                            setDriveLinkDraft(caseItem?.googleDriveLink || '');
+	                            setEditingDriveLink(true);
+	                          }}
+	                          className="text-xs text-blue-600 hover:underline"
+	                        >
+	                          {caseItem?.googleDriveLink ? 'Edit' : 'Add'}
+	                        </button>
+	                      )}
+	                    </div>
+	                    {!editingDriveLink ? (
+	                      <div className="text-sm">
+	                        {caseItem.googleDriveLink ? (
+	                          <a
+	                            href={caseItem.googleDriveLink}
+	                            target="_blank"
+	                            rel="noreferrer"
+	                            className="text-blue-600 hover:underline break-all"
+	                          >
+	                            {caseItem.googleDriveLink}
+	                          </a>
+	                        ) : (
+	                          <span className="text-text-secondary">
+	                            
+	                          </span>
+	                        )}
+	                      </div>
+	                    ) : (
+	                      <div className="mt-1">
+	                        <input
+	                          type="url"
+	                          value={driveLinkDraft}
+	                          onChange={(e) => setDriveLinkDraft(e.target.value)}
+	                          className="w-full border rounded p-2 text-sm"
+	                          placeholder="https://drive.google.com/..."
+	                        />
+	                        <div className="mt-2 flex items-center gap-2">
+	                          <button
+	                            onClick={saveGoogleDriveLink}
+	                            className="px-3 py-1.5 rounded bg-[#ffa332] text-white text-xs font-semibold"
+	                          >
+	                            Save
+	                          </button>
+	                          <button
+	                            onClick={() => setEditingDriveLink(false)}
+	                            className="px-3 py-1.5 rounded border text-xs"
+	                          >
+	                            Cancel
+	                          </button>
+	                        </div>
+	                      </div>
+	                    )}
+	                  </div>
+
         <title>Case Detail | GSL Pakistan CRM</title>
       </Helmet>
       <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar/></div>
@@ -508,6 +642,65 @@ const CaseTaskDetailPage: React.FC = () => {
                   <div className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${caseItem.priority ? PRIORITY_STYLES[caseItem.priority].bg : 'bg-gray-100'} ${caseItem.priority ? PRIORITY_STYLES[caseItem.priority].text : 'text-gray-700'}`}>
                     <span>{caseItem.priority || '—'}</span>
                   </div>
+
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-text-secondary">Google Drive Link</span>
+                      {canEditCaseMeta && !editingDriveLink && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDriveLinkDraft(caseItem.googleDriveLink || '');
+                            setEditingDriveLink(true);
+                          }}
+                          className="text-xs text-blue-600 hover:underline"
+                        >
+                          {caseItem.googleDriveLink ? 'Edit' : 'Add'}
+                        </button>
+                      )}
+                    </div>
+                    {!editingDriveLink ? (
+                      <div className="text-sm">
+                        {caseItem.googleDriveLink ? (
+                          <a
+                            href={caseItem.googleDriveLink}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-600 hover:underline break-all"
+                          >
+                            {caseItem.googleDriveLink}
+                          </a>
+                        ) : (
+                          <span className="text-text-secondary">—</span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-1">
+                        <input
+                          type="url"
+                          value={driveLinkDraft}
+                          onChange={(e) => setDriveLinkDraft(e.target.value)}
+                          className="w-full border rounded p-2 text-sm"
+                          placeholder="https://drive.google.com/..."
+                        />
+                        <div className="mt-2 flex items-center gap-2">
+                          <button
+                            onClick={saveGoogleDriveLink}
+                            className="px-3 py-1.5 rounded bg-[#ffa332] text-white text-xs font-semibold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingDriveLink(false)}
+                            className="px-3 py-1.5 rounded border text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <div className="text-text-secondary">Deadline</div>
