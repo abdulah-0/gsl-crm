@@ -7,41 +7,83 @@ import { useNavigate } from 'react-router-dom';
 
 // Types
 export type LeadSource = 'facebook' | 'instagram' | 'google_form' | 'walk_in' | 'referral' | 'organic' | '';
-export type LeadStatus = 'new' | 'documentation' | 'university' | 'visa' | 'enrolled' | 'rejected';
+export type LeadStatus = 'new' | 'documentation' | 'university' | 'visa' | 'enrolled' | 'rejected' | 'confirmed';
 
 export type Lead = {
   id: number;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
+  full_name: string;
+  father_name: string;
+  cnic: string;
+  phone: string;
+  email: string;
+  country: string | null;
+  city: string | null;
+  address: string | null;
+  dob: string | null;
+  service_name: string | null;
+  branch: string | null;
   source: LeadSource | null;
   status: LeadStatus;
   assigned_to_email: string | null;
   university_id: number | null;
   tags: string[] | null;
+  lead_date: string | null;
+  converted_to_student_id?: string | null;
   created_at?: string;
 };
 
-const defaultLeadForm = {
-  first_name: '',
-  last_name: '',
-  email: '',
+type LeadFormState = {
+  full_name: string;
+  father_name: string;
+  cnic: string;
+  phone: string;
+  email: string;
+  country: string;
+  city: string;
+  address: string;
+  dob: string;
+  service_name: string;
+  branch: string;
+  date: string;
+  source: LeadSource;
+  status: LeadStatus;
+  assigned_to_email: string;
+  tags: string;
+};
+
+const makeDefaultLeadForm = (): LeadFormState => ({
+  full_name: '',
+  father_name: '',
+  cnic: '',
   phone: '',
+  email: '',
+  country: '',
+  city: '',
+  address: '',
+  dob: '',
+  service_name: '',
+  branch: '',
+  date: new Date().toISOString().slice(0, 10),
   source: '' as LeadSource,
   status: 'new' as LeadStatus,
   assigned_to_email: '',
-  tags: ''
-};
+  tags: '',
+});
 
 const LeadsPage: React.FC = () => {
   const [tab, setTab] = useState<'add' | 'list'>('list');
   const [items, setItems] = useState<Lead[]>([]);
   const [search, setSearch] = useState('');
   const [statusF, setStatusF] = useState<'All' | LeadStatus>('All');
-  const [form, setForm] = useState(defaultLeadForm);
+  const [form, setForm] = useState<LeadFormState>(makeDefaultLeadForm());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [services, setServices] = useState<Array<{id:string; name:string}>>([]);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [agreeAll, setAgreeAll] = useState(false);
+  const [declTextAgree, setDeclTextAgree] = useState(false);
+  const [recentLead, setRecentLead] = useState<Lead | null>(null);
   const navigate = useNavigate();
 
   const loadLeads = async () => {
@@ -55,6 +97,34 @@ const LeadsPage: React.FC = () => {
     setLoading(false);
   };
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email || '';
+        setCurrentUserEmail(email);
+        if (email) {
+          const { data: u } = await supabase
+            .from('dashboard_users')
+            .select('branch')
+            .eq('email', email)
+            .maybeSingle();
+          const branch = (u as any)?.branch || '';
+          setCurrentBranch(branch || null);
+          setForm(prev => ({ ...prev, assigned_to_email: prev.assigned_to_email || email, branch: prev.branch || branch }));
+        }
+      } catch {
+        // ignore
+      }
+      const { data: sv } = await supabase
+        .from('dashboard_services')
+        .select('id, name')
+        .order('name');
+      setServices((sv as any) || []);
+    })();
+  }, []);
+
+
   useEffect(() => { loadLeads(); }, []);
 
   const filtered = useMemo(() => {
@@ -62,15 +132,41 @@ const LeadsPage: React.FC = () => {
     return items.filter(l => {
       if (statusF !== 'All' && l.status !== statusF) return false;
       if (!q) return true;
-      const bucket = `${l.first_name || ''} ${l.last_name || ''} ${l.email || ''} ${l.phone || ''}`.toLowerCase();
+      const bucket = `${l.full_name || ''} ${l.email || ''} ${l.phone || ''} ${l.city || ''}`.toLowerCase();
       return bucket.includes(q);
     });
   }, [items, search, statusF]);
 
-  const resetForm = () => setForm(defaultLeadForm);
+  const resetForm = () => {
+    setForm(prev => ({
+      ...makeDefaultLeadForm(),
+      assigned_to_email: prev.assigned_to_email,
+      branch: prev.branch,
+    }));
+    setAgreeAll(false);
+    setDeclTextAgree(false);
+  };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const name = form.full_name.trim();
+    const father = form.father_name.trim();
+    const cnic = form.cnic.trim();
+    const phone = form.phone.trim();
+    const email = form.email.trim();
+
+    if (!name) { alert('Full Name is required'); return; }
+    if (!father) { alert('Father Name is required'); return; }
+    if (!cnic) { alert('CNIC is required'); return; }
+    if (!/^\d{13}$/.test(cnic)) { alert('CNIC must be 13 digits'); return; }
+    if (!phone) { alert('Phone is required'); return; }
+    if (!/^\+?[0-9]{10,15}$/.test(phone)) { alert('Invalid phone number format'); return; }
+    if (!email) { alert('Email is required'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Invalid email format'); return; }
+    if (!agreeAll) { alert('You must agree to Terms & Conditions'); return; }
+    if (!declTextAgree) { alert('You must accept the Declaration'); return; }
+
     setSaving(true);
     try {
       const tagsArr = form.tags
@@ -78,23 +174,35 @@ const LeadsPage: React.FC = () => {
         .map(t => t.trim())
         .filter(Boolean);
       const payload: any = {
-        first_name: form.first_name || null,
-        last_name: form.last_name || null,
-        email: form.email || null,
-        phone: form.phone || null,
+        full_name: name,
+        father_name: father,
+        cnic,
+        phone,
+        email,
+        country: form.country || null,
+        city: form.city || null,
+        address: form.address || null,
+        dob: form.dob || null,
+        service_name: form.service_name || null,
+        branch: form.branch || currentBranch || null,
+        lead_date: form.date || new Date().toISOString().slice(0, 10),
         source: form.source || null,
         status: form.status,
-        assigned_to_email: form.assigned_to_email || null,
-        tags: tagsArr.length ? tagsArr : null
+        assigned_to_email: form.assigned_to_email || currentUserEmail || null,
+        tags: tagsArr.length ? tagsArr : null,
       };
-      const { error } = await supabase.from('leads').insert([payload]);
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([payload])
+        .select('*')
+        .single();
       if (error) throw error;
+      setRecentLead(data as any as Lead);
       resetForm();
-      setTab('list');
       await loadLeads();
       alert('Lead added successfully.');
     } catch (err: any) {
-      alert(err.message || 'Failed to add lead');
+      alert((err as any)?.message || 'Failed to add lead');
     } finally {
       setSaving(false);
     }
@@ -109,9 +217,15 @@ const LeadsPage: React.FC = () => {
   const handleConvert = (lead: Lead) => {
     const params = new URLSearchParams();
     params.set('from_lead', '1');
-    if (lead.first_name || lead.last_name) params.set('full_name', `${lead.first_name || ''} ${lead.last_name || ''}`.trim());
+    params.set('lead_id', String(lead.id));
+    if (lead.full_name) params.set('full_name', lead.full_name);
+    if (lead.father_name) params.set('father_name', lead.father_name);
+    if (lead.cnic) params.set('cnic', lead.cnic);
     if (lead.email) params.set('email', lead.email);
     if (lead.phone) params.set('phone', lead.phone);
+    if (lead.city) params.set('city', lead.city);
+    if (lead.dob) params.set('dob', lead.dob);
+    if (lead.service_name) params.set('service', lead.service_name);
     navigate(`/students?${params.toString()}`);
   };
 
@@ -131,44 +245,117 @@ const LeadsPage: React.FC = () => {
           </div>
 
           {tab==='add' && (
-            <form onSubmit={onSubmit} className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                <label><span className="text-text-secondary">First Name</span><input value={form.first_name} onChange={e=>setForm({...form, first_name:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Last Name</span><input value={form.last_name} onChange={e=>setForm({...form, last_name:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Email</span><input type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Phone</span><input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Source</span>
-                  <select value={form.source} onChange={e=>setForm({...form, source:e.target.value as LeadSource})} className="mt-1 w-full border rounded p-2">
-                    <option value="">Select Source</option>
-                    <option value="facebook">Facebook</option>
-                    <option value="instagram">Instagram</option>
-                    <option value="google_form">Google Form</option>
-                    <option value="walk_in">Walk-in</option>
-                    <option value="referral">Referral</option>
-                    <option value="organic">Organic</option>
-                  </select>
-                </label>
-                <label><span className="text-text-secondary">Status</span>
-                  <select value={form.status} onChange={e=>setForm({...form, status:e.target.value as LeadStatus})} className="mt-1 w-full border rounded p-2">
-                    <option value="new">New</option>
-                    <option value="documentation">Documentation</option>
-                    <option value="university">University</option>
-                    <option value="visa">Visa</option>
-                    <option value="enrolled">Enrolled</option>
-                    <option value="rejected">Rejected</option>
-                  </select>
-                </label>
-                <label className="sm:col-span-2"><span className="text-text-secondary">Assigned To (email)</span><input value={form.assigned_to_email} onChange={e=>setForm({...form, assigned_to_email:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                <label className="sm:col-span-2"><span className="text-text-secondary">Tags (comma separated)</span><input value={form.tags} onChange={e=>setForm({...form, tags:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-              </div>
-              <aside className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] flex flex-col justify-between">
-                <div>
-                  <h3 className="font-bold text-lg">Actions</h3>
-                  <p className="mt-2 text-sm text-text-secondary">Create a new lead that you can later convert into a student enrollment.</p>
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <form onSubmit={onSubmit} className="lg:col-span-2 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] text-sm">
+                <h3 className="font-bold text-lg">Program Information</h3>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-sm"><span className="text-text-secondary">Service</span>
+                    <select
+                      value={form.service_name}
+                      onChange={e=>setForm({...form, service_name:e.target.value})}
+                      className="mt-1 w-full border rounded p-2"
+                      required
+                    >
+                      <option value="">Select Service</option>
+                      {services.map(sv => (
+                        <option key={sv.id} value={sv.name}>{sv.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm"><span className="text-text-secondary">Batch No. (auto)</span>
+                    <input
+                      value="Auto on enrollment"
+                      readOnly
+                      className="mt-1 w-full border rounded p-2 bg-gray-50 text-gray-500"
+                    />
+                  </label>
                 </div>
-                <button type="submit" disabled={saving} className="mt-4 px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Save Lead'}</button>
+
+                <h3 className="mt-6 font-bold text-lg">Personal Details</h3>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Full Name (CAPITAL)</span><input value={form.full_name} onChange={e=>setForm({...form, full_name:e.target.value.toUpperCase()})} className="mt-1 w-full border rounded p-2" required/></label>
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={form.father_name} onChange={e=>setForm({...form, father_name:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={form.cnic} onChange={e=>setForm({...form, cnic:e.target.value.replace(/[^0-9]/g,'')})} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
+                  <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={form.dob} onChange={e=>setForm({...form, dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                  <label className="text-sm"><span className="text-text-secondary">City</span><input value={form.city} onChange={e=>setForm({...form, city:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Address (optional)</span><input value={form.address} onChange={e=>setForm({...form, address:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                </div>
+
+                <h3 className="mt-6 font-bold text-lg">Lead Info</h3>
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-sm"><span className="text-text-secondary">Source</span>
+                    <select value={form.source} onChange={e=>setForm({...form, source:e.target.value as LeadSource})} className="mt-1 w-full border rounded p-2">
+                      <option value="">Select Source</option>
+                      <option value="facebook">Facebook</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="google_form">Google Form</option>
+                      <option value="walk_in">Walk-in</option>
+                      <option value="referral">Referral</option>
+                      <option value="organic">Organic</option>
+                    </select>
+                  </label>
+                  <label className="text-sm"><span className="text-text-secondary">Status</span>
+                    <select value={form.status} onChange={e=>setForm({...form, status:e.target.value as LeadStatus})} className="mt-1 w-full border rounded p-2">
+                      <option value="new">New</option>
+                      <option value="documentation">Documentation</option>
+                      <option value="university">University</option>
+                      <option value="visa">Visa</option>
+                      <option value="enrolled">Enrolled</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </label>
+                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Assigned To (email)</span><input value={form.assigned_to_email} onChange={e=>setForm({...form, assigned_to_email:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Tags (comma separated)</span><input value={form.tags} onChange={e=>setForm({...form, tags:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
+                </div>
+
+                <h3 className="mt-6 font-bold text-lg">Terms & Conditions</h3>
+                <div className="mt-2 space-y-2 text-sm">
+                  {[
+                    'Institute reserves the right to change the date or schedule.',
+                    'Permission for recording/exposure in front of the camera.',
+                    'Attendance must be 90%.',
+                    'Course fee payable before classes commence.',
+                    'Tuition fee is non-refundable.',
+                  ].map((t, i)=> (
+                    <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e)=>setAgreeAll(e.target.checked)} className="mt-1"/><span>{t}</span></label>
+                  ))}
+                </div>
+
+                <h3 className="mt-6 font-bold text-lg">Declaration</h3>
+                <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e)=>setDeclTextAgree(e.target.checked)} className="mt-1"/><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
+
+                <div className="mt-6 text-right">
+                  <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Save Lead'}</button>
+                </div>
+              </form>
+
+              <aside className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] flex flex-col justify-between text-sm">
+                <div>
+                  <h3 className="font-bold text-lg">Lead Summary</h3>
+                  <p className="mt-2 text-text-secondary">Fill in the lead details on the left. Once saved, you can enroll the lead directly into Students.</p>
+                  <div className="mt-3 text-xs text-text-secondary space-y-1">
+                    <div><span className="font-semibold">Branch:</span> {form.branch || currentBranch || '—'}</div>
+                    <div><span className="font-semibold">Date:</span> {form.date}</div>
+                  </div>
+                  {recentLead && (
+                    <div className="mt-4 border-t pt-4">
+                      <div className="text-sm font-semibold">Last Lead Saved</div>
+                      <div className="mt-1 text-xs text-text-secondary">{recentLead.full_name} · {recentLead.email} · {recentLead.phone}</div>
+                      <button
+                        type="button"
+                        onClick={()=>handleConvert(recentLead)}
+                        className="mt-3 inline-flex items-center px-3 py-2 rounded bg-[#ffa332] text-white font-semibold text-xs"
+                      >
+                        Enroll Lead in Students
+                      </button>
+                    </div>
+                  )}
+                </div>
               </aside>
-            </form>
+            </div>
           )}
 
           {tab==='list' && (
@@ -183,6 +370,7 @@ const LeadsPage: React.FC = () => {
                     <option value="university">University</option>
                     <option value="visa">Visa</option>
                     <option value="enrolled">Enrolled</option>
+                    <option value="confirmed">Confirmed</option>
                     <option value="rejected">Rejected</option>
                   </select>
                 </div>
@@ -203,16 +391,16 @@ const LeadsPage: React.FC = () => {
                   <tbody>
                     {filtered.map(l => (
                       <tr key={l.id} className="border-t">
-                        <td className="p-2">{[l.first_name, l.last_name].filter(Boolean).join(' ') || '—'}</td>
+                        <td className="p-2">{l.full_name || '—'}</td>
                         <td className="p-2">{l.email || '—'}</td>
                         <td className="p-2">{l.phone || '—'}</td>
                         <td className="p-2 capitalize">{l.source || '—'}</td>
                         <td className="p-2 capitalize">{l.status}</td>
                         <td className="p-2 text-right space-x-2">
-                          {l.status !== 'enrolled' && (
-                            <button onClick={()=>updateStatus(l, 'enrolled')} className="text-green-700 hover:underline">Mark Enrolled</button>
+                          {l.status !== 'confirmed' && (
+                            <button onClick={()=>updateStatus(l, 'confirmed')} className="text-green-700 hover:underline">Mark Confirmed</button>
                           )}
-                          <button onClick={()=>handleConvert(l)} className="text-blue-600 hover:underline">Convert to Student</button>
+                          <button onClick={()=>handleConvert(l)} className="text-blue-600 hover:underline">Enroll Lead in Students</button>
                         </td>
                       </tr>
                     ))}

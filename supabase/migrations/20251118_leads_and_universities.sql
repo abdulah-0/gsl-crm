@@ -43,6 +43,10 @@ create table if not exists public.leads (
   updated_at         timestamptz not null default now()
 );
 
+-- Ensure assigned_to_email exists even if leads table was created previously without it
+alter table public.leads add column if not exists assigned_to_email text;
+
+
 create index if not exists idx_leads_status on public.leads(status);
 create index if not exists idx_leads_assigned_to on public.leads(assigned_to_email);
 create index if not exists idx_leads_email_phone on public.leads(lower(email), phone);
