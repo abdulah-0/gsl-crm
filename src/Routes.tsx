@@ -25,6 +25,7 @@ import UsersPage from './pages/Users';
 import TeachersPanel from './pages/Teachers/Panel';
 import TeacherDetail from './pages/Teachers/Detail';
 
+import LeadsPage from './pages/Leads';
 import ProfilePage from './pages/Profile';
 import LeavesPage from './pages/Leaves';
 import BranchEmployeesPage from './pages/Employees/BranchEmployees';
@@ -168,6 +169,7 @@ const AppRoutes = () => {
         <Route path="/cases/:caseNumber/tasks/:taskId" element={<ProtectedRoute><CaseTaskDetailPage /></ProtectedRoute>} />
         <Route path="/calendar" element={<ProtectedRoute><CalendarPage /></ProtectedRoute>} />
 
+        <Route path="/leads" element={<ProtectedRoute><LeadsPage /></ProtectedRoute>} />
         <Route path="/students" element={<ProtectedRoute><StudentsPage /></ProtectedRoute>} />
         <Route path="/teachers/:id" element={<ProtectedRoute><TeacherDetail /></ProtectedRoute>} />
 

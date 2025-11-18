@@ -188,6 +188,21 @@ const StudentsPage: React.FC = () => {
       if (svc) setS(prev=>({ ...prev, program_title: svc }));
     })();
   }, [location.search]);
+  // Prefill from Lead -> Student conversion via query params
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    if (sp.get('from_lead') === '1') {
+      if (canAdd) setTab('add');
+      setS(prev => ({
+        ...prev,
+        full_name: sp.get('full_name') || prev.full_name,
+        email: sp.get('email') || prev.email,
+        phone: sp.get('phone') || prev.phone,
+        city: sp.get('city') || prev.city,
+        reference: sp.get('reference') || prev.reference,
+      }));
+    }
+  }, [location.search, canAdd]);
   // Prefill service fee into invoice from selected service price when opening the modal
   useEffect(() => {
     if (invoiceOpen && lastCreatedStudent) {
