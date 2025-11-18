@@ -246,8 +246,7 @@ const StudentsPage: React.FC = () => {
     if (!/^\+?[0-9]{10,15}$/.test(s.phone)) return 'Invalid phone number format';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)) return 'Invalid email format';
     if (!/^[0-9]{13}$/.test(s.cnic)) return 'CNIC must be 13 digits';
-    if (!s.dob) return 'Date of Birth is required';
-    if (!s.city) return 'City is required';
+    // Date of Birth and City are optional for course enrollment
     if (!agreeAll) return 'You must agree to Terms & Conditions';
     if (!declTextAgree) return 'You must accept the Declaration';
     return null;
@@ -259,8 +258,6 @@ const StudentsPage: React.FC = () => {
     const cnic = (consultSf.basic_cnic || '').trim();
     const phone = (consultSf.basic_phone || '').trim();
     const email = (consultSf.basic_email || '').trim();
-    const address = (consultSf.basic_address || '').trim();
-    const nationality = (consultSf.basic_nationality || '').trim();
     const date = (consultSf.basic_date || '').trim();
 
     if (!name) return 'Student Name is required for Consultancy enrollment';
@@ -271,11 +268,14 @@ const StudentsPage: React.FC = () => {
     if (!/^\+?[0-9]{10,15}$/.test(phone)) return 'Invalid phone number format for Consultancy enrollment';
     if (!email) return 'Email is required for Consultancy enrollment';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Invalid email format for Consultancy enrollment';
-    if (!address) return 'Address is required for Consultancy enrollment';
-    if (!nationality) return 'Nationality is required for Consultancy enrollment';
-    if (!date) return 'Date is required for Consultancy enrollment';
-    const today = new Date().toISOString().slice(0, 10);
-    if (date < today) return 'Date cannot be earlier than today';
+
+    // Address, nationality, and other fields are optional.
+    // If a date is provided, keep the sanity check that it cannot be earlier than today.
+    if (date) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (date < today) return 'Date cannot be earlier than today';
+    }
+
     return null;
   };
 
@@ -764,8 +764,8 @@ const StudentsPage: React.FC = () => {
                       <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={s.phone} onChange={e=>setS({...s, phone:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
                       <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={s.email} onChange={e=>setS({...s, email:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
                       <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={s.cnic} onChange={e=>setS({...s, cnic:e.target.value.replace(/[^0-9]/g,'')})} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={s.dob} onChange={e=>setS({...s, dob:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">City</span><input value={s.city} onChange={e=>setS({...s, city:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
+                      <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={s.dob} onChange={e=>setS({...s, dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                      <label className="text-sm"><span className="text-text-secondary">City</span><input value={s.city} onChange={e=>setS({...s, city:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
                       <label className="text-sm"><span className="text-text-secondary">Reference (optional)</span><input value={s.reference} onChange={e=>setS({...s, reference:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
                     </div>
 
@@ -779,16 +779,16 @@ const StudentsPage: React.FC = () => {
                           </div>
                           <label className="text-sm"><span className="text-text-secondary">Degree Name</span><input value={a.degree_name} onChange={e=>{
                             const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, degree_name:v}:r));
-                          }} className="mt-1 w-full border rounded p-2" required/></label>
+                          }} className="mt-1 w-full border rounded p-2"/></label>
                           <label className="text-sm"><span className="text-text-secondary">Grade</span><input value={a.grade} onChange={e=>{
                             const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, grade:v}:r));
-                          }} className="mt-1 w-full border rounded p-2" required/></label>
+                          }} className="mt-1 w-full border rounded p-2"/></label>
                           <label className="text-sm"><span className="text-text-secondary">Year</span><input value={a.year} onChange={e=>{
                             const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, year:v}:r));
-                          }} className="mt-1 w-full border rounded p-2" required/></label>
+                          }} className="mt-1 w-full border rounded p-2"/></label>
                           <label className="text-sm"><span className="text-text-secondary">Institute/University</span><input value={a.institute} onChange={e=>{
                             const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, institute:v}:r));
-                          }} className="mt-1 w-full border rounded p-2" required/></label>
+                          }} className="mt-1 w-full border rounded p-2"/></label>
                           {i>0 && <button type="button" onClick={()=>onRemoveAcademic(i)} className="text-xs text-red-600">Remove</button>}
                         </div>
                       ))}
@@ -847,10 +847,10 @@ const StudentsPage: React.FC = () => {
                         <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e=>setConsultSf(prev=>({...prev, basic_father_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                         <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e=>setConsultSf(prev=>({...prev, basic_cnic:e.target.value.replace(/[^0-9]/g,'')}))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
                         <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e=>setConsultSf(prev=>({...prev, basic_dob:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e=>setConsultSf(prev=>({...prev, basic_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e=>setConsultSf(prev=>({...prev, basic_address:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e=>setConsultSf(prev=>({...prev, basic_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e=>setConsultSf(prev=>({...prev, basic_address:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
                         <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e=>setConsultSf(prev=>({...prev, basic_email:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e=>setConsultSf(prev=>({...prev, basic_nationality:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e=>setConsultSf(prev=>({...prev, basic_nationality:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
                         <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e=>setConsultSf(prev=>({...prev, basic_phone:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
                       </div>
                     </div>
@@ -909,7 +909,7 @@ const StudentsPage: React.FC = () => {
                     {/* Work Experience */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Work Experience</h4>
-                      <textarea value={consultSf.work_exp} onChange={e=>setConsultSf(prev=>({...prev, work_exp:e.target.value}))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience" required></textarea>
+                      <textarea value={consultSf.work_exp} onChange={e=>setConsultSf(prev=>({...prev, work_exp:e.target.value}))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
                     </div>
 
                     {/* Country of Interest */}
@@ -930,10 +930,10 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">Additional Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e=>setConsultSf(prev=>({...prev, add_course_or_uni:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e=>setConsultSf(prev=>({...prev, add_travel_history:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e=>setConsultSf(prev=>({...prev, add_visa_refusal:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e=>setConsultSf(prev=>({...prev, add_asylum_family:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e=>setConsultSf(prev=>({...prev, add_course_or_uni:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e=>setConsultSf(prev=>({...prev, add_travel_history:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e=>setConsultSf(prev=>({...prev, add_visa_refusal:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e=>setConsultSf(prev=>({...prev, add_asylum_family:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
                       </div>
                     </div>
 
@@ -941,11 +941,11 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Office Use Only</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e=>setConsultSf(prev=>({...prev, office_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e=>setConsultSf(prev=>({...prev, office_application_started:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e=>setConsultSf(prev=>({...prev, office_university_applied:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e=>setConsultSf(prev=>({...prev, office_next_follow_up_date:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e=>setConsultSf(prev=>({...prev, office_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e=>setConsultSf(prev=>({...prev, office_application_started:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e=>setConsultSf(prev=>({...prev, office_university_applied:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_name:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e=>setConsultSf(prev=>({...prev, office_next_follow_up_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
                       </div>
                     </div>
 
