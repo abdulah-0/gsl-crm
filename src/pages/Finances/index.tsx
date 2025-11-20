@@ -493,10 +493,11 @@ const Finances: React.FC = () => {
 
 
 
-  // Accounts (payment breakdown by student)
+  // Accounts (payment breakdown by student) - with realtime updates
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    const loadAccounts = async () => {
       try {
         const { data: invs, error } = await supabase
           .from('invoices')
@@ -524,8 +525,23 @@ const Finances: React.FC = () => {
       } catch (e) {
         console.error('Accounts load error', e);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+
+    loadAccounts();
+
+    // Realtime subscription for invoices
+    const channel = supabase
+      .channel('public:invoices')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
+        // Reload accounts data when invoices change
+        loadAccounts();
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Pending students search (debounced)
@@ -889,7 +905,7 @@ const Finances: React.FC = () => {
         .from('vouchers')
         .select('*')
         .order('occurred_at', { ascending: false })
-        .limit(500);
+        .limit(5000); // Increased limit to ensure all data is loaded for charts
       if (!cancelled && data) setVouchers(data.map(mapDbToRow));
       if (error) console.error('Load vouchers error', error);
     };
