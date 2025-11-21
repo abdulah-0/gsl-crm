@@ -47,14 +47,11 @@ const Sidebar = ({
         const granularAllowed = (up||[])
           .filter((r:any) => (r.can_add || r.can_edit || r.can_delete || (r.access && ['VIEW','CRUD'].includes(r.access))))
           .map((r:any) => (r.module === 'info-portal' ? 'info' : (r.module as string)));
-        if (superRole) {
+        if (superRole || adminRole) {
+          // Super Admin and Admin can access all tabs (Users tab still restricted below to super only)
           setAllowed(ALL);
         } else if ((granularAllowed && granularAllowed.length > 0)) {
           setAllowed(Array.from(new Set(granularAllowed)));
-        } else if (role.includes('admin')) {
-          // Admins see at least Teachers by default (fallback to legacy array)
-          const union = Array.from(new Set([...normalizedPerms, 'teachers']));
-          setAllowed(union);
         } else if (role.includes('teacher')) {
           // Teachers by default only see Teachers unless explicitly granted more (fallback)
           setAllowed((normalizedPerms && normalizedPerms.length>0) ? normalizedPerms : ['teachers']);
