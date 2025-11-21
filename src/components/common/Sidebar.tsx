@@ -34,8 +34,9 @@ const Sidebar = ({
         const roleStr = (((sess.user as any)?.app_metadata?.role) || ((sess.user as any)?.user_metadata?.role) || (u?.role) || '').toString();
         const role = roleStr.toLowerCase();
         const superRole = role.includes('super');
+        const adminRole = role.includes('admin');
         setIsSuper(superRole);
-        const ALL = ['dashboard','students','services','cases','leads','calendar','accounts','teachers','employees','leaves','hrm','dailytask','messenger','info','reports','users'];
+        const ALL = ['dashboard','students','services','cases','leads','calendar','accounts','universities','teachers','employees','leaves','hrm','dailytask','messenger','info','reports','users'];
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
         // Prefer granular permissions when present

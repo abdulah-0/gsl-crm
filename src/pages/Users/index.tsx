@@ -22,6 +22,7 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'cases', label: 'On-Going Cases' },
   { id: 'calendar', label: 'Calendar' },
   { id: 'accounts', label: 'Accounts' },
+  { id: 'universities', label: 'Universities' },
   { id: 'employees', label: 'Employees' },
   { id: 'teachers', label: 'Teachers' },
   { id: 'messenger', label: 'Messenger' },
