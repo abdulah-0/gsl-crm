@@ -25,6 +25,8 @@ import UsersPage from './pages/Users';
 import TeachersPanel from './pages/Teachers/Panel';
 import TeacherDetail from './pages/Teachers/Detail';
 
+import UniversitiesPage from './pages/Universities';
+
 import LeadsPage from './pages/Leads';
 import ProfilePage from './pages/Profile';
 import LeavesPage from './pages/Leaves';
@@ -187,6 +189,8 @@ const AppRoutes = () => {
         <Route path="/info" element={<ProtectedRoute><InfoPage /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><BranchEmployeesPage /></ProtectedRoute>} />
+        <Route path="/universities" element={<ProtectedRoute><UniversitiesPage /></ProtectedRoute>} />
+
         <Route path="/leaves" element={<ProtectedRoute><LeavesPage /></ProtectedRoute>} />
 
         <Route path="/onboard" element={<PublicOnboarding />} />

@@ -70,11 +70,12 @@ const Sidebar = ({
   const baseMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '/images/img_icn_sidebar_dashboard_active.svg', href: '/dashboard' },
     { id: 'cases', label: 'On Going Cases', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/cases' },
-      { id: 'leads', label: 'Leads', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/leads' },
+    { id: 'leads', label: 'Leads', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/leads' },
     { id: 'students', label: 'Students', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/students' },
     { id: 'services', label: 'Products & Services', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/services' },
     { id: 'calendar', label: 'Calendar', icon: '/images/img_icn_sidebar_calendar_inactive.svg', href: '/calendar' },
     { id: 'accounts', label: 'Accounts', icon: '/images/img_icn_sidebar_vac.svg', href: '/accounts' },
+    { id: 'universities', label: 'Universities', icon: '/images/img_icn_sidebar_projects_inactive.svg', href: '/universities' },
 
     { id: 'teachers', label: 'Teachers', icon: '/images/img_icn_sidebar_emp.svg', href: '/teachers' },
     { id: 'employees', label: 'Employees', icon: '/images/img_icn_sidebar_emp.svg', href: '/employees' },
