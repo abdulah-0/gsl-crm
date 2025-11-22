@@ -132,7 +132,7 @@ const StudentsPage: React.FC = () => {
         setCurrentBranch((u as any)?.branch || null);
         setCurrentUserName((u as any)?.full_name || email || '');
         if ((u as any)?.full_name) {
-          setConsultSf(prev => ({ ...prev, office_counsellor_name: prev.office_counsellor_name || (u as any).full_name }));
+          setConsultSf((prev: any) => ({ ...prev, office_counsellor_name: prev.office_counsellor_name || (u as any).full_name }));
         }
         if (roleStr.includes('super')) { setStuAccess('CRUD'); setPermFlags({ add: true, edit: true, del: true }); return; }
         const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'students');
@@ -153,7 +153,7 @@ const StudentsPage: React.FC = () => {
   useEffect(() => {
     if (enrollmentType === 'consultancy') {
       const today = new Date().toISOString().slice(0, 10);
-      setConsultSf(prev => ({
+      setConsultSf((prev: any) => ({
         ...prev,
         basic_date: prev.basic_date || today,
       }));
@@ -846,15 +846,15 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-4">
                       <h4 className="font-semibold">Basic Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Full Name</span><input value={consultSf.basic_name} onChange={e => setConsultSf(prev => ({ ...prev, basic_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
-                        <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e => setConsultSf(prev => ({ ...prev, basic_father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
-                        <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e => setConsultSf(prev => ({ ...prev, basic_cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
-                        <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e => setConsultSf(prev => ({ ...prev, basic_dob: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e => setConsultSf(prev => ({ ...prev, basic_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e => setConsultSf(prev => ({ ...prev, basic_address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e => setConsultSf(prev => ({ ...prev, basic_email: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
-                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e => setConsultSf(prev => ({ ...prev, basic_nationality: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e => setConsultSf(prev => ({ ...prev, basic_phone: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">Full Name</span><input value={consultSf.basic_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                        <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_dob: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_email: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_nationality: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_phone: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       </div>
                     </div>
 
@@ -862,19 +862,19 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Undergrad</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_olevels} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels: e.target.checked }))} />O-Levels</label>
-                        <input placeholder="Year" value={consultSf.ug_olevels_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.ug_olevels_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_alevels} onChange={e => setConsultSf(prev => ({ ...prev, ug_alevels: e.target.checked }))} />A-Levels</label>
-                        <input placeholder="Year" value={consultSf.ug_alevels_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_alevels_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_matric} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric: e.target.checked }))} />Matric</label>
-                        <input placeholder="Year" value={consultSf.ug_matric_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.ug_matric_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_hssc} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc: e.target.checked }))} />HSSC</label>
-                        <input placeholder="Year" value={consultSf.ug_hssc_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.ug_hssc_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <input placeholder="Other Education" value={consultSf.ug_other} onChange={e => setConsultSf(prev => ({ ...prev, ug_other: e.target.value }))} className="border rounded p-2 sm:col-span-2 lg:col-span-4" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_olevels} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_olevels: e.target.checked }))} />O-Levels</label>
+                        <input placeholder="Year" value={consultSf.ug_olevels_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_olevels_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_olevels_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_alevels} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_alevels: e.target.checked }))} />A-Levels</label>
+                        <input placeholder="Year" value={consultSf.ug_alevels_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_alevels_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_matric} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_matric: e.target.checked }))} />Matric</label>
+                        <input placeholder="Year" value={consultSf.ug_matric_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_matric_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_matric_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_matric_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_hssc} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_hssc: e.target.checked }))} />HSSC</label>
+                        <input placeholder="Year" value={consultSf.ug_hssc_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_hssc_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_hssc_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_hssc_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Other Education" value={consultSf.ug_other} onChange={e => setConsultSf((prev: any) => ({ ...prev, ug_other: e.target.value }))} className="border rounded p-2 sm:col-span-2 lg:col-span-4" />
                       </div>
                     </div>
 
@@ -882,17 +882,17 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Postgrad</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.pg_bachelors} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors: e.target.checked }))} />Bachelors</label>
-                        <input placeholder="University Name" value={consultSf.pg_bachelors_university} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
-                        <input placeholder="Course Name" value={consultSf.pg_bachelors_course} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <input placeholder="Year" value={consultSf.pg_bachelors_year} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.pg_bachelors_grades} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_grades: e.target.value }))} className="border rounded p-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.pg_bachelors} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_bachelors: e.target.checked }))} />Bachelors</label>
+                        <input placeholder="University Name" value={consultSf.pg_bachelors_university} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_bachelors_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
+                        <input placeholder="Course Name" value={consultSf.pg_bachelors_course} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_bachelors_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Year" value={consultSf.pg_bachelors_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_bachelors_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.pg_bachelors_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_bachelors_grades: e.target.value }))} className="border rounded p-2" />
 
-                        <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={consultSf.pg_masters} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters: e.target.checked }))} />Masters</label>
-                        <input placeholder="University Name" value={consultSf.pg_masters_university} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
-                        <input placeholder="Course Name" value={consultSf.pg_masters_course} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
-                        <input placeholder="Year" value={consultSf.pg_masters_year} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_year: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Grades" value={consultSf.pg_masters_grades} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_grades: e.target.value }))} className="border rounded p-2" />
+                        <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={consultSf.pg_masters} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_masters: e.target.checked }))} />Masters</label>
+                        <input placeholder="University Name" value={consultSf.pg_masters_university} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_masters_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
+                        <input placeholder="Course Name" value={consultSf.pg_masters_course} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_masters_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Year" value={consultSf.pg_masters_year} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_masters_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.pg_masters_grades} onChange={e => setConsultSf((prev: any) => ({ ...prev, pg_masters_grades: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
@@ -900,32 +900,32 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">English Proficiency Test</h4>
                       <div className="mt-2 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_ielts} onChange={e => setConsultSf(prev => ({ ...prev, eng_ielts: e.target.checked }))} />IELTS</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_toefl} onChange={e => setConsultSf(prev => ({ ...prev, eng_toefl: e.target.checked }))} />TOEFL</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_pte} onChange={e => setConsultSf(prev => ({ ...prev, eng_pte: e.target.checked }))} />PTE</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_duolingo} onChange={e => setConsultSf(prev => ({ ...prev, eng_duolingo: e.target.checked }))} />Duolingo</label>
-                        <input placeholder="Other" value={consultSf.eng_other} onChange={e => setConsultSf(prev => ({ ...prev, eng_other: e.target.value }))} className="border rounded p-2" />
-                        <input placeholder="Score" value={consultSf.eng_score} onChange={e => setConsultSf(prev => ({ ...prev, eng_score: e.target.value }))} className="border rounded p-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_ielts} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_ielts: e.target.checked }))} />IELTS</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_toefl} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_toefl: e.target.checked }))} />TOEFL</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_pte} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_pte: e.target.checked }))} />PTE</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_duolingo} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_duolingo: e.target.checked }))} />Duolingo</label>
+                        <input placeholder="Other" value={consultSf.eng_other} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_other: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Score" value={consultSf.eng_score} onChange={e => setConsultSf((prev: any) => ({ ...prev, eng_score: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
                     {/* Work Experience */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Work Experience</h4>
-                      <textarea value={consultSf.work_exp} onChange={e => setConsultSf(prev => ({ ...prev, work_exp: e.target.value }))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
+                      <textarea value={consultSf.work_exp} onChange={e => setConsultSf((prev: any) => ({ ...prev, work_exp: e.target.value }))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
                     </div>
 
                     {/* Country of Interest */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Country of Interest</h4>
                       <div className="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_uk} onChange={e => setConsultSf(prev => ({ ...prev, coi_uk: e.target.checked }))} />United Kingdom</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_usa} onChange={e => setConsultSf(prev => ({ ...prev, coi_usa: e.target.checked }))} />United States of America</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_canada} onChange={e => setConsultSf(prev => ({ ...prev, coi_canada: e.target.checked }))} />Canada</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_malaysia} onChange={e => setConsultSf(prev => ({ ...prev, coi_malaysia: e.target.checked }))} />Malaysia</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_germany} onChange={e => setConsultSf(prev => ({ ...prev, coi_germany: e.target.checked }))} />Germany</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_australia} onChange={e => setConsultSf(prev => ({ ...prev, coi_australia: e.target.checked }))} />Australia</label>
-                        <input placeholder="Others" value={consultSf.coi_others} onChange={e => setConsultSf(prev => ({ ...prev, coi_others: e.target.value }))} className="border rounded p-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_uk} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_uk: e.target.checked }))} />United Kingdom</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_usa} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_usa: e.target.checked }))} />United States of America</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_canada} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_canada: e.target.checked }))} />Canada</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_malaysia} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_malaysia: e.target.checked }))} />Malaysia</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_germany} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_germany: e.target.checked }))} />Germany</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_australia} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_australia: e.target.checked }))} />Australia</label>
+                        <input placeholder="Others" value={consultSf.coi_others} onChange={e => setConsultSf((prev: any) => ({ ...prev, coi_others: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
@@ -933,10 +933,10 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">Additional Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e => setConsultSf(prev => ({ ...prev, add_course_or_uni: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e => setConsultSf(prev => ({ ...prev, add_travel_history: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e => setConsultSf(prev => ({ ...prev, add_visa_refusal: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e => setConsultSf(prev => ({ ...prev, add_asylum_family: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e => setConsultSf((prev: any) => ({ ...prev, add_course_or_uni: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e => setConsultSf((prev: any) => ({ ...prev, add_travel_history: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e => setConsultSf((prev: any) => ({ ...prev, add_visa_refusal: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e => setConsultSf((prev: any) => ({ ...prev, add_asylum_family: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                       </div>
                     </div>
 
@@ -944,11 +944,11 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Office Use Only</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e => setConsultSf(prev => ({ ...prev, office_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e => setConsultSf(prev => ({ ...prev, office_application_started: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e => setConsultSf(prev => ({ ...prev, office_university_applied: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e => setConsultSf(prev => ({ ...prev, office_counsellor_name: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e => setConsultSf(prev => ({ ...prev, office_next_follow_up_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_application_started: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_university_applied: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_counsellor_name: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_next_follow_up_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                       </div>
                     </div>
 
