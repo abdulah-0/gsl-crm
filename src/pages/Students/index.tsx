@@ -69,26 +69,26 @@ const defaultStudent: Omit<Student, 'id'> = {
 };
 
 const defaultConsultancyForm: any = {
-  basic_name:'', basic_father_name:'', basic_cnic:'', basic_dob:'', basic_address:'', basic_date:'', basic_email:'', basic_nationality:'', basic_phone:'',
-  ug_olevels:false, ug_olevels_year:'', ug_olevels_grades:'', ug_alevels:false, ug_alevels_year:'', ug_alevels_grades:'', ug_matric:false, ug_matric_year:'', ug_matric_grades:'', ug_hssc:false, ug_hssc_year:'', ug_hssc_grades:'', ug_other:'',
-  pg_bachelors:false, pg_bachelors_university:'', pg_bachelors_course:'', pg_bachelors_year:'', pg_bachelors_grades:'', pg_masters:false, pg_masters_university:'', pg_masters_course:'', pg_masters_year:'', pg_masters_grades:'',
-  eng_ielts:false, eng_toefl:false, eng_pte:false, eng_duolingo:false, eng_other:'', eng_score:'',
-  work_exp:'',
-  coi_uk:false, coi_usa:false, coi_canada:false, coi_malaysia:false, coi_germany:false, coi_australia:false, coi_others:'',
-  add_course_or_uni:'', add_travel_history:'', add_visa_refusal:'', add_asylum_family:'',
-  office_date:'', office_application_started:'', office_university_applied:'', office_counsellor_name:'', office_next_follow_up_date:'',
+  basic_name: '', basic_father_name: '', basic_cnic: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '',
+  ug_olevels: false, ug_olevels_year: '', ug_olevels_grades: '', ug_alevels: false, ug_alevels_year: '', ug_alevels_grades: '', ug_matric: false, ug_matric_year: '', ug_matric_grades: '', ug_hssc: false, ug_hssc_year: '', ug_hssc_grades: '', ug_other: '',
+  pg_bachelors: false, pg_bachelors_university: '', pg_bachelors_course: '', pg_bachelors_year: '', pg_bachelors_grades: '', pg_masters: false, pg_masters_university: '', pg_masters_course: '', pg_masters_year: '', pg_masters_grades: '',
+  eng_ielts: false, eng_toefl: false, eng_pte: false, eng_duolingo: false, eng_other: '', eng_score: '',
+  work_exp: '',
+  coi_uk: false, coi_usa: false, coi_canada: false, coi_malaysia: false, coi_germany: false, coi_australia: false, coi_others: '',
+  add_course_or_uni: '', add_travel_history: '', add_visa_refusal: '', add_asylum_family: '',
+  office_date: '', office_application_started: '', office_university_applied: '', office_counsellor_name: '', office_next_follow_up_date: '',
 };
 
 const defaultTestForm: TestEnrollmentForm = {
-  first_name:'',
-  last_name:'',
-  father_name:'',
-  cnic:'',
-  email:'',
-  mobile:'',
-  address:'',
-  date_of_birth:'',
-  test_type:'',
+  first_name: '',
+  last_name: '',
+  father_name: '',
+  cnic: '',
+  email: '',
+  mobile: '',
+  address: '',
+  date_of_birth: '',
+  test_type: '',
 };
 
 const StudentsPage: React.FC = () => {
@@ -111,21 +111,21 @@ const StudentsPage: React.FC = () => {
   const [currentUserName, setCurrentUserName] = useState<string>('');
   const [sourceLeadId, setSourceLeadId] = useState<number | null>(null);
 
-  const [stuAccess, setStuAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE');
+  const [stuAccess, setStuAccess] = useState<'NONE' | 'VIEW' | 'CRUD'>('NONE');
   const canCrud = stuAccess === 'CRUD';
   const [isSuper, setIsSuper] = useState(false);
-  const [permFlags, setPermFlags] = useState<{add:boolean; edit:boolean; del:boolean}>({add:false, edit:false, del:false});
+  const [permFlags, setPermFlags] = useState<{ add: boolean; edit: boolean; del: boolean }>({ add: false, edit: false, del: false });
   const canAdd = isSuper || permFlags.add || canCrud;
   const canEdit = isSuper || permFlags.edit || canCrud;
   const canDelete = isSuper || permFlags.del || canCrud;
 
 
-  useEffect(()=>{
-    (async()=>{
-      try{
+  useEffect(() => {
+    (async () => {
+      try {
         const { data: auth } = await supabase.auth.getUser();
         const email = auth.user?.email;
-        if(!email) return;
+        if (!email) return;
         const { data: u } = await supabase.from('dashboard_users').select('role, permissions, branch, full_name').eq('email', email).maybeSingle();
         const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
         setIsSuper(roleStr.includes('super'));
@@ -134,20 +134,20 @@ const StudentsPage: React.FC = () => {
         if ((u as any)?.full_name) {
           setConsultSf(prev => ({ ...prev, office_counsellor_name: prev.office_counsellor_name || (u as any).full_name }));
         }
-        if (roleStr.includes('super')) { setStuAccess('CRUD'); setPermFlags({add:true, edit:true, del:true}); return; }
+        if (roleStr.includes('super')) { setStuAccess('CRUD'); setPermFlags({ add: true, edit: true, del: true }); return; }
         const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'students');
         if (up && up.length) {
           const r: any = up[0];
-          setPermFlags({ add: !!r.can_add || r.access==='CRUD', edit: !!r.can_edit || r.access==='CRUD', del: !!r.can_delete || r.access==='CRUD' });
-          setStuAccess((r.access as any)==='CRUD'?'CRUD':'VIEW');
+          setPermFlags({ add: !!r.can_add || r.access === 'CRUD', edit: !!r.can_edit || r.access === 'CRUD', del: !!r.can_delete || r.access === 'CRUD' });
+          setStuAccess((r.access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
         } else {
-          const perms = Array.isArray(u?.permissions)? (u?.permissions as any as string[]) : [];
-          setStuAccess(perms.includes('students')? 'CRUD' : 'NONE');
+          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
+          setStuAccess(perms.includes('students') ? 'CRUD' : 'NONE');
         }
-      }catch{}
+      } catch { }
     })();
-  },[]);
-  useEffect(()=>{ if(tab==='add' && !canAdd) setTab('list'); }, [tab, canAdd]);
+  }, []);
+  useEffect(() => { if (tab === 'add' && !canAdd) setTab('list'); }, [tab, canAdd]);
 
   // Auto-fill Consultancy Date field with today's date when applicable
   useEffect(() => {
@@ -162,7 +162,7 @@ const StudentsPage: React.FC = () => {
 
   // Invoice modal state (post-creation)
   const [invoiceOpen, setInvoiceOpen] = useState(false);
-  const [lastCreatedStudent, setLastCreatedStudent] = useState<{id:string; full_name:string; batch_no:string; program_title?:string} | null>(null);
+  const [lastCreatedStudent, setLastCreatedStudent] = useState<{ id: string; full_name: string; batch_no: string; program_title?: string } | null>(null);
   const [invReg, setInvReg] = useState<string>('1000');
   const [invSvc, setInvSvc] = useState<string>('');
   const [invDisc, setInvDisc] = useState<string>('0');
@@ -173,7 +173,7 @@ const StudentsPage: React.FC = () => {
 
 
   // Services for enrollment
-  const [services, setServices] = useState<Array<{id:string; name:string; type?:string; price?:number; duration_weeks?:number}>>([]);
+  const [services, setServices] = useState<Array<{ id: string; name: string; type?: string; price?: number; duration_weeks?: number }>>([]);
 
   // List state
   const [items, setItems] = useState<Student[]>([]);
@@ -183,14 +183,14 @@ const StudentsPage: React.FC = () => {
   const [fCity, setFCity] = useState('All');
   const [editItem, setEditItem] = useState<Student | null>(null);
 
-  useEffect(()=>{
-    (async()=>{
+  useEffect(() => {
+    (async () => {
       const { data } = await supabase.from('dashboard_services').select('id, name, type, price, duration_weeks').order('name');
-      setServices((data as any)||[]);
+      setServices((data as any) || []);
       // prefill from query ?service=NAME
       const sp = new URLSearchParams(location.search);
       const svc = sp.get('service');
-      if (svc) setS(prev=>({ ...prev, program_title: svc }));
+      if (svc) setS(prev => ({ ...prev, program_title: svc }));
     })();
   }, [location.search]);
   // Prefill from Lead -> Student conversion via query params
@@ -488,9 +488,12 @@ const StudentsPage: React.FC = () => {
         branch: currentBranch || null,
       }]);
 
+      const { data: srow } = await supabase.from('dashboard_students').select('id, full_name, batch_no, program_title').eq('id', newId).maybeSingle();
+      setLastCreatedStudent(srow as any);
+      setInvoiceOpen(true);
       await loadList();
       resetForm();
-      alert('Test enrollment added successfully. No invoice is created for test enrollments.');
+      alert('Test enrollment added successfully. You can now generate the invoice.');
     } catch (err: any) {
       alert(`Failed to save test enrollment: ${err.message || err}`);
     } finally {
@@ -592,10 +595,10 @@ const StudentsPage: React.FC = () => {
             enrollmentType === 'course'
               ? `Course - ${baseProgramTitle}`
               : enrollmentType === 'consultancy'
-              ? `Consultancy - ${baseProgramTitle}`
-              : enrollmentType === 'test'
-              ? `Test - ${baseProgramTitle}`
-              : baseProgramTitle;
+                ? `Consultancy - ${baseProgramTitle}`
+                : enrollmentType === 'test'
+                  ? `Test - ${baseProgramTitle}`
+                  : baseProgramTitle;
 
           const pendingForPdf: PendingStudent = {
             student_id: lastCreatedStudent.id,
@@ -658,7 +661,7 @@ const StudentsPage: React.FC = () => {
         loadList();
       })
       .subscribe();
-    return () => { try { supabase.removeChannel(channel); } catch {} };
+    return () => { try { supabase.removeChannel(channel); } catch { } };
   }, [loadList]);
 
   // Distincts for filters
@@ -691,7 +694,7 @@ const StudentsPage: React.FC = () => {
   return (
     <main className="w-full min-h-screen bg-background-main flex">
       <Helmet><title>Students | GSL Pakistan CRM</title></Helmet>
-      <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar/></div>
+      <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar /></div>
       <div className="flex-1 flex flex-col">
         <Header />
 
@@ -699,12 +702,12 @@ const StudentsPage: React.FC = () => {
           <div className="flex items-center justify-between">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Students</h1>
             <div className="bg-white rounded-full p-1 shadow flex">
-              <button disabled={!canAdd} onClick={()=>{ if(canAdd) setTab('add'); }} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add' && canAdd ? 'bg-[#ffa332] text-white' : 'text-text-secondary'} ${!canAdd? 'opacity-60 cursor-not-allowed' : ''}`}>Add New Student</button>
-              <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>All Students</button>
+              <button disabled={!canAdd} onClick={() => { if (canAdd) setTab('add'); }} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab === 'add' && canAdd ? 'bg-[#ffa332] text-white' : 'text-text-secondary'} ${!canAdd ? 'opacity-60 cursor-not-allowed' : ''}`}>Add New Student</button>
+              <button onClick={() => setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab === 'list' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>All Students</button>
             </div>
           </div>
 
-          {tab==='add' && (
+          {tab === 'add' && (
             <form onSubmit={submitStudent} className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -749,24 +752,24 @@ const StudentsPage: React.FC = () => {
                     <h3 className="mt-6 font-bold text-lg">Program Information</h3>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <label className="text-sm"><span className="text-text-secondary">Service</span>
-                        <select value={s.program_title} onChange={e=>setS({...s, program_title:e.target.value})} className="mt-1 w-full border rounded p-2" required>
+                        <select value={s.program_title} onChange={e => setS({ ...s, program_title: e.target.value })} className="mt-1 w-full border rounded p-2" required>
                           <option value="">Select Service</option>
                           {services.map(sv => (<option key={sv.id} value={sv.name}>{sv.name}</option>))}
                         </select>
                       </label>
-                      <label className="text-sm"><span className="text-text-secondary">Batch No. (auto)</span><input value={s.batch_no || 'Auto on save'} readOnly className="mt-1 w-full border rounded p-2 bg-gray-50 text-gray-500"/></label>
+                      <label className="text-sm"><span className="text-text-secondary">Batch No. (auto)</span><input value={s.batch_no || 'Auto on save'} readOnly className="mt-1 w-full border rounded p-2 bg-gray-50 text-gray-500" /></label>
                     </div>
 
                     <h3 className="mt-6 font-bold text-lg">Personal Details</h3>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Full Name (CAPITAL)</span><input value={s.full_name} onChange={e=>setS({...s, full_name:e.target.value.toUpperCase()})} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={s.father_name} onChange={e=>setS({...s, father_name:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={s.phone} onChange={e=>setS({...s, phone:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={s.email} onChange={e=>setS({...s, email:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={s.cnic} onChange={e=>setS({...s, cnic:e.target.value.replace(/[^0-9]/g,'')})} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
-                      <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={s.dob} onChange={e=>setS({...s, dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-                      <label className="text-sm"><span className="text-text-secondary">City</span><input value={s.city} onChange={e=>setS({...s, city:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-                      <label className="text-sm"><span className="text-text-secondary">Reference (optional)</span><input value={s.reference} onChange={e=>setS({...s, reference:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                      <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Full Name (CAPITAL)</span><input value={s.full_name} onChange={e => setS({ ...s, full_name: e.target.value.toUpperCase() })} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={s.father_name} onChange={e => setS({ ...s, father_name: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={s.phone} onChange={e => setS({ ...s, phone: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={s.email} onChange={e => setS({ ...s, email: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={s.cnic} onChange={e => setS({ ...s, cnic: e.target.value.replace(/[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                      <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={s.dob} onChange={e => setS({ ...s, dob: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+                      <label className="text-sm"><span className="text-text-secondary">City</span><input value={s.city} onChange={e => setS({ ...s, city: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+                      <label className="text-sm"><span className="text-text-secondary">Reference (optional)</span><input value={s.reference} onChange={e => setS({ ...s, reference: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                     </div>
 
                     <h3 className="mt-6 font-bold text-lg">Academic Background</h3>
@@ -775,21 +778,21 @@ const StudentsPage: React.FC = () => {
                         <div key={i} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end">
                           <div>
                             <div className="text-xs text-text-secondary">S. No</div>
-                            <input readOnly value={i+1} className="w-full border rounded p-2" />
+                            <input readOnly value={i + 1} className="w-full border rounded p-2" />
                           </div>
-                          <label className="text-sm"><span className="text-text-secondary">Degree Name</span><input value={a.degree_name} onChange={e=>{
-                            const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, degree_name:v}:r));
-                          }} className="mt-1 w-full border rounded p-2"/></label>
-                          <label className="text-sm"><span className="text-text-secondary">Grade</span><input value={a.grade} onChange={e=>{
-                            const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, grade:v}:r));
-                          }} className="mt-1 w-full border rounded p-2"/></label>
-                          <label className="text-sm"><span className="text-text-secondary">Year</span><input value={a.year} onChange={e=>{
-                            const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, year:v}:r));
-                          }} className="mt-1 w-full border rounded p-2"/></label>
-                          <label className="text-sm"><span className="text-text-secondary">Institute/University</span><input value={a.institute} onChange={e=>{
-                            const v=e.target.value; setAcademics(p=>p.map((r,idx)=>idx===i?{...r, institute:v}:r));
-                          }} className="mt-1 w-full border rounded p-2"/></label>
-                          {i>0 && <button type="button" onClick={()=>onRemoveAcademic(i)} className="text-xs text-red-600">Remove</button>}
+                          <label className="text-sm"><span className="text-text-secondary">Degree Name</span><input value={a.degree_name} onChange={e => {
+                            const v = e.target.value; setAcademics(p => p.map((r, idx) => idx === i ? { ...r, degree_name: v } : r));
+                          }} className="mt-1 w-full border rounded p-2" /></label>
+                          <label className="text-sm"><span className="text-text-secondary">Grade</span><input value={a.grade} onChange={e => {
+                            const v = e.target.value; setAcademics(p => p.map((r, idx) => idx === i ? { ...r, grade: v } : r));
+                          }} className="mt-1 w-full border rounded p-2" /></label>
+                          <label className="text-sm"><span className="text-text-secondary">Year</span><input value={a.year} onChange={e => {
+                            const v = e.target.value; setAcademics(p => p.map((r, idx) => idx === i ? { ...r, year: v } : r));
+                          }} className="mt-1 w-full border rounded p-2" /></label>
+                          <label className="text-sm"><span className="text-text-secondary">Institute/University</span><input value={a.institute} onChange={e => {
+                            const v = e.target.value; setAcademics(p => p.map((r, idx) => idx === i ? { ...r, institute: v } : r));
+                          }} className="mt-1 w-full border rounded p-2" /></label>
+                          {i > 0 && <button type="button" onClick={() => onRemoveAcademic(i)} className="text-xs text-red-600">Remove</button>}
                         </div>
                       ))}
                       <button type="button" onClick={onAddAcademic} className="px-3 py-2 rounded bg-gray-100 text-sm font-semibold">+ Add Row</button>
@@ -801,12 +804,12 @@ const StudentsPage: React.FC = () => {
                         <div key={i} className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
                           <div>
                             <div className="text-xs text-text-secondary">S. No</div>
-                            <input readOnly value={i+1} className="w-full border rounded p-2" />
+                            <input readOnly value={i + 1} className="w-full border rounded p-2" />
                           </div>
-                          <label className="text-sm"><span className="text-text-secondary">Name of Organization</span><input value={w.org} onChange={e=>{ const v=e.target.value; setExperiences(p=>p.map((r,idx)=>idx===i?{...r, org:v}:r)); }} className="mt-1 w-full border rounded p-2"/></label>
-                          <label className="text-sm"><span className="text-text-secondary">Designation</span><input value={w.designation} onChange={e=>{ const v=e.target.value; setExperiences(p=>p.map((r,idx)=>idx===i?{...r, designation:v}:r)); }} className="mt-1 w-full border rounded p-2"/></label>
-                          <label className="text-sm"><span className="text-text-secondary">Period</span><input value={w.period} onChange={e=>{ const v=e.target.value; setExperiences(p=>p.map((r,idx)=>idx===i?{...r, period:v}:r)); }} className="mt-1 w-full border rounded p-2"/></label>
-                          {i>0 && <button type="button" onClick={()=>onRemoveExperience(i)} className="text-xs text-red-600">Remove</button>}
+                          <label className="text-sm"><span className="text-text-secondary">Name of Organization</span><input value={w.org} onChange={e => { const v = e.target.value; setExperiences(p => p.map((r, idx) => idx === i ? { ...r, org: v } : r)); }} className="mt-1 w-full border rounded p-2" /></label>
+                          <label className="text-sm"><span className="text-text-secondary">Designation</span><input value={w.designation} onChange={e => { const v = e.target.value; setExperiences(p => p.map((r, idx) => idx === i ? { ...r, designation: v } : r)); }} className="mt-1 w-full border rounded p-2" /></label>
+                          <label className="text-sm"><span className="text-text-secondary">Period</span><input value={w.period} onChange={e => { const v = e.target.value; setExperiences(p => p.map((r, idx) => idx === i ? { ...r, period: v } : r)); }} className="mt-1 w-full border rounded p-2" /></label>
+                          {i > 0 && <button type="button" onClick={() => onRemoveExperience(i)} className="text-xs text-red-600">Remove</button>}
                         </div>
                       ))}
                       <button type="button" onClick={onAddExperience} className="px-3 py-2 rounded bg-gray-100 text-sm font-semibold">+ Add Row</button>
@@ -820,16 +823,16 @@ const StudentsPage: React.FC = () => {
                         'Attendance must be 90%.',
                         'Course fee payable before classes commence.',
                         'Tuition fee is non-refundable.',
-                      ].map((t, i)=> (
-                        <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e)=>setAgreeAll(e.target.checked)} className="mt-1"/><span>{t}</span></label>
+                      ].map((t, i) => (
+                        <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e) => setAgreeAll(e.target.checked)} className="mt-1" /><span>{t}</span></label>
                       ))}
                     </div>
 
                     <h3 className="mt-6 font-bold text-lg">Declaration</h3>
-                    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e)=>setDeclTextAgree(e.target.checked)} className="mt-1"/><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
+                    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e) => setDeclTextAgree(e.target.checked)} className="mt-1" /><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
 
                     <div className="mt-6 text-right">
-                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Submit'}</button>
+                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving ? 'Saving...' : 'Submit'}</button>
                     </div>
                   </>
                 )}
@@ -843,15 +846,15 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-4">
                       <h4 className="font-semibold">Basic Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Full Name</span><input value={consultSf.basic_name} onChange={e=>setConsultSf(prev=>({...prev, basic_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e=>setConsultSf(prev=>({...prev, basic_father_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e=>setConsultSf(prev=>({...prev, basic_cnic:e.target.value.replace(/[^0-9]/g,'')}))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
-                        <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e=>setConsultSf(prev=>({...prev, basic_dob:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e=>setConsultSf(prev=>({...prev, basic_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e=>setConsultSf(prev=>({...prev, basic_address:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e=>setConsultSf(prev=>({...prev, basic_email:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e=>setConsultSf(prev=>({...prev, basic_nationality:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e=>setConsultSf(prev=>({...prev, basic_phone:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
+                        <label><span className="text-text-secondary">Full Name</span><input value={consultSf.basic_name} onChange={e => setConsultSf(prev => ({ ...prev, basic_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e => setConsultSf(prev => ({ ...prev, basic_father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e => setConsultSf(prev => ({ ...prev, basic_cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                        <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e => setConsultSf(prev => ({ ...prev, basic_dob: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e => setConsultSf(prev => ({ ...prev, basic_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e => setConsultSf(prev => ({ ...prev, basic_address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Email</span><input type="email" value={consultSf.basic_email} onChange={e => setConsultSf(prev => ({ ...prev, basic_email: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                        <label><span className="text-text-secondary">Nationality</span><input value={consultSf.basic_nationality} onChange={e => setConsultSf(prev => ({ ...prev, basic_nationality: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Phone No</span><input value={consultSf.basic_phone} onChange={e => setConsultSf(prev => ({ ...prev, basic_phone: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       </div>
                     </div>
 
@@ -859,19 +862,19 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Undergrad</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_olevels} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels:e.target.checked}))}/>O-Levels</label>
-                        <input placeholder="Year" value={consultSf.ug_olevels_year} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.ug_olevels_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_alevels} onChange={e=>setConsultSf(prev=>({...prev, ug_alevels:e.target.checked}))}/>A-Levels</label>
-                        <input placeholder="Year" value={consultSf.ug_alevels_year} onChange={e=>setConsultSf(prev=>({...prev, ug_alevels_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_olevels_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_matric} onChange={e=>setConsultSf(prev=>({...prev, ug_matric:e.target.checked}))}/>Matric</label>
-                        <input placeholder="Year" value={consultSf.ug_matric_year} onChange={e=>setConsultSf(prev=>({...prev, ug_matric_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.ug_matric_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_matric_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_hssc} onChange={e=>setConsultSf(prev=>({...prev, ug_hssc:e.target.checked}))}/>HSSC</label>
-                        <input placeholder="Year" value={consultSf.ug_hssc_year} onChange={e=>setConsultSf(prev=>({...prev, ug_hssc_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.ug_hssc_grades} onChange={e=>setConsultSf(prev=>({...prev, ug_hssc_grades:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <input placeholder="Other Education" value={consultSf.ug_other} onChange={e=>setConsultSf(prev=>({...prev, ug_other:e.target.value}))} className="border rounded p-2 sm:col-span-2 lg:col-span-4"/>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_olevels} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels: e.target.checked }))} />O-Levels</label>
+                        <input placeholder="Year" value={consultSf.ug_olevels_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_olevels_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_alevels} onChange={e => setConsultSf(prev => ({ ...prev, ug_alevels: e.target.checked }))} />A-Levels</label>
+                        <input placeholder="Year" value={consultSf.ug_alevels_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_alevels_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_alevels_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_olevels_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_matric} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric: e.target.checked }))} />Matric</label>
+                        <input placeholder="Year" value={consultSf.ug_matric_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_matric_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_matric_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.ug_hssc} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc: e.target.checked }))} />HSSC</label>
+                        <input placeholder="Year" value={consultSf.ug_hssc_year} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.ug_hssc_grades} onChange={e => setConsultSf(prev => ({ ...prev, ug_hssc_grades: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Other Education" value={consultSf.ug_other} onChange={e => setConsultSf(prev => ({ ...prev, ug_other: e.target.value }))} className="border rounded p-2 sm:col-span-2 lg:col-span-4" />
                       </div>
                     </div>
 
@@ -879,17 +882,17 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Postgrad</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.pg_bachelors} onChange={e=>setConsultSf(prev=>({...prev, pg_bachelors:e.target.checked}))}/>Bachelors</label>
-                        <input placeholder="University Name" value={consultSf.pg_bachelors_university} onChange={e=>setConsultSf(prev=>({...prev, pg_bachelors_university:e.target.value}))} className="border rounded p-2 lg:col-span-3"/>
-                        <input placeholder="Course Name" value={consultSf.pg_bachelors_course} onChange={e=>setConsultSf(prev=>({...prev, pg_bachelors_course:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <input placeholder="Year" value={consultSf.pg_bachelors_year} onChange={e=>setConsultSf(prev=>({...prev, pg_bachelors_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.pg_bachelors_grades} onChange={e=>setConsultSf(prev=>({...prev, pg_bachelors_grades:e.target.value}))} className="border rounded p-2"/>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.pg_bachelors} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors: e.target.checked }))} />Bachelors</label>
+                        <input placeholder="University Name" value={consultSf.pg_bachelors_university} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
+                        <input placeholder="Course Name" value={consultSf.pg_bachelors_course} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Year" value={consultSf.pg_bachelors_year} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.pg_bachelors_grades} onChange={e => setConsultSf(prev => ({ ...prev, pg_bachelors_grades: e.target.value }))} className="border rounded p-2" />
 
-                        <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={consultSf.pg_masters} onChange={e=>setConsultSf(prev=>({...prev, pg_masters:e.target.checked}))}/>Masters</label>
-                        <input placeholder="University Name" value={consultSf.pg_masters_university} onChange={e=>setConsultSf(prev=>({...prev, pg_masters_university:e.target.value}))} className="border rounded p-2 lg:col-span-3"/>
-                        <input placeholder="Course Name" value={consultSf.pg_masters_course} onChange={e=>setConsultSf(prev=>({...prev, pg_masters_course:e.target.value}))} className="border rounded p-2 lg:col-span-2"/>
-                        <input placeholder="Year" value={consultSf.pg_masters_year} onChange={e=>setConsultSf(prev=>({...prev, pg_masters_year:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Grades" value={consultSf.pg_masters_grades} onChange={e=>setConsultSf(prev=>({...prev, pg_masters_grades:e.target.value}))} className="border rounded p-2"/>
+                        <label className="flex items-center gap-2 mt-2"><input type="checkbox" checked={consultSf.pg_masters} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters: e.target.checked }))} />Masters</label>
+                        <input placeholder="University Name" value={consultSf.pg_masters_university} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_university: e.target.value }))} className="border rounded p-2 lg:col-span-3" />
+                        <input placeholder="Course Name" value={consultSf.pg_masters_course} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_course: e.target.value }))} className="border rounded p-2 lg:col-span-2" />
+                        <input placeholder="Year" value={consultSf.pg_masters_year} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_year: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Grades" value={consultSf.pg_masters_grades} onChange={e => setConsultSf(prev => ({ ...prev, pg_masters_grades: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
@@ -897,32 +900,32 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">English Proficiency Test</h4>
                       <div className="mt-2 grid grid-cols-2 lg:grid-cols-6 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_ielts} onChange={e=>setConsultSf(prev=>({...prev, eng_ielts:e.target.checked}))}/>IELTS</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_toefl} onChange={e=>setConsultSf(prev=>({...prev, eng_toefl:e.target.checked}))}/>TOEFL</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_pte} onChange={e=>setConsultSf(prev=>({...prev, eng_pte:e.target.checked}))}/>PTE</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_duolingo} onChange={e=>setConsultSf(prev=>({...prev, eng_duolingo:e.target.checked}))}/>Duolingo</label>
-                        <input placeholder="Other" value={consultSf.eng_other} onChange={e=>setConsultSf(prev=>({...prev, eng_other:e.target.value}))} className="border rounded p-2"/>
-                        <input placeholder="Score" value={consultSf.eng_score} onChange={e=>setConsultSf(prev=>({...prev, eng_score:e.target.value}))} className="border rounded p-2"/>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_ielts} onChange={e => setConsultSf(prev => ({ ...prev, eng_ielts: e.target.checked }))} />IELTS</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_toefl} onChange={e => setConsultSf(prev => ({ ...prev, eng_toefl: e.target.checked }))} />TOEFL</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_pte} onChange={e => setConsultSf(prev => ({ ...prev, eng_pte: e.target.checked }))} />PTE</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.eng_duolingo} onChange={e => setConsultSf(prev => ({ ...prev, eng_duolingo: e.target.checked }))} />Duolingo</label>
+                        <input placeholder="Other" value={consultSf.eng_other} onChange={e => setConsultSf(prev => ({ ...prev, eng_other: e.target.value }))} className="border rounded p-2" />
+                        <input placeholder="Score" value={consultSf.eng_score} onChange={e => setConsultSf(prev => ({ ...prev, eng_score: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
                     {/* Work Experience */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Work Experience</h4>
-                      <textarea value={consultSf.work_exp} onChange={e=>setConsultSf(prev=>({...prev, work_exp:e.target.value}))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
+                      <textarea value={consultSf.work_exp} onChange={e => setConsultSf(prev => ({ ...prev, work_exp: e.target.value }))} className="mt-2 w-full border rounded p-2 text-sm" rows={3} placeholder="Describe work experience"></textarea>
                     </div>
 
                     {/* Country of Interest */}
                     <div className="mt-6">
                       <h4 className="font-semibold">Country of Interest</h4>
                       <div className="mt-2 grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_uk} onChange={e=>setConsultSf(prev=>({...prev, coi_uk:e.target.checked}))}/>United Kingdom</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_usa} onChange={e=>setConsultSf(prev=>({...prev, coi_usa:e.target.checked}))}/>United States of America</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_canada} onChange={e=>setConsultSf(prev=>({...prev, coi_canada:e.target.checked}))}/>Canada</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_malaysia} onChange={e=>setConsultSf(prev=>({...prev, coi_malaysia:e.target.checked}))}/>Malaysia</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_germany} onChange={e=>setConsultSf(prev=>({...prev, coi_germany:e.target.checked}))}/>Germany</label>
-                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_australia} onChange={e=>setConsultSf(prev=>({...prev, coi_australia:e.target.checked}))}/>Australia</label>
-                        <input placeholder="Others" value={consultSf.coi_others} onChange={e=>setConsultSf(prev=>({...prev, coi_others:e.target.value}))} className="border rounded p-2"/>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_uk} onChange={e => setConsultSf(prev => ({ ...prev, coi_uk: e.target.checked }))} />United Kingdom</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_usa} onChange={e => setConsultSf(prev => ({ ...prev, coi_usa: e.target.checked }))} />United States of America</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_canada} onChange={e => setConsultSf(prev => ({ ...prev, coi_canada: e.target.checked }))} />Canada</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_malaysia} onChange={e => setConsultSf(prev => ({ ...prev, coi_malaysia: e.target.checked }))} />Malaysia</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_germany} onChange={e => setConsultSf(prev => ({ ...prev, coi_germany: e.target.checked }))} />Germany</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={consultSf.coi_australia} onChange={e => setConsultSf(prev => ({ ...prev, coi_australia: e.target.checked }))} />Australia</label>
+                        <input placeholder="Others" value={consultSf.coi_others} onChange={e => setConsultSf(prev => ({ ...prev, coi_others: e.target.value }))} className="border rounded p-2" />
                       </div>
                     </div>
 
@@ -930,10 +933,10 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">Additional Info</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e=>setConsultSf(prev=>({...prev, add_course_or_uni:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e=>setConsultSf(prev=>({...prev, add_travel_history:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e=>setConsultSf(prev=>({...prev, add_visa_refusal:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e=>setConsultSf(prev=>({...prev, add_asylum_family:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Course of interest / University</span><input value={consultSf.add_course_or_uni} onChange={e => setConsultSf(prev => ({ ...prev, add_course_or_uni: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label className="sm:col-span-2"><span className="text-text-secondary">Any travel history</span><input value={consultSf.add_travel_history} onChange={e => setConsultSf(prev => ({ ...prev, add_travel_history: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Visa refusal (if any)</span><input value={consultSf.add_visa_refusal} onChange={e => setConsultSf(prev => ({ ...prev, add_visa_refusal: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Any asylum taken by family</span><input value={consultSf.add_asylum_family} onChange={e => setConsultSf(prev => ({ ...prev, add_asylum_family: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                       </div>
                     </div>
 
@@ -941,16 +944,16 @@ const StudentsPage: React.FC = () => {
                     <div className="mt-6">
                       <h4 className="font-semibold">For Office Use Only</h4>
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e=>setConsultSf(prev=>({...prev, office_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e=>setConsultSf(prev=>({...prev, office_application_started:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e=>setConsultSf(prev=>({...prev, office_university_applied:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e=>setConsultSf(prev=>({...prev, office_counsellor_name:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e=>setConsultSf(prev=>({...prev, office_next_follow_up_date:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e => setConsultSf(prev => ({ ...prev, office_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e => setConsultSf(prev => ({ ...prev, office_application_started: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e => setConsultSf(prev => ({ ...prev, office_university_applied: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e => setConsultSf(prev => ({ ...prev, office_counsellor_name: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e => setConsultSf(prev => ({ ...prev, office_next_follow_up_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                       </div>
                     </div>
 
                     <div className="mt-6 text-right">
-                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Submit Consultancy'}</button>
+                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving ? 'Saving...' : 'Submit Consultancy'}</button>
                     </div>
                   </div>
                 )}
@@ -960,16 +963,16 @@ const StudentsPage: React.FC = () => {
                   <div className="mt-6">
                     <h3 className="font-bold text-lg">Test Enrollment</h3>
                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                      <label><span className="text-text-secondary">First Name</span><input value={testForm.first_name} onChange={e=>setTestForm(prev=>({...prev, first_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label><span className="text-text-secondary">Last Name</span><input value={testForm.last_name} onChange={e=>setTestForm(prev=>({...prev, last_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label><span className="text-text-secondary">Father Name</span><input value={testForm.father_name} onChange={e=>setTestForm(prev=>({...prev, father_name:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label><span className="text-text-secondary">CNIC</span><input value={testForm.cnic} onChange={e=>setTestForm(prev=>({...prev, cnic:e.target.value.replace(/[^0-9]/g,'')}))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
-                      <label><span className="text-text-secondary">Email</span><input type="email" value={testForm.email} onChange={e=>setTestForm(prev=>({...prev, email:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label><span className="text-text-secondary">Mobile</span><input value={testForm.mobile} onChange={e=>setTestForm(prev=>({...prev, mobile:e.target.value}))} className="mt-1 w-full border rounded p-2" required/></label>
-                      <label className="sm:col-span-2"><span className="text-text-secondary">Address</span><input value={testForm.address} onChange={e=>setTestForm(prev=>({...prev, address:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
-                      <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={testForm.date_of_birth} onChange={e=>setTestForm(prev=>({...prev, date_of_birth:e.target.value}))} className="mt-1 w-full border rounded p-2"/></label>
+                      <label><span className="text-text-secondary">First Name</span><input value={testForm.first_name} onChange={e => setTestForm(prev => ({ ...prev, first_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label><span className="text-text-secondary">Last Name</span><input value={testForm.last_name} onChange={e => setTestForm(prev => ({ ...prev, last_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label><span className="text-text-secondary">Father Name</span><input value={testForm.father_name} onChange={e => setTestForm(prev => ({ ...prev, father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label><span className="text-text-secondary">CNIC</span><input value={testForm.cnic} onChange={e => setTestForm(prev => ({ ...prev, cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                      <label><span className="text-text-secondary">Email</span><input type="email" value={testForm.email} onChange={e => setTestForm(prev => ({ ...prev, email: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label><span className="text-text-secondary">Mobile</span><input value={testForm.mobile} onChange={e => setTestForm(prev => ({ ...prev, mobile: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
+                      <label className="sm:col-span-2"><span className="text-text-secondary">Address</span><input value={testForm.address} onChange={e => setTestForm(prev => ({ ...prev, address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
+                      <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={testForm.date_of_birth} onChange={e => setTestForm(prev => ({ ...prev, date_of_birth: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                       <label><span className="text-text-secondary">Test Type</span>
-                        <select value={testForm.test_type} onChange={e=>setTestForm(prev=>({...prev, test_type:e.target.value as TestEnrollmentForm['test_type']}))} className="mt-1 w-full border rounded p-2" required>
+                        <select value={testForm.test_type} onChange={e => setTestForm(prev => ({ ...prev, test_type: e.target.value as TestEnrollmentForm['test_type'] }))} className="mt-1 w-full border rounded p-2" required>
                           <option value="">Select</option>
                           <option value="IELTS">IELTS</option>
                           <option value="PTE">PTE</option>
@@ -979,7 +982,7 @@ const StudentsPage: React.FC = () => {
                     </div>
 
                     <div className="mt-6 text-right">
-                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Submit Test Enrollment'}</button>
+                      <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving ? 'Saving...' : 'Submit Test Enrollment'}</button>
                     </div>
                   </div>
                 )}
@@ -988,12 +991,12 @@ const StudentsPage: React.FC = () => {
 
               <aside className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
                 <h3 className="font-bold text-lg">Student Photo</h3>
-                <input type="file" accept="image/*" onChange={(e)=> setPhotoFile(e.target.files?.[0] || null)} className="mt-2 text-sm" />
+                <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} className="mt-2 text-sm" />
                 {photoFile && <div className="mt-2 text-xs text-text-secondary">{photoFile.name}</div>}
 
                 <div className="mt-6">
                   <h3 className="font-bold text-lg">Status</h3>
-                  <select value={s.status} onChange={e=>setS({...s, status: e.target.value as Student['status']})} className="mt-2 w-full border rounded p-2 text-sm">
+                  <select value={s.status} onChange={e => setS({ ...s, status: e.target.value as Student['status'] })} className="mt-2 w-full border rounded p-2 text-sm">
                     <option>Active</option>
                     <option>Completed</option>
                     <option>Withdrawn</option>
@@ -1003,13 +1006,13 @@ const StudentsPage: React.FC = () => {
             </form>
           )}
 
-          {tab==='list' && (
+          {tab === 'list' && (
             <div className="mt-6">
               <div className="flex flex-wrap items-center gap-2">
-                <input placeholder="Search name, CNIC, program, batch" value={search} onChange={e=>{ setSearch(e.target.value); }} className="w-full sm:w-64 border rounded p-2 text-sm" />
-                <select value={fProgram} onChange={e=>{ setFProgram(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{programs.map(p=><option key={p}>{p}</option>)}</select>
-                <select value={fBatch} onChange={e=>{ setFBatch(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{batches.map(b=><option key={b}>{b}</option>)}</select>
-                <select value={fCity} onChange={e=>{ setFCity(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{cities.map(c=><option key={c}>{c}</option>)}</select>
+                <input placeholder="Search name, CNIC, program, batch" value={search} onChange={e => { setSearch(e.target.value); }} className="w-full sm:w-64 border rounded p-2 text-sm" />
+                <select value={fProgram} onChange={e => { setFProgram(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{programs.map(p => <option key={p}>{p}</option>)}</select>
+                <select value={fBatch} onChange={e => { setFBatch(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{batches.map(b => <option key={b}>{b}</option>)}</select>
+                <select value={fCity} onChange={e => { setFCity(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{cities.map(c => <option key={c}>{c}</option>)}</select>
               </div>
 
               <div className="mt-4 space-y-8">
@@ -1032,7 +1035,7 @@ const StudentsPage: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {items.filter(st=>st.status==='Active').map(st => (
+                        {items.filter(st => st.status === 'Active').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
                             <td className="p-2">{st.full_name}</td>
@@ -1043,12 +1046,12 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.city}</td>
                             <td className="p-2">{formatEnrollmentType(st.enrollment_type)}</td>
                             <td className="p-2 text-right">
-                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={() => setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={() => archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
-                        {items.filter(st=>st.status==='Active').length===0 && (
+                        {items.filter(st => st.status === 'Active').length === 0 && (
                           <tr><td className="p-3 text-text-secondary" colSpan={9}>No students in this section</td></tr>
                         )}
                       </tbody>
@@ -1075,7 +1078,7 @@ const StudentsPage: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {items.filter(st=>st.status==='Completed').map(st => (
+                        {items.filter(st => st.status === 'Completed').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
                             <td className="p-2">{st.full_name}</td>
@@ -1086,12 +1089,12 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.city}</td>
                             <td className="p-2">{formatEnrollmentType(st.enrollment_type)}</td>
                             <td className="p-2 text-right">
-                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={() => setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={() => archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
-                        {items.filter(st=>st.status==='Completed').length===0 && (
+                        {items.filter(st => st.status === 'Completed').length === 0 && (
                           <tr><td className="p-3 text-text-secondary" colSpan={9}>No students in this section</td></tr>
                         )}
                       </tbody>
@@ -1118,7 +1121,7 @@ const StudentsPage: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {items.filter(st=>st.status==='Withdrawn').map(st => (
+                        {items.filter(st => st.status === 'Withdrawn').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
                             <td className="p-2">{st.full_name}</td>
@@ -1129,12 +1132,12 @@ const StudentsPage: React.FC = () => {
                             <td className="p-2">{st.city}</td>
                             <td className="p-2">{formatEnrollmentType(st.enrollment_type)}</td>
                             <td className="p-2 text-right">
-                              {canEdit && (<button onClick={()=>setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
-                              {canDelete && (<button onClick={()=>archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
+                              {canEdit && (<button onClick={() => setEditItem(st)} className="text-blue-600 hover:underline mr-3">Edit</button>)}
+                              {canDelete && (<button onClick={() => archiveStudent(st.id)} className="text-red-600 hover:underline">Archive</button>)}
                             </td>
                           </tr>
                         ))}
-                        {items.filter(st=>st.status==='Withdrawn').length===0 && (
+                        {items.filter(st => st.status === 'Withdrawn').length === 0 && (
                           <tr><td className="p-3 text-text-secondary" colSpan={9}>No students in this section</td></tr>
                         )}
                       </tbody>
@@ -1152,21 +1155,21 @@ const StudentsPage: React.FC = () => {
           <form onSubmit={saveEdit} className="bg-white w-full max-w-xl rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Edit Student</h3>
-              <button type="button" onClick={()=>setEditItem(null)} className="text-text-secondary">✕</button>
+              <button type="button" onClick={() => setEditItem(null)} className="text-text-secondary">✕</button>
             </div>
             <div className="mt-1 text-xs text-text-secondary">Enrollment Type: <span className="font-semibold">{formatEnrollmentType(editItem.enrollment_type)}</span></div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={editItem.full_name} onChange={e=>setEditItem({...editItem, full_name:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Father/Guardian Name</span><input value={editItem.father_name} onChange={e=>setEditItem({...editItem, father_name:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Phone</span><input value={editItem.phone} onChange={e=>setEditItem({...editItem, phone:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Email</span><input value={editItem.email} onChange={e=>setEditItem({...editItem, email:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">CNIC</span><input value={editItem.cnic} onChange={e=>setEditItem({...editItem, cnic:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">DOB</span><input type="date" value={editItem.dob} onChange={e=>setEditItem({...editItem, dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">City</span><input value={editItem.city} onChange={e=>setEditItem({...editItem, city:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Reference</span><input value={editItem.reference||''} onChange={e=>setEditItem({...editItem, reference:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Program Title</span><input value={editItem.program_title} onChange={e=>setEditItem({...editItem, program_title:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Batch No.</span><input value={editItem.batch_no} onChange={e=>setEditItem({...editItem, batch_no:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">Status</span><select value={editItem.status} onChange={e=>setEditItem({...editItem!, status: e.target.value as Student['status']})} className="mt-1 w-full border rounded p-2"><option>Active</option><option>Completed</option><option>Withdrawn</option></select></label>
+              <label><span className="text-text-secondary">Full Name</span><input value={editItem.full_name} onChange={e => setEditItem({ ...editItem, full_name: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Father/Guardian Name</span><input value={editItem.father_name} onChange={e => setEditItem({ ...editItem, father_name: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Phone</span><input value={editItem.phone} onChange={e => setEditItem({ ...editItem, phone: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Email</span><input value={editItem.email} onChange={e => setEditItem({ ...editItem, email: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">CNIC</span><input value={editItem.cnic} onChange={e => setEditItem({ ...editItem, cnic: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">DOB</span><input type="date" value={editItem.dob} onChange={e => setEditItem({ ...editItem, dob: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">City</span><input value={editItem.city} onChange={e => setEditItem({ ...editItem, city: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Reference</span><input value={editItem.reference || ''} onChange={e => setEditItem({ ...editItem, reference: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Program Title</span><input value={editItem.program_title} onChange={e => setEditItem({ ...editItem, program_title: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Batch No.</span><input value={editItem.batch_no} onChange={e => setEditItem({ ...editItem, batch_no: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+              <label><span className="text-text-secondary">Status</span><select value={editItem.status} onChange={e => setEditItem({ ...editItem!, status: e.target.value as Student['status'] })} className="mt-1 w-full border rounded p-2"><option>Active</option><option>Completed</option><option>Withdrawn</option></select></label>
             </div>
             <div className="mt-5 text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save</button></div>
           </form>
@@ -1177,16 +1180,16 @@ const StudentsPage: React.FC = () => {
           <form onSubmit={handleCreateInvoice} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Generate Invoice for {lastCreatedStudent.full_name}</h3>
-              <button type="button" onClick={()=>setInvoiceOpen(false)} className="text-text-secondary">✕</button>
+              <button type="button" onClick={() => setInvoiceOpen(false)} className="text-text-secondary">✕</button>
             </div>
             <div className="mt-3 text-sm space-y-3">
               <div className="text-text-secondary">Student ID: {lastCreatedStudent.id} • Batch: {lastCreatedStudent.batch_no}</div>
-              <label className="block"><span className="text-text-secondary">Registration Fee (Rs)</span><input type="number" min={0} value={invReg} onChange={e=>setInvReg(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-              <label className="block"><span className="text-text-secondary">Service Fee (Rs)</span><input type="number" min={0} value={invSvc} onChange={e=>setInvSvc(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+              <label className="block"><span className="text-text-secondary">Registration Fee (Rs)</span><input type="number" min={0} value={invReg} onChange={e => setInvReg(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
+              <label className="block"><span className="text-text-secondary">Service Fee (Rs)</span><input type="number" min={0} value={invSvc} onChange={e => setInvSvc(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
               <div className="grid grid-cols-2 gap-2">
-                <label className="block"><span className="text-text-secondary">Discount</span><input type="number" min={0} value={invDisc} onChange={e=>setInvDisc(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
+                <label className="block"><span className="text-text-secondary">Discount</span><input type="number" min={0} value={invDisc} onChange={e => setInvDisc(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
                 <label className="block"><span className="text-text-secondary">Discount Type</span>
-                  <select value={invDiscType} onChange={e=>setInvDiscType(e.target.value as 'flat' | 'percent')} className="mt-1 w-full border rounded p-2">
+                  <select value={invDiscType} onChange={e => setInvDiscType(e.target.value as 'flat' | 'percent')} className="mt-1 w-full border rounded p-2">
                     <option value="flat">Flat</option>
                     <option value="percent">%</option>
                   </select>
@@ -1198,21 +1201,21 @@ const StudentsPage: React.FC = () => {
                 <div className="text-sm font-semibold mb-1">Payment Option</div>
                 <div className="flex items-center gap-4">
                   <label className="flex items-center gap-2">
-                    <input type="radio" name="payopt" value="full" checked={paymentOption==='full'} onChange={()=>setPaymentOption('full')} />
+                    <input type="radio" name="payopt" value="full" checked={paymentOption === 'full'} onChange={() => setPaymentOption('full')} />
                     <span>Full Payment</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="radio" name="payopt" value="partial" checked={paymentOption==='partial'} onChange={()=>setPaymentOption('partial')} />
+                    <input type="radio" name="payopt" value="partial" checked={paymentOption === 'partial'} onChange={() => setPaymentOption('partial')} />
                     <span>Partial Payment</span>
                   </label>
                 </div>
               </div>
 
-              {paymentOption==='partial' && (
+              {paymentOption === 'partial' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label className="block"><span className="text-text-secondary">Amount Paid Now (Rs)</span><input type="number" min={0} value={amountPaidNow} onChange={e=>setAmountPaidNow(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-                  <label className="block"><span className="text-text-secondary">Due Date</span><input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-                  <div className="sm:col-span-2 text-sm text-text-secondary">Remaining Balance: Rs {Math.max(0, computeTotal() - (Number(amountPaidNow)||0)).toLocaleString()}</div>
+                  <label className="block"><span className="text-text-secondary">Amount Paid Now (Rs)</span><input type="number" min={0} value={amountPaidNow} onChange={e => setAmountPaidNow(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="block"><span className="text-text-secondary">Due Date</span><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
+                  <div className="sm:col-span-2 text-sm text-text-secondary">Remaining Balance: Rs {Math.max(0, computeTotal() - (Number(amountPaidNow) || 0)).toLocaleString()}</div>
                 </div>
               )}
             </div>
