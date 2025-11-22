@@ -34,6 +34,7 @@ type CaseItem = {
   createdAt?: string;
   studentId?: string;
   googleDriveLink?: string;
+  universityId?: number | null;
 };
 
 const fmtDur = (totalMins: number) => {
@@ -117,6 +118,10 @@ type ApplicationHistoryItem = {
 
 const CaseTaskDetailPage: React.FC = () => {
   const navigate = useNavigate();
+
+  const [universities, setUniversities] = useState<{ id: number; name: string }[]>([]);
+  const [savingUniversity, setSavingUniversity] = useState(false);
+
   const { caseNumber, taskId } = useParams();
 
   const [caseItem, setCaseItem] = useState<CaseItem | null>(null);
@@ -206,7 +211,7 @@ const CaseTaskDetailPage: React.FC = () => {
     if (!caseNumber) return;
     const { data, error } = await supabase
       .from('dashboard_cases')
-      .select('case_number, title, assignees, employee, status, branch, type, created_at, student_info, google_drive_link')
+      .select('case_number, title, assignees, employee, status, branch, type, created_at, student_info, google_drive_link, university_id')
       .eq('case_number', caseNumber)
       .single();
     if (!error && data) {
@@ -222,6 +227,7 @@ const CaseTaskDetailPage: React.FC = () => {
         createdAt: data.created_at,
         studentId: info.student_id || undefined,
         googleDriveLink: (data as any).google_drive_link || undefined,
+        universityId: (data as any).university_id ?? null,
       };
       setCaseItem(c);
       // Load other cases by same student if possible
@@ -234,6 +240,49 @@ const CaseTaskDetailPage: React.FC = () => {
         setStudentCases((sc||[]).map((r:any)=>({ caseId: r.case_number, title: r.title, assignees: [] })));
       } else {
         setStudentCases([]);
+
+  // Load universities for dropdown
+  useEffect(() => {
+    const loadUniversities = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('universities')
+          .select('id, name')
+          .order('name', { ascending: true });
+        if (!error && data) {
+          setUniversities(data as { id: number; name: string }[]);
+        }
+      } catch (err) {
+        console.error('load universities for case detail error', err);
+      }
+    };
+    loadUniversities();
+  }, []);
+
+  const saveCaseUniversity = async (nextId: number | null) => {
+    if (!caseNumber || !canEditCaseMeta) return;
+    setSavingUniversity(true);
+    try {
+      await supabase
+        .from('dashboard_cases')
+        .update({ university_id: nextId })
+        .eq('case_number', caseNumber);
+      await loadCase();
+      await supabase.from('activity_log').insert([
+        {
+          entity: 'case',
+          action: 'Updated case university',
+          detail: { case_number: caseNumber, university_id: nextId },
+        },
+      ]);
+    } catch (err) {
+      console.error('save case university error', err);
+      alert('Failed to update university for this case');
+    } finally {
+      setSavingUniversity(false);
+    }
+  };
+
       }
     }
   }, [caseNumber]);
@@ -659,6 +708,28 @@ const CaseTaskDetailPage: React.FC = () => {
                         </button>
                       )}
                     </div>
+
+                    <div className="mt-3">
+						<div className="flex items-center justify-between">
+						  <span className="text-sm text-text-secondary">University</span>
+						</div>
+						<select
+						  value={caseItem.universityId ?? ''}
+						  onChange={(e) => {
+							if (!canEditCaseMeta) return;
+							const v = e.target.value;
+							const nextId = v ? Number(v) : null;
+							saveCaseUniversity(nextId);
+						  }}
+						  disabled={!canEditCaseMeta || savingUniversity}
+						  className="mt-1 w-full border rounded p-2 text-sm bg-white disabled:bg-gray-100"
+						>
+						  <option value="">Select university</option>
+						  {universities.map((u) => (
+							<option key={u.id} value={u.id}>{u.name}</option>
+						  ))}
+						</select>
+					  </div>
                     {!editingDriveLink ? (
                       <div className="text-sm">
                         {caseItem.googleDriveLink ? (
