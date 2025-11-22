@@ -5,6 +5,7 @@ import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
 import MultiSelectUser from '../../components/MultiSelectUser';
+import MultiSelectUniversity from '../../components/MultiSelectUniversity';
 
 
 // Shared types (keep in sync with index.tsx)
@@ -35,7 +36,7 @@ type CaseItem = {
   createdAt?: string;
   studentId?: string;
   googleDriveLink?: string;
-  universityId?: number | null;
+  universityIds?: number[];
   caseLeadBy?: string[];
 };
 
@@ -229,7 +230,7 @@ const CaseTaskDetailPage: React.FC = () => {
         createdAt: data.created_at,
         studentId: info.student_id || undefined,
         googleDriveLink: (data as any).google_drive_link || undefined,
-        universityId: (data as any).university_id ?? null,
+        universityIds: info.university_ids || (data.university_id ? [data.university_id] : []),
         caseLeadBy: info.case_lead_by || [],
       };
       setCaseItem(c);
@@ -270,25 +271,36 @@ const CaseTaskDetailPage: React.FC = () => {
     loadUniversities();
   }, [loadUniversities]);
 
-  const saveCaseUniversity = async (nextId: number | null) => {
+  const saveCaseUniversity = async (ids: number[]) => {
     if (!caseNumber || !canEditCaseMeta) return;
     setSavingUniversity(true);
     try {
+      const { data: row } = await supabase.from('dashboard_cases').select('student_info').eq('case_number', caseNumber).single();
+      const info = (row?.student_info || {}) as any;
+      const nextInfo = { ...info, university_ids: ids };
+
+      // Also update the legacy university_id column with the first selected university, or null
+      const primaryId = ids.length > 0 ? ids[0] : null;
+
       await supabase
         .from('dashboard_cases')
-        .update({ university_id: nextId })
+        .update({
+          university_id: primaryId,
+          student_info: nextInfo
+        })
         .eq('case_number', caseNumber);
+
       await loadCase();
       await supabase.from('activity_log').insert([
         {
           entity: 'case',
-          action: 'Updated case university',
-          detail: { case_number: caseNumber, university_id: nextId },
+          action: 'Updated case universities',
+          detail: { case_number: caseNumber, university_ids: ids },
         },
       ]);
     } catch (err) {
       console.error('save case university error', err);
-      alert('Failed to update university for this case');
+      alert('Failed to update universities for this case');
     } finally {
       setSavingUniversity(false);
     }
@@ -732,26 +744,14 @@ const CaseTaskDetailPage: React.FC = () => {
 
                     <div className="mt-3">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-text-secondary">University</span>
+                        <span className="text-sm text-text-secondary">Universities</span>
                         <button onClick={loadUniversities} className="text-xs text-blue-600 hover:underline">Refresh</button>
                       </div>
-                      <select
-                        value={caseItem.universityId ?? ''}
-                        onChange={(e) => {
-                          if (!canEditCaseMeta) return;
-                          const v = e.target.value;
-                          const nextId = v ? Number(v) : null;
-                          saveCaseUniversity(nextId);
-                        }}
-                        disabled={!canEditCaseMeta || savingUniversity}
-                        className="mt-1 w-full border rounded p-2 text-sm bg-white disabled:bg-gray-100"
-                      >
-                        <option value="">Select university</option>
-                        {universities.length === 0 && <option disabled>No universities found</option>}
-                        {universities.map((u) => (
-                          <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                      </select>
+                      <MultiSelectUniversity
+                        selectedIds={caseItem.universityIds || []}
+                        onChange={saveCaseUniversity}
+                        className="mt-1"
+                      />
                     </div>
 
                     <div className="mt-3">
