@@ -6,6 +6,8 @@ import { supabase } from '../../lib/supabaseClient';
 import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
 import MultiSelectUser from '../../components/MultiSelectUser';
 import MultiSelectUniversity from '../../components/MultiSelectUniversity';
+import UniversityApplicationForm from '../../components/UniversityApplicationForm';
+import UniversityApplicationHistory from '../../components/UniversityApplicationHistory';
 
 
 // Shared types (keep in sync with index.tsx)
@@ -167,6 +169,13 @@ const CaseTaskDetailPage: React.FC = () => {
   const [histComment, setHistComment] = useState('');
   const [savingHistory, setSavingHistory] = useState(false);
 
+  // University Application Tracking
+  const [selectedUniversities, setSelectedUniversities] = useState<{ id: string; name: string }[]>([]);
+  const [applicationFormOpen, setApplicationFormOpen] = useState(false);
+  const [selectedUniversityForForm, setSelectedUniversityForForm] = useState<{ id: string; name: string } | null>(null);
+  const [universityApplications, setUniversityApplications] = useState<any[]>([]);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+
 
   useEffect(() => {
     (async () => {
@@ -317,6 +326,92 @@ const CaseTaskDetailPage: React.FC = () => {
     } catch (err) {
       console.error('save case lead by error', err);
       alert('Failed to update case lead by');
+    }
+  };
+
+  // Load university applications for this case
+  const loadUniversityApplications = useCallback(async () => {
+    if (!caseNumber) return;
+    setLoadingApplications(true);
+    try {
+      const { data, error } = await supabase
+        .from('case_university_applications')
+        .select('*')
+        .eq('case_id', caseNumber)
+        .order('created_at', { ascending: false });
+
+      if (!error) {
+        setUniversityApplications(data || []);
+      }
+    } catch (err) {
+      console.error('load university applications error', err);
+    } finally {
+      setLoadingApplications(false);
+    }
+  }, [caseNumber]);
+
+  // Load selected universities when case loads
+  useEffect(() => {
+    if (caseItem && caseItem.universityIds) {
+      const selected = universities.filter(u =>
+        caseItem.universityIds?.includes(u.id)
+      ).map(u => ({ id: String(u.id), name: u.name }));
+      setSelectedUniversities(selected);
+    }
+  }, [caseItem, universities]);
+
+  // Load applications when case loads
+  useEffect(() => {
+    loadUniversityApplications();
+  }, [loadUniversityApplications]);
+
+  // Handle university click to open application form
+  const handleUniversityClick = (university: { id: string; name: string }) => {
+    setSelectedUniversityForForm(university);
+    setApplicationFormOpen(true);
+  };
+
+  // Handle application form submission
+  const handleApplicationSubmit = async (data: { courseApplied: string; applicationDate: string; comment: string }) => {
+    if (!caseNumber || !selectedUniversityForForm) return;
+
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const email = auth.user?.email;
+
+      const { error } = await supabase
+        .from('case_university_applications')
+        .insert([{
+          case_id: caseNumber,
+          university_id: selectedUniversityForForm.id,
+          course_applied: data.courseApplied,
+          application_date: data.applicationDate,
+          comment: data.comment,
+          created_by: email || null,
+        }]);
+
+      if (error) {
+        console.error('save application error', error);
+        alert('Failed to save application');
+        return;
+      }
+
+      // Reload applications
+      await loadUniversityApplications();
+
+      // Log activity
+      await supabase.from('activity_log').insert([{
+        entity: 'case',
+        action: 'Added university application',
+        detail: {
+          case_number: caseNumber,
+          university_id: selectedUniversityForForm.id,
+          course: data.courseApplied
+        },
+      }]);
+    } catch (err) {
+      console.error('save application error', err);
+      alert('Failed to save application');
     }
   };
 
@@ -752,6 +847,51 @@ const CaseTaskDetailPage: React.FC = () => {
                         onChange={saveCaseUniversity}
                         className="mt-1"
                       />
+
+                      {/* Selected Universities List (Clickable) */}
+                      {selectedUniversities.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs text-text-secondary font-semibold mb-2">Selected Universities</div>
+                          <div className="space-y-2">
+                            {selectedUniversities.map((uni) => (
+                              <button
+                                key={uni.id}
+                                onClick={() => handleUniversityClick(uni)}
+                                className="w-full text-left px-3 py-2 border rounded hover:bg-blue-50 hover:border-blue-300 transition"
+                              >
+                                <div className="text-sm font-medium text-blue-700">{uni.name}</div>
+                                <div className="text-xs text-text-secondary mt-0.5">Click to add application</div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* University Application History */}
+                      {selectedUniversities.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-sm font-semibold mb-2">University Application History</div>
+                          {loadingApplications ? (
+                            <div className="text-xs text-text-secondary">Loading...</div>
+                          ) : (
+                            <UniversityApplicationHistory
+                              data={selectedUniversities.map(uni => ({
+                                universityId: uni.id,
+                                universityName: uni.name,
+                                applications: universityApplications
+                                  .filter(app => app.university_id === uni.id)
+                                  .map(app => ({
+                                    id: app.id,
+                                    courseApplied: app.course_applied,
+                                    applicationDate: app.application_date,
+                                    comment: app.comment || '',
+                                    createdAt: app.created_at,
+                                  })),
+                              }))}
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-3">
@@ -1122,6 +1262,17 @@ const CaseTaskDetailPage: React.FC = () => {
           </form>
         </div>
       )}
+
+      {/* University Application Form Modal */}
+      <UniversityApplicationForm
+        isOpen={applicationFormOpen}
+        onClose={() => {
+          setApplicationFormOpen(false);
+          setSelectedUniversityForForm(null);
+        }}
+        onSubmit={handleApplicationSubmit}
+        universityName={selectedUniversityForForm?.name || ''}
+      />
     </main>
   );
 };
