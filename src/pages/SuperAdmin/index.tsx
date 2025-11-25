@@ -10,8 +10,8 @@ interface EmployeePerf { id: string; name: string; cases: number; successRate: n
 interface Activity { id: string; text: string; at: string; }
 
 const CASE_STAGES = [
-  'Initial Stage','Offer Applied','Offer Received','Fee Paid','Interview',
-  'CAS Applied','CAS Received','Visa Applied','Visa Received','Enrollment','Backout','Visa Rejected',
+  'Initial Stage', 'Offer Applied', 'Offer Received', 'Fee Paid', 'Interview',
+  'CAS Applied', 'CAS Received', 'Visa Applied', 'Visa Received', 'Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected',
 ] as const;
 
 type CaseStage = typeof CASE_STAGES[number];
@@ -87,7 +87,7 @@ const SuperAdmin: React.FC = () => {
 
 
   // Branches management state
-  const [branchesList, setBranchesList] = useState<Array<{id:string; branch_name:string; branch_code:string}>>([]);
+  const [branchesList, setBranchesList] = useState<Array<{ id: string; branch_name: string; branch_code: string }>>([]);
   const [brName, setBrName] = useState('');
   const [brCode, setBrCode] = useState('');
   const [brSaving, setBrSaving] = useState(false);
@@ -115,33 +115,33 @@ const SuperAdmin: React.FC = () => {
             setBranchesList(mapped as any);
             setBranchesSchema('legacy');
           }
-        } catch {}
+        } catch { }
       }
     })();
 
-	  // Realtime: keep branches list in sync across tabs
-	  const chan = supabase
-	    .channel('public:branches')
-	    .on('postgres_changes', { event: '*', schema: 'public', table: 'branches' }, async () => {
-	      try {
-	        const { data, error } = await supabase
-	          .from('branches')
-	          .select('id, branch_name, branch_code')
-	          .order('branch_name', { ascending: true });
-	        if (!error && data) { setBranchesList(data as any); setBranchesSchema('modern'); return; }
-	      } catch {}
-	      try {
-	        const { data } = await supabase
-	          .from('branches')
-	          .select('id, name, code')
-	          .order('name', { ascending: true });
-	        const mapped = ((data as any[])||[]).map((r:any) => ({ id: r.id, branch_name: r.name, branch_code: r.code }));
-	        setBranchesList(mapped as any);
-	        setBranchesSchema('legacy');
-	      } catch {}
-	    })
-	    .subscribe();
-	  return () => { try { supabase.removeChannel(chan); } catch {} };
+    // Realtime: keep branches list in sync across tabs
+    const chan = supabase
+      .channel('public:branches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'branches' }, async () => {
+        try {
+          const { data, error } = await supabase
+            .from('branches')
+            .select('id, branch_name, branch_code')
+            .order('branch_name', { ascending: true });
+          if (!error && data) { setBranchesList(data as any); setBranchesSchema('modern'); return; }
+        } catch { }
+        try {
+          const { data } = await supabase
+            .from('branches')
+            .select('id, name, code')
+            .order('name', { ascending: true });
+          const mapped = ((data as any[]) || []).map((r: any) => ({ id: r.id, branch_name: r.name, branch_code: r.code }));
+          setBranchesList(mapped as any);
+          setBranchesSchema('legacy');
+        } catch { }
+      })
+      .subscribe();
+    return () => { try { supabase.removeChannel(chan); } catch { } };
 
   }, []);
 
@@ -201,7 +201,7 @@ const SuperAdmin: React.FC = () => {
         branch_code: inserted.branch_code ?? inserted.code,
       } as any;
 
-      setBranchesList(prev => [...prev, mapped].sort((a,b)=> (a.branch_name || '').localeCompare(b.branch_name || '')));
+      setBranchesList(prev => [...prev, mapped].sort((a, b) => (a.branch_name || '').localeCompare(b.branch_name || '')));
       setBrName(''); setBrCode('');
     } catch (er: any) {
       const msg = er?.message || '';
@@ -315,6 +315,7 @@ const SuperAdmin: React.FC = () => {
         'Visa Applied': '#16a34a',
         'Visa Received': '#22c55e',
         'Enrollment': '#14b8a6',
+        'Not Enrolled': '#9ca3af',
         'Backout': '#f97316',
         'Visa Rejected': '#ef4444',
       };
@@ -376,7 +377,7 @@ const SuperAdmin: React.FC = () => {
           const vd = new Date(v.occurred_at);
           return vd.getFullYear() === cur.getFullYear() && vd.getMonth() === cur.getMonth();
         })
-        .reduce((acc: number, v: any) => acc + (['cash_in','online','bank'].includes(v.vtype) ? Number(v.amount || 0) : 0), 0);
+        .reduce((acc: number, v: any) => acc + (['cash_in', 'online', 'bank'].includes(v.vtype) ? Number(v.amount || 0) : 0), 0);
       const outSum = vouchersRows
         .filter((v: any) => {
           const vd = new Date(v.occurred_at);
@@ -391,7 +392,7 @@ const SuperAdmin: React.FC = () => {
       for (const v of vouchersRows) {
         const vd = new Date(v.occurred_at);
         if (vd.getFullYear() !== cur.getFullYear() || vd.getMonth() !== cur.getMonth()) continue;
-        if (!['cash_in','online','bank'].includes(v.vtype)) continue;
+        if (!['cash_in', 'online', 'bank'].includes(v.vtype)) continue;
         const key = v.branch || 'Unknown';
         byBranch.set(key, (byBranch.get(key) || 0) + Number(v.amount || 0));
       }
@@ -432,7 +433,7 @@ const SuperAdmin: React.FC = () => {
       const { count: pending } = await supabase
         .from('dashboard_tasks')
         .select('*', { count: 'exact', head: true })
-        .in('status', ['Todo','In Progress','In Review']);
+        .in('status', ['Todo', 'In Progress', 'In Review']);
       const { count: completed } = await supabase
         .from('dashboard_tasks')
         .select('*', { count: 'exact', head: true })
@@ -596,8 +597,8 @@ const SuperAdmin: React.FC = () => {
               <div className="p-4 flex items-center justify-between flex-wrap gap-3">
                 <h2 className="text-xl font-bold text-text-primary">Branch Performance</h2>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {['F-8 Branch','I-8 Branch','PWD Branch','Peshawar Branch'].map(b => (
-                    <button key={b} onClick={()=>setBranch(b as any)} className={`px-3 py-1 rounded-full border ${branch===b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
+                  {['F-8 Branch', 'I-8 Branch', 'PWD Branch', 'Peshawar Branch'].map(b => (
+                    <button key={b} onClick={() => setBranch(b as any)} className={`px-3 py-1 rounded-full border ${branch === b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
                   ))}
                 </div>
               </div>
@@ -626,11 +627,11 @@ const SuperAdmin: React.FC = () => {
                         <td className="col-span-2">{e.cases}</td>
                         {/* Success Rate with colored badge */}
                         <td className="col-span-2">
-                          <span className={`px-2 py-0.5 text-xs rounded ${e.successRate>=70?'bg-emerald-100 text-emerald-700': e.successRate>=40? 'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-700'}`}>{e.successRate}%</span>
+                          <span className={`px-2 py-0.5 text-xs rounded ${e.successRate >= 70 ? 'bg-emerald-100 text-emerald-700' : e.successRate >= 40 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-700'}`}>{e.successRate}%</span>
                         </td>
                         <td className="col-span-2">{e.active}</td>
                         <td className="col-span-2">
-                          <span className={`px-2 py-0.5 text-xs rounded ${e.status==='Active'?'bg-emerald-100 text-emerald-700':'bg-gray-100 text-gray-700'}`}>{e.status}</span>
+                          <span className={`px-2 py-0.5 text-xs rounded ${e.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-700'}`}>{e.status}</span>
                         </td>
                       </tr>
                     ))}
@@ -676,7 +677,7 @@ const SuperAdmin: React.FC = () => {
                 <div className="mt-2">
                   <svg viewBox="0 0 300 120" className="w-full h-36">
                     <polyline points="0,90 50,80 100,85 150,70 200,55 250,40" stroke="#8b5cf6" strokeWidth="3" fill="none" />
-                    {[[0,90],[50,80],[100,85],[150,70],[200,55],[250,40]].map((p,i)=>(
+                    {[[0, 90], [50, 80], [100, 85], [150, 70], [200, 55], [250, 40]].map((p, i) => (
                       <circle key={i} cx={p[0]} cy={p[1]} r="3" fill="#8b5cf6" />
                     ))}
                   </svg>
@@ -768,13 +769,13 @@ const SuperAdmin: React.FC = () => {
                       </div>
                       <div className="col-span-2">{c.branch}</div>
                       <div className="col-span-2">
-                        <span className={`px-2 py-0.5 text-xs rounded ${c.type==='Visa'?'bg-emerald-100 text-emerald-700': c.type==='CAS'?'bg-blue-100 text-blue-700':'bg-orange-100 text-orange-800'}`}>{c.type}</span>
+                        <span className={`px-2 py-0.5 text-xs rounded ${c.type === 'Visa' ? 'bg-emerald-100 text-emerald-700' : c.type === 'CAS' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-800'}`}>{c.type}</span>
                       </div>
                       <div className="col-span-2">{c.employee}</div>
                       <div className="col-span-2">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</div>
                       <div className="col-span-1 flex items-center justify-end gap-2">
-                        <button onClick={()=>openEditCase(c)} className="text-[11px] text-purple-700 hover:underline">View</button>
-                        <button onClick={()=>openEditCase(c)} className="text-[11px] text-blue-600 hover:underline">Edit</button>
+                        <button onClick={() => openEditCase(c)} className="text-[11px] text-purple-700 hover:underline">View</button>
+                        <button onClick={() => openEditCase(c)} className="text-[11px] text-blue-600 hover:underline">Edit</button>
                       </div>
                     </div>
                   ))}
@@ -789,7 +790,7 @@ const SuperAdmin: React.FC = () => {
                 <h2 className="text-xl font-bold text-text-primary mb-3">Cash Flow (Last 9 Months)</h2>
                 <div className="space-y-3">
                   {months.map((m, idx) => (
-                    <div key={m+idx} className="space-y-1">
+                    <div key={m + idx} className="space-y-1">
                       <div className="flex items-center gap-3">
                         <span className="w-12 text-sm text-text-secondary">{m}</span>
                         <div className="flex-1">
@@ -811,7 +812,7 @@ const SuperAdmin: React.FC = () => {
                 <h2 className="text-xl font-bold text-text-primary mb-3">Branch Revenue</h2>
                 <div className="space-y-3">
                   {branchRev.map((b, i) => (
-                    <HBar key={b.name + i} name={b.name} pct={b.pct} color={i===0? '#22c55e' : i===1? '#f59e0b' : '#3b82f6'} label={`${b.pct}%`} />
+                    <HBar key={b.name + i} name={b.name} pct={b.pct} color={i === 0 ? '#22c55e' : i === 1 ? '#f59e0b' : '#3b82f6'} label={`${b.pct}%`} />
                   ))}
                 </div>
               </div>
@@ -825,11 +826,11 @@ const SuperAdmin: React.FC = () => {
               <form onSubmit={addBranch} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <label className="text-sm">
                   <span className="text-text-secondary">Branch Code</span>
-                  <input value={brCode} onChange={e=>setBrCode(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG" />
+                  <input value={brCode} onChange={e => setBrCode(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG" />
                 </label>
                 <label className="text-sm">
                   <span className="text-text-secondary">Branch Name</span>
-                  <input value={brName} onChange={e=>setBrName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG Branch" />
+                  <input value={brName} onChange={e => setBrName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., IG Branch" />
                 </label>
                 <div className="flex items-end">
                   <button type="submit" disabled={brSaving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43] w-full">
@@ -853,7 +854,7 @@ const SuperAdmin: React.FC = () => {
                         <td className="col-span-3">{b.branch_code}</td>
                         <td className="col-span-7">{b.branch_name}</td>
                         <td className="col-span-2 text-right">
-                          <button onClick={()=>deleteBranch(b.id)} className="text-[11px] text-red-600 hover:underline">Delete</button>
+                          <button onClick={() => deleteBranch(b.id)} className="text-[11px] text-red-600 hover:underline">Delete</button>
                         </td>
                       </tr>
                     ))}
@@ -876,17 +877,17 @@ const SuperAdmin: React.FC = () => {
           <form onSubmit={saveNewCase} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">New Case</h3>
-              <button type="button" onClick={()=>setShowAddCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button type="button" onClick={() => setShowAddCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             {formError && <div className="mt-3 text-red-600 text-sm">{formError}</div>}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="text-text-secondary">Student</span>
-                <input value={formStudent} onChange={e=>setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
+                <input value={formStudent} onChange={e => setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Branch</span>
-                <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
+                <select value={formBranch} onChange={e => setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
                   <option>IG Branch</option>
                   <option>PWD Branch</option>
                   <option>Peshawar Branch</option>
@@ -894,7 +895,7 @@ const SuperAdmin: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Type</span>
-                <select value={formType} onChange={e=>setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                <select value={formType} onChange={e => setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
                   <option>Visa</option>
                   <option>Fee</option>
                   <option>CAS</option>
@@ -903,7 +904,7 @@ const SuperAdmin: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Assigned To</span>
-                <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
+                <input value={formEmployee} onChange={e => setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Stage</span>
@@ -915,7 +916,7 @@ const SuperAdmin: React.FC = () => {
               </label>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={()=>setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowAddCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
 
 
               <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
@@ -932,17 +933,17 @@ const SuperAdmin: React.FC = () => {
           <form onSubmit={saveEditCase} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Edit Case</h3>
-              <button type="button" onClick={()=>setShowEditCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button type="button" onClick={() => setShowEditCase(false)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             {formError && <div className="mt-3 text-red-600 text-sm">{formError}</div>}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="text-text-secondary">Student</span>
-                <input value={formStudent} onChange={e=>setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
+                <input value={formStudent} onChange={e => setFormStudent(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Student full name" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Branch</span>
-                <select value={formBranch} onChange={e=>setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
+                <select value={formBranch} onChange={e => setFormBranch(e.target.value)} className="mt-1 w-full border rounded p-2">
                   <option>IG Branch</option>
                   <option>PWD Branch</option>
                   <option>Peshawar Branch</option>
@@ -950,7 +951,7 @@ const SuperAdmin: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Type</span>
-                <select value={formType} onChange={e=>setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                <select value={formType} onChange={e => setFormType(e.target.value as any)} className="mt-1 w-full border rounded p-2">
                   <option>Visa</option>
                   <option>Fee</option>
                   <option>CAS</option>
@@ -959,7 +960,7 @@ const SuperAdmin: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Assigned To</span>
-                <input value={formEmployee} onChange={e=>setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
+                <input value={formEmployee} onChange={e => setFormEmployee(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Employee name" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Stage</span>
@@ -971,7 +972,7 @@ const SuperAdmin: React.FC = () => {
               </label>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={()=>setShowEditCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowEditCase(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" disabled={savingCase} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">
                 {savingCase ? 'Saving...' : 'Save Changes'}
               </button>
