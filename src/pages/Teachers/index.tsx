@@ -165,8 +165,8 @@ const TeachersPage: React.FC = () => {
                 <button
                   onClick={() => setActiveTab('assign')}
                   className={`px-6 py-3 font-semibold ${activeTab === 'assign'
-                      ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
-                      : 'text-text-secondary'
+                    ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                    : 'text-text-secondary'
                     }`}
                 >
                   Assign Students
@@ -175,8 +175,8 @@ const TeachersPage: React.FC = () => {
               <button
                 onClick={() => setActiveTab('attendance')}
                 className={`px-6 py-3 font-semibold ${activeTab === 'attendance'
-                    ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
-                    : 'text-text-secondary'
+                  ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                  : 'text-text-secondary'
                   }`}
               >
                 Daily Attendance
@@ -184,8 +184,8 @@ const TeachersPage: React.FC = () => {
               <button
                 onClick={() => setActiveTab('timetable')}
                 className={`px-6 py-3 font-semibold ${activeTab === 'timetable'
-                    ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
-                    : 'text-text-secondary'
+                  ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                  : 'text-text-secondary'
                   }`}
               >
                 Timetable
@@ -195,66 +195,125 @@ const TeachersPage: React.FC = () => {
 
           {/* Section A: Assign Students (Admin Only) */}
           {activeTab === 'assign' && isAdmin && (
-            <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
-              <h2 className="text-xl font-bold mb-4">Assign Students to Teachers</h2>
-              <p className="text-text-secondary mb-4">
-                This section is for managing student-teacher assignments.
-              </p>
-              <div className="text-sm text-text-secondary">
-                <p>⚠️ Student assignment functionality will be implemented here.</p>
-                <p>Features: Search students, assign to teachers, view assignments, remove assignments.</p>
+            <div className="space-y-6">
+              {/* Teacher Selection */}
+              <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+                <h2 className="text-xl font-bold mb-4">Assign Students to Teachers</h2>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Available Students */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3">Available Students</h3>
+                    <input
+                      type="text"
+                      placeholder="Search students..."
+                      className="w-full border rounded p-2 mb-3 text-sm"
+                    />
+                    <div className="border rounded max-h-96 overflow-auto">
+                      {students.map(student => (
+                        <div
+                          key={student.id}
+                          className="p-3 border-b hover:bg-gray-50 flex items-center justify-between"
+                        >
+                          <span className="text-sm">{student.full_name}</span>
+                          <button
+                            className="text-xs px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          >
+                            Assign
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Teachers and Their Assigned Students */}
+                  <div>
+                    <h3 className="text-sm font-semibold mb-3">Teachers & Assigned Students</h3>
+                    <div className="space-y-4">
+                      {teachers.filter(t => t.status === 'Active').map(teacher => (
+                        <div key={teacher.id} className="border rounded p-4">
+                          <div className="font-semibold mb-2">{teacher.full_name}</div>
+                          <div className="text-xs text-text-secondary mb-2">
+                            {teacher.email}
+                          </div>
+                          <div className="text-xs text-text-secondary mb-2">
+                            Assigned Students: 0
+                          </div>
+                          <div className="text-xs text-blue-600">
+                            Click to view/manage students
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {/* Section B: Daily Attendance */}
           {activeTab === 'attendance' && (
-            <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold">Daily Attendance</h2>
+            <div className="space-y-6">
+              {/* Add Attendance Section */}
+              <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-bold">Daily Attendance</h2>
+                </div>
+
+                {isTeacher && !isAdmin ? (
+                  <div>
+                    <p className="text-text-secondary mb-4">
+                      Mark attendance for your assigned students.
+                    </p>
+                    <button
+                      onClick={() => {
+                        // For teachers, find their own teacher record
+                        const teacherRecord = teachers.find(t => t.email === role);
+                        if (teacherRecord) {
+                          handleOpenAttendance(teacherRecord);
+                        } else {
+                          alert('Teacher record not found');
+                        }
+                      }}
+                      className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold"
+                    >
+                      Add Attendance
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="text-text-secondary mb-4">
+                      Select a teacher to add attendance for their students.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {teachers.filter(t => t.status === 'Active').map(teacher => (
+                        <div key={teacher.id} className="border rounded-lg p-4">
+                          <div className="font-semibold">{teacher.full_name}</div>
+                          <div className="text-sm text-text-secondary">{teacher.email}</div>
+                          <div className="text-xs text-text-secondary mt-2">
+                            Assigned Students: 0
+                          </div>
+                          <button
+                            onClick={() => handleOpenAttendance(teacher)}
+                            className="mt-3 px-3 py-1.5 rounded bg-blue-100 text-blue-700 text-sm font-semibold hover:bg-blue-200"
+                          >
+                            Add Attendance
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {isTeacher && !isAdmin ? (
-                <div>
-                  <p className="text-text-secondary mb-4">
-                    Mark attendance for your assigned students.
-                  </p>
-                  <button
-                    onClick={() => {
-                      // For teachers, find their own teacher record
-                      const teacherRecord = teachers.find(t => t.email === role);
-                      if (teacherRecord) {
-                        handleOpenAttendance(teacherRecord);
-                      } else {
-                        alert('Teacher record not found');
-                      }
-                    }}
-                    className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold"
-                  >
-                    Add Attendance
-                  </button>
+              {/* Attendance History */}
+              <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+                <h3 className="text-lg font-bold mb-4">Attendance History</h3>
+                <div className="text-sm text-text-secondary">
+                  <p>Recent attendance records will be displayed here.</p>
+                  <p className="mt-2">Features: Filter by date, teacher, student, export to Excel.</p>
                 </div>
-              ) : (
-                <div>
-                  <p className="text-text-secondary mb-4">
-                    Select a teacher to add attendance for their students.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {teachers.filter(t => t.status === 'Active').map(teacher => (
-                      <div key={teacher.id} className="border rounded-lg p-4">
-                        <div className="font-semibold">{teacher.full_name}</div>
-                        <div className="text-sm text-text-secondary">{teacher.email}</div>
-                        <button
-                          onClick={() => handleOpenAttendance(teacher)}
-                          className="mt-3 px-3 py-1.5 rounded bg-blue-100 text-blue-700 text-sm font-semibold hover:bg-blue-200"
-                        >
-                          Add Attendance
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
 
