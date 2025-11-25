@@ -399,7 +399,8 @@ const Cases: React.FC = () => {
         setTimeout(() => setJustDroppedId(null), 500);
         showToast(`Moved case ${id} to ${next}`);
       }
-    } catch {
+    } catch (err) {
+      console.error('Drop error:', err);
       showToast('Failed to update stage', 'error');
     }
   };
@@ -820,7 +821,11 @@ const Cases: React.FC = () => {
                                 key={col}
                                 onDragOver={(e) => e.preventDefault()}
                                 onDragEnter={(e) => { if (Array.from(e.dataTransfer.types || []).includes('text/case')) setBoardDropCol(col); }}
-                                onDragLeave={(e) => { setBoardDropCol(prev => prev === col ? null : prev); }}
+                                onDragLeave={(e) => {
+                                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                    setBoardDropCol(null);
+                                  }
+                                }}
                                 onDrop={(e) => { handleDropCaseToStatus(col)(e); setBoardDropCol(null); }}
                                 className={`rounded-lg border p-2 min-h-[180px] ${boardDropCol === col ? 'border-[#ffa332] ring-2 ring-[#ffa332] bg-orange-50/40 animate-pulse' : 'border-dashed border-gray-300 bg-gray-50/50'}`}
                               >
