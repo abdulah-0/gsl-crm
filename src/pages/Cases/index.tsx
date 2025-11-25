@@ -26,7 +26,64 @@ const CASE_STAGES = [
 
 type CaseStage = typeof CASE_STAGES[number];
 
-// ... (keep existing types)
+type Priority = 'Low' | 'Medium' | 'High';
+type TaskStatus = 'Todo' | 'In Progress' | 'In Review' | 'Done';
+
+type Task = {
+  id: string;
+  name: string;
+  estimateMins: number;
+  spentMins: number;
+  assignee: { id?: string; name: string; avatar?: string };
+  priority: Priority;
+  status: TaskStatus;
+  description?: string;
+};
+
+type CaseItem = {
+  caseId: string; // e.g., PN001245
+  title: string; // student/case title
+  status?: CaseStage;
+  branch?: string;
+  type?: string;
+  employee?: string;
+  assignees: string[];
+  createdAt?: string;
+  active: Task[];
+  backlog: Task[];
+};
+
+// Utils
+const mins = (d: number = 0, h: number = 0, m: number = 0) => d * 24 * 60 + h * 60 + m;
+const fmtDur = (totalMins: number) => {
+  const d = Math.floor(totalMins / (24 * 60));
+  const h = Math.floor((totalMins % (24 * 60)) / 60);
+  const m = totalMins % 60;
+  const parts: string[] = [];
+  if (d) parts.push(`${d}d`);
+  if (h) parts.push(`${h}h`);
+  if (m || parts.length === 0) parts.push(`${m}m`);
+  return parts.join(' ');
+};
+
+const PRIORITY_STYLES: Record<Priority, { text: string; bg: string; arrow: '↑' | '↓'; border?: string }> = {
+  High: { text: 'text-red-700', bg: 'bg-red-100', arrow: '↑', border: 'border-red-200' },
+  Medium: { text: 'text-yellow-800', bg: 'bg-yellow-100', arrow: '↑', border: 'border-yellow-200' },
+  Low: { text: 'text-emerald-700', bg: 'bg-emerald-100', arrow: '↓', border: 'border-emerald-200' },
+};
+
+const TASK_STATUS_STYLES: Record<TaskStatus, { text: string; bg: string; dot: string }> = {
+  'Done': { text: 'text-emerald-700', bg: 'bg-emerald-100', dot: 'bg-emerald-500' },
+  'In Progress': { text: 'text-blue-700', bg: 'bg-blue-100', dot: 'bg-blue-500' },
+  'In Review': { text: 'text-purple-700', bg: 'bg-purple-100', dot: 'bg-purple-500' },
+  'Todo': { text: 'text-gray-700', bg: 'bg-gray-100', dot: 'bg-gray-400' },
+};
+
+const normalizeCaseStage = (raw?: string | null): CaseStage => {
+  const val = (raw || '').toString().trim().toLowerCase();
+  const match = CASE_STAGES.find(s => s.toLowerCase() === val);
+  return match || 'Initial Stage';
+};
 
 const CASE_STAGE_COLORS: Record<CaseStage, string> = {
   'Initial Stage': 'bg-amber-100 text-amber-700',
