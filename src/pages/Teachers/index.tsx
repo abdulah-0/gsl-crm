@@ -4,144 +4,151 @@ import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
+import AttendanceModal from '../../components/AttendanceModal';
+import TimetableUpload from '../../components/TimetableUpload';
+import TimetableViewer from '../../components/TimetableViewer';
 
 // Types
-interface Teacher { id: string; full_name: string; email: string; phone?: string; cnic?: string; status: 'Active'|'Inactive'|string; created_at?: string; }
+interface Teacher { id: string; full_name: string; email: string; phone?: string; cnic?: string; status: 'Active' | 'Inactive' | string; created_at?: string; }
 interface Service { id: string; name: string; }
-interface Assignment { id?: number; service_id?: string|null; service_name?: string|null; batch_no?: string|null; }
+interface Assignment { id?: number; service_id?: string | null; service_name?: string | null; batch_no?: string | null; }
+interface Student { id: string; full_name: string; }
+
+type TabType = 'assign' | 'attendance' | 'timetable';
 
 const TeachersPage: React.FC = () => {
   const navigate = useNavigate();
   const [role, setRole] = useState<string>('');
-  const [allowed, setAllowed] = useState<string[]|null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isTeacher, setIsTeacher] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('assign');
 
   // Lists
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [assignMap, setAssignMap] = useState<Record<string, Assignment[]>>({});
+  const [studentAssignments, setStudentAssignments] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [q, setQ] = useState('');
-  const [statusF, setStatusF] = useState('All');
+  // Attendance state
+  const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
+  const [teacherStudents, setTeacherStudents] = useState<Student[]>([]);
 
-  // Add Form
-  const [nFull, setNFull] = useState('');
-  const [nEmail, setNEmail] = useState('');
-  const [nPassword, setNPassword] = useState('');
-  const [nPhone, setNPhone] = useState('');
-  const [nCnic, setNCnic] = useState('');
-  const [nAssignments, setNAssignments] = useState<Assignment[]>([{ service_id: undefined, service_name: undefined, batch_no: '' }]);
-  const [saving, setSaving] = useState(false);
-
-  // Edit Modal
-  const [editing, setEditing] = useState<Teacher|null>(null);
-  const [eFull, setEFull] = useState('');
-  const [eEmail, setEEmail] = useState('');
-  const [ePhone, setEPhone] = useState('');
-  const [eCnic, setECnic] = useState('');
-  const [eStatus, setEStatus] = useState<'Active'|'Inactive'>('Active');
-  const [eAssignments, setEAssignments] = useState<Assignment[]>([]);
+  // Timetable state
+  const [timetable, setTimetable] = useState<{ file_url: string; file_name: string; file_type: string } | null>(null);
+  const [loadingTimetable, setLoadingTimetable] = useState(false);
 
   useEffect(() => {
     (async () => {
-      // determine role and allowed tabs for conditional access
       const { data: sess } = await supabase.auth.getUser();
       const email = sess.user?.email;
       if (email) {
-        const { data: me } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+        const { data: me } = await supabase.from('dashboard_users').select('id, role, permissions').eq('email', email).maybeSingle();
         const roleStr = (me?.role || (sess.user as any)?.app_metadata?.role || (sess.user as any)?.user_metadata?.role || '').toString();
         setRole(roleStr);
-        const perms = Array.isArray(me?.permissions) ? (me?.permissions as any as string[]) : [];
+        setCurrentUserId(me?.id || '');
+
         const rl = roleStr.toLowerCase();
-        if (rl.includes('super')) setAllowed(['teachers']);
-        else if (rl.includes('admin')) setAllowed(['teachers']);
-        else if (rl.includes('teacher')) setAllowed(['teachers']);
-        else setAllowed(perms.length?perms:null);
+        const admin = rl.includes('super') || rl.includes('admin');
+        const teacher = rl.includes('teacher');
+        setIsAdmin(admin);
+        setIsTeacher(teacher);
+
+        // Set default tab based on role
+        if (teacher && !admin) {
+          setActiveTab('attendance');
+        }
       }
       await loadAll();
+      await loadTimetable();
     })();
   }, []);
 
   const loadAll = async () => {
     setLoading(true);
-    const [{ data: ts }, { data: svcs }, { data: assigns }] = await Promise.all([
+    const [{ data: ts }, { data: svcs }, { data: assigns }, { data: studs }] = await Promise.all([
       supabase.from('dashboard_teachers').select('*').order('created_at', { ascending: false }),
       supabase.from('dashboard_services').select('id,name').order('name'),
-      supabase.from('dashboard_teacher_assignments').select('*')
+      supabase.from('dashboard_teacher_assignments').select('*'),
+      supabase.from('dashboard_students').select('id, full_name').eq('archived', false)
     ]);
-    setTeachers((ts||[]) as any);
-    setServices((svcs||[]) as any);
+    setTeachers((ts || []) as any);
+    setServices((svcs || []) as any);
+    setStudents((studs || []) as any);
+
     const grouped: Record<string, Assignment[]> = {};
-    (assigns||[]).forEach((a: any) => { const t = a.teacher_id; if (!grouped[t]) grouped[t]=[]; grouped[t].push(a); });
+    (assigns || []).forEach((a: any) => { const t = a.teacher_id; if (!grouped[t]) grouped[t] = []; grouped[t].push(a); });
     setAssignMap(grouped);
+
+    // TODO: Load actual student-teacher assignments from a proper table
+    // For now, this is a placeholder
+    setStudentAssignments({});
+
     setLoading(false);
   };
 
-  const visible = useMemo(() => {
-    const term = q.toLowerCase().trim();
-    return teachers.filter(t => {
-      if (statusF !== 'All' && t.status !== statusF) return false;
-      const slist = (assignMap[t.id]||[]).map(a=>{
-        const svc = services.find(s=>s.id===a.service_id);
-        return `${svc?.name||a.service_name||''} ${a.batch_no||''}`.trim();
-      }).join(', ');
-      if (term && !(`${t.full_name} ${t.email} ${slist}`.toLowerCase().includes(term))) return false;
-      return true;
-    });
-  }, [teachers, assignMap, services, q, statusF]);
-
-  const addAssignmentRow = () => setNAssignments(rows=>[...rows, { service_id: undefined, service_name: undefined, batch_no: '' }]);
-  const removeAssignmentRow = (i: number) => setNAssignments(rows=>rows.filter((_,idx)=>idx!==i));
-  const updateAssignment = (i: number, patch: Partial<Assignment>) => setNAssignments(rows=>rows.map((r,idx)=> idx===i ? { ...r, ...patch } : r));
-
-  const saveNew = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nFull || !nEmail) { alert('Full Name and Email are required'); return; }
-    setSaving(true);
+  const loadTimetable = async () => {
+    setLoadingTimetable(true);
     try {
-      const id = `TEA${Date.now().toString().slice(-8)}`;
-      await supabase.from('dashboard_teachers').insert([{ id, full_name: nFull, email: nEmail, phone: nPhone, cnic: nCnic, status: 'Active' }]);
-      const rows = (nAssignments||[]).map(a=>({ teacher_id: id, service_id: a.service_id||null, service_name: (services.find(s=>s.id===a.service_id)?.name)||a.service_name||null, batch_no: a.batch_no||null }));
-      if (rows.length) await supabase.from('dashboard_teacher_assignments').insert(rows);
-      // Also add to dashboard_users with Teacher role & default permissions ['teachers']
-      await supabase.from('dashboard_users').insert([{ id: `USR${Date.now().toString().slice(-8)}`, full_name: nFull, email: nEmail, role: 'Teacher', status: 'Active', permissions: ['teachers'] }]);
-      // Note: creating auth user/password should be done via Admin API from a secure backend.
-      setNFull(''); setNEmail(''); setNPassword(''); setNPhone(''); setNCnic(''); setNAssignments([{ service_id: undefined, service_name: undefined, batch_no: '' }]);
-      await loadAll();
-      alert('Teacher added');
-    } catch (err: any) {
-      alert(err.message || String(err));
+      const { data } = await supabase
+        .from('teacher_timetable')
+        .select('file_url, file_name, file_type')
+        .eq('is_active', true)
+        .order('uploaded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setTimetable(data || null);
+    } catch (error) {
+      console.error('Error loading timetable:', error);
     } finally {
-      setSaving(false);
+      setLoadingTimetable(false);
     }
   };
 
-  const openEdit = async (t: Teacher) => {
-    setEditing(t);
-    setEFull(t.full_name); setEEmail(t.email); setEPhone(t.phone||''); setECnic(t.cnic||''); setEStatus((t.status as any)||'Active');
-    setEAssignments(assignMap[t.id] ? [...assignMap[t.id]] : []);
+  // Attendance functions
+  const handleOpenAttendance = async (teacher: Teacher) => {
+    setSelectedTeacher(teacher);
+    // TODO: Load students assigned to this teacher
+    // For now, using all students as placeholder
+    setTeacherStudents(students);
+    setAttendanceModalOpen(true);
   };
 
-  const saveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editing) return;
-    await supabase.from('dashboard_teachers').update({ full_name: eFull, email: eEmail, phone: ePhone, cnic: eCnic, status: eStatus }).eq('id', editing.id);
-    // Reset assignments: delete then insert
-    await supabase.from('dashboard_teacher_assignments').delete().eq('teacher_id', editing.id);
-    const rows = (eAssignments||[]).map(a=>({ teacher_id: editing.id, service_id: a.service_id||null, service_name: (services.find(s=>s.id===a.service_id)?.name)||a.service_name||null, batch_no: a.batch_no||null }));
-    if (rows.length) await supabase.from('dashboard_teacher_assignments').insert(rows);
-    setEditing(null);
-    await loadAll();
-  };
+  const handleAttendanceSubmit = async (data: { date: string; attendance: { studentId: string; status: 'Present' | 'Absent' }[] }) => {
+    if (!selectedTeacher) return;
 
-  const delTeacher = async (t: Teacher) => {
-    if (!confirm(`Delete teacher ${t.full_name}?`)) return;
-    await supabase.from('dashboard_teachers').delete().eq('id', t.id);
-    await loadAll();
-  };
+    try {
+      const records = data.attendance.map(att => ({
+        teacher_id: selectedTeacher.id,
+        student_id: att.studentId,
+        attendance_date: data.date,
+        status: att.status,
+      }));
 
-  // Access control: if user is Teacher role, they should only see this tab; already handled by Sidebar. No extra UI restrictions here.
+      const { error } = await supabase
+        .from('teacher_attendance')
+        .upsert(records, {
+          onConflict: 'teacher_id,student_id,attendance_date',
+        });
+
+      if (error) {
+        console.error('Error saving attendance:', error);
+        alert('Failed to save attendance');
+        return;
+      }
+
+      alert('Attendance saved successfully!');
+    } catch (error) {
+      console.error('Error saving attendance:', error);
+      alert('Failed to save attendance');
+    }
+  };
 
   return (
     <main className="w-full min-h-screen bg-background-main flex">
@@ -150,126 +157,147 @@ const TeachersPage: React.FC = () => {
       <div className="flex-1 flex flex-col">
         <Header />
 
-        <section className="px-4 sm:px-6 lg:px-8 mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Add Teacher */}
-          <form onSubmit={saveNew} className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] lg:col-span-1">
-            <div className="flex items-center justify-between"><h2 className="text-lg font-bold">Add Teacher</h2></div>
-            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={nFull} onChange={e=>setNFull(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <label><span className="text-text-secondary">Email</span><input type="email" value={nEmail} onChange={e=>setNEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <label><span className="text-text-secondary">Password</span><input type="password" value={nPassword} onChange={e=>setNPassword(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="(Auth created server-side)"/></label>
-              <label><span className="text-text-secondary">Phone</span><input value={nPhone} onChange={e=>setNPhone(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-              <label><span className="text-text-secondary">CNIC (optional)</span><input value={nCnic} onChange={e=>setNCnic(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-              <div>
-                <div className="text-text-secondary mb-1">Assignments (Course + Batch)</div>
-                {nAssignments.map((row, idx) => (
-                  <div key={idx} className="flex items-center gap-2 mb-2">
-                    <select value={row.service_id||''} onChange={e=>updateAssignment(idx,{ service_id: e.target.value||undefined })} className="border rounded p-2 flex-1">
-                      <option value="">Select Course</option>
-                      {services.map(s=> <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    <input placeholder="Batch No (optional)" value={row.batch_no||''} onChange={e=>updateAssignment(idx,{ batch_no: e.target.value })} className="border rounded p-2 w-40"/>
-                    <button type="button" onClick={()=>removeAssignmentRow(idx)} className="text-red-600">Remove</button>
-                  </div>
-                ))}
-                <button type="button" onClick={addAssignmentRow} className="text-blue-600 text-xs">+ Add Another</button>
-              </div>
-              <div className="text-right"><button disabled={saving} type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save</button></div>
-            </div>
-          </form>
-
-          {/* Teachers List */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
-              <div className="flex flex-wrap items-center gap-2 justify-between">
-                <h2 className="text-lg font-bold">Teachers</h2>
-                <div className="flex items-center gap-2 text-sm">
-                  <input placeholder="Search" value={q} onChange={e=>setQ(e.target.value)} className="border rounded p-2" />
-                  <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option></select>
-                </div>
-              </div>
-              <div className="mt-3 overflow-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-text-secondary border-b">
-                      <th className="py-2 pr-4">Full Name</th>
-                      <th className="py-2 pr-4">Email</th>
-                      <th className="py-2 pr-4">Assigned Batches / Courses</th>
-                      <th className="py-2 pr-4">Total Students</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading && (<tr><td colSpan={6} className="py-4 text-center text-text-secondary">Loading...</td></tr>)}
-                    {!loading && visible.map(t => {
-                      const assignments = assignMap[t.id]||[];
-                      const assignedLabel = assignments.map(a => {
-                        const svc = services.find(s=>s.id===a.service_id);
-                        return `${svc?.name||a.service_name||''}${a.batch_no?` (${a.batch_no})`:''}`;
-                      }).join(', ');
-                      // Total students will be computed on detail page; here we leave blank or estimate
-                      return (
-                        <tr key={t.id} className="border-b">
-                          <td className="py-2 pr-4 font-semibold">{t.full_name}</td>
-                          <td className="py-2 pr-4">{t.email}</td>
-                          <td className="py-2 pr-4">{assignedLabel||'-'}</td>
-                          <td className="py-2 pr-4">-</td>
-                          <td className="py-2 pr-4">{t.status}</td>
-                          <td className="py-2 pr-4">
-                            <button onClick={()=>navigate(`/teachers/${t.id}`)} className="text-blue-600 hover:underline mr-3">View</button>
-                            <button onClick={()=>openEdit(t)} className="text-indigo-600 hover:underline mr-3">Edit</button>
-                            <button onClick={()=>delTeacher(t)} className="text-red-600 hover:underline">Delete</button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {!loading && visible.length===0 && (<tr><td colSpan={6} className="py-4 text-center text-text-secondary">No teachers found</td></tr>)}
-                  </tbody>
-                </table>
-              </div>
+        <section className="px-4 sm:px-6 lg:px-8 mt-6">
+          {/* Tab Navigation */}
+          <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] mb-6">
+            <div className="flex border-b">
+              {isAdmin && (
+                <button
+                  onClick={() => setActiveTab('assign')}
+                  className={`px-6 py-3 font-semibold ${activeTab === 'assign'
+                      ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                      : 'text-text-secondary'
+                    }`}
+                >
+                  Assign Students
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('attendance')}
+                className={`px-6 py-3 font-semibold ${activeTab === 'attendance'
+                    ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                    : 'text-text-secondary'
+                  }`}
+              >
+                Daily Attendance
+              </button>
+              <button
+                onClick={() => setActiveTab('timetable')}
+                className={`px-6 py-3 font-semibold ${activeTab === 'timetable'
+                    ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                    : 'text-text-secondary'
+                  }`}
+              >
+                Timetable
+              </button>
             </div>
           </div>
+
+          {/* Section A: Assign Students (Admin Only) */}
+          {activeTab === 'assign' && isAdmin && (
+            <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+              <h2 className="text-xl font-bold mb-4">Assign Students to Teachers</h2>
+              <p className="text-text-secondary mb-4">
+                This section is for managing student-teacher assignments.
+              </p>
+              <div className="text-sm text-text-secondary">
+                <p>⚠️ Student assignment functionality will be implemented here.</p>
+                <p>Features: Search students, assign to teachers, view assignments, remove assignments.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Section B: Daily Attendance */}
+          {activeTab === 'attendance' && (
+            <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Daily Attendance</h2>
+              </div>
+
+              {isTeacher && !isAdmin ? (
+                <div>
+                  <p className="text-text-secondary mb-4">
+                    Mark attendance for your assigned students.
+                  </p>
+                  <button
+                    onClick={() => {
+                      // For teachers, find their own teacher record
+                      const teacherRecord = teachers.find(t => t.email === role);
+                      if (teacherRecord) {
+                        handleOpenAttendance(teacherRecord);
+                      } else {
+                        alert('Teacher record not found');
+                      }
+                    }}
+                    className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold"
+                  >
+                    Add Attendance
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-text-secondary mb-4">
+                    Select a teacher to add attendance for their students.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {teachers.filter(t => t.status === 'Active').map(teacher => (
+                      <div key={teacher.id} className="border rounded-lg p-4">
+                        <div className="font-semibold">{teacher.full_name}</div>
+                        <div className="text-sm text-text-secondary">{teacher.email}</div>
+                        <button
+                          onClick={() => handleOpenAttendance(teacher)}
+                          className="mt-3 px-3 py-1.5 rounded bg-blue-100 text-blue-700 text-sm font-semibold hover:bg-blue-200"
+                        >
+                          Add Attendance
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Section C: Timetable */}
+          {activeTab === 'timetable' && (
+            <div className="space-y-6">
+              {isAdmin && (
+                <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+                  <h2 className="text-xl font-bold mb-4">Upload Timetable</h2>
+                  <TimetableUpload onUploadSuccess={loadTimetable} />
+                </div>
+              )}
+
+              <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+                <h2 className="text-xl font-bold mb-4">View Timetable</h2>
+                {loadingTimetable ? (
+                  <div className="text-text-secondary">Loading...</div>
+                ) : (
+                  <TimetableViewer
+                    fileUrl={timetable?.file_url || null}
+                    fileName={timetable?.file_name || null}
+                    fileType={timetable?.file_type || null}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </section>
       </div>
 
-      {/* Edit Modal */}
-      {editing && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <form onSubmit={saveEdit} className="bg-white w-full max-w-2xl rounded-xl p-5 shadow-xl">
-            <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Edit Teacher</h3><button type="button" onClick={()=>setEditing(null)} className="text-text-secondary">✕</button></div>
-            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={eFull} onChange={e=>setEFull(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <label><span className="text-text-secondary">Email</span><input type="email" value={eEmail} onChange={e=>setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <div className="grid grid-cols-2 gap-3">
-                <label><span className="text-text-secondary">Phone</span><input value={ePhone} onChange={e=>setEPhone(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-                <label><span className="text-text-secondary">CNIC</span><input value={eCnic} onChange={e=>setECnic(e.target.value)} className="mt-1 w-full border rounded p-2"/></label>
-              </div>
-              <label><span className="text-text-secondary">Status</span>
-                <select value={eStatus} onChange={e=>setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2"><option>Active</option><option>Inactive</option></select>
-              </label>
-              <div>
-                <div className="text-text-secondary mb-1">Assignments</div>
-                {(eAssignments||[]).map((row, idx) => (
-                  <div key={idx} className="flex items-center gap-2 mb-2">
-                    <select value={row.service_id||''} onChange={e=>setEAssignments(list=>list.map((r,i)=> i===idx?{...r, service_id: e.target.value||undefined}:r))} className="border rounded p-2 flex-1">
-                      <option value="">Select Course</option>
-                      {services.map(s=> <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    <input placeholder="Batch No (optional)" value={row.batch_no||''} onChange={e=>setEAssignments(list=>list.map((r,i)=> i===idx?{...r, batch_no: e.target.value}:r))} className="border rounded p-2 w-40"/>
-                    <button type="button" onClick={()=>setEAssignments(list=>list.filter((_,i)=>i!==idx))} className="text-red-600">Remove</button>
-                  </div>
-                ))}
-                <button type="button" onClick={()=>setEAssignments(list=>[...list, { service_id: undefined, batch_no: '' }])} className="text-blue-600 text-xs">+ Add Another</button>
-              </div>
-              <div className="text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save Changes</button></div>
-            </div>
-          </form>
-        </div>
-      )}
+      {/* Attendance Modal */}
+      <AttendanceModal
+        isOpen={attendanceModalOpen}
+        onClose={() => {
+          setAttendanceModalOpen(false);
+          setSelectedTeacher(null);
+        }}
+        onSubmit={handleAttendanceSubmit}
+        students={teacherStudents}
+        teacherId={selectedTeacher?.id || ''}
+      />
     </main>
   );
 };
 
 export default TeachersPage;
-
