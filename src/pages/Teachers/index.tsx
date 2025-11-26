@@ -183,9 +183,12 @@ const TeachersPage: React.FC = () => {
   // Attendance functions
   const handleOpenAttendance = async (teacher: Teacher) => {
     setSelectedTeacher(teacher);
-    // TODO: Load students assigned to this teacher
-    // For now, using all students as placeholder
-    setTeacherStudents(students);
+
+    // Get only students assigned to this teacher
+    const assignedStudentIds = studentAssignments[teacher.id] || [];
+    const assignedStudents = students.filter(s => assignedStudentIds.includes(s.id));
+
+    setTeacherStudents(assignedStudents);
     setAttendanceModalOpen(true);
   };
 
