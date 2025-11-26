@@ -301,6 +301,23 @@ const StudentsPage: React.FC = () => {
 
   const fileUrl = (path: string) => supabase.storage.from('attachments').getPublicUrl(path).data.publicUrl;
 
+  const openMockTestsModal = async (student: Student) => {
+    setSelectedStudentForTests(student);
+    try {
+      const { data } = await supabase
+        .from('student_mock_tests')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('test_date', { ascending: false });
+
+      setMockTests(data || []);
+      setMockTestsModalOpen(true);
+    } catch (error) {
+      console.error('Error loading mock tests:', error);
+      alert('Failed to load mock tests');
+    }
+  };
+
   const submitStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canAdd) { alert('You are not permitted to add Students.'); return; }
@@ -1041,7 +1058,14 @@ const StudentsPage: React.FC = () => {
                         {items.filter(st => st.status === 'Active').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
-                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">
+                              <button
+                                onClick={() => openMockTestsModal(st)}
+                                className="text-blue-600 hover:underline font-medium"
+                              >
+                                {st.full_name}
+                              </button>
+                            </td>
                             <td className="p-2">{st.program_title}</td>
                             <td className="p-2">{st.batch_no}</td>
                             <td className="p-2">{st.phone}</td>
@@ -1084,7 +1108,14 @@ const StudentsPage: React.FC = () => {
                         {items.filter(st => st.status === 'Completed').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
-                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">
+                              <button
+                                onClick={() => openMockTestsModal(st)}
+                                className="text-blue-600 hover:underline font-medium"
+                              >
+                                {st.full_name}
+                              </button>
+                            </td>
                             <td className="p-2">{st.program_title}</td>
                             <td className="p-2">{st.batch_no}</td>
                             <td className="p-2">{st.phone}</td>
@@ -1127,7 +1158,14 @@ const StudentsPage: React.FC = () => {
                         {items.filter(st => st.status === 'Withdrawn').map(st => (
                           <tr key={st.id} className="border-t">
                             <td className="p-2">{st.id}</td>
-                            <td className="p-2">{st.full_name}</td>
+                            <td className="p-2">
+                              <button
+                                onClick={() => openMockTestsModal(st)}
+                                className="text-blue-600 hover:underline font-medium"
+                              >
+                                {st.full_name}
+                              </button>
+                            </td>
                             <td className="p-2">{st.program_title}</td>
                             <td className="p-2">{st.batch_no}</td>
                             <td className="p-2">{st.phone}</td>
