@@ -805,10 +805,10 @@ const Cases: React.FC = () => {
                       <div className="col-span-2">Title</div>
                       <div className="col-span-1">Branch</div>
                       <div className="col-span-1">Type</div>
-                      <div className="col-span-1">University</div>
+                      <div className="col-span-2">University</div>
                       <div className="col-span-2">Course</div>
                       <div className="col-span-1">Date Added</div>
-                      <div className="col-span-2">Assignees</div>
+                      <div className="col-span-1">Assignees</div>
                       <div className="col-span-1 text-right">Stage</div>
                     </div>
 
@@ -827,10 +827,10 @@ const Cases: React.FC = () => {
                               <div className="col-span-2 font-semibold truncate">{c.title}</div>
                               <div className="col-span-1 text-sm truncate">{c.branch || '—'}</div>
                               <div className="col-span-1 text-sm truncate">{c.type || '—'}</div>
-                              <div className="col-span-1 text-sm truncate">{c.universityName || '—'}</div>
+                              <div className="col-span-2 text-sm truncate">{c.universityName || '—'}</div>
                               <div className="col-span-2 text-sm truncate">{c.courseName || '—'}</div>
                               <div className="col-span-1 text-xs text-text-secondary">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</div>
-                              <div className="col-span-3 truncate text-sm">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
+                              <div className="col-span-1 truncate text-sm">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
                               <div className="col-span-1 text-right">
                                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${sStyle}`}>
                                   <span>{stage}</span>
