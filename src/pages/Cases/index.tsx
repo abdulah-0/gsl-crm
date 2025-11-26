@@ -146,7 +146,7 @@ const Cases: React.FC = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, updated_at, university_id, universities(name)')
+        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, updated_at, university_id')
         .order('created_at', { ascending: false });
       if (!error) {
         // Fetch course information for each case
@@ -163,6 +163,18 @@ const Cases: React.FC = () => {
           }
         });
 
+        // Fetch university names
+        const universityIds = (data ?? []).map((row: any) => row.university_id).filter(Boolean);
+        const { data: universities } = await supabase
+          .from('universities')
+          .select('id, name')
+          .in('id', universityIds);
+
+        const universityMap = new Map<number, string>();
+        (universities || []).forEach((uni: any) => {
+          universityMap.set(uni.id, uni.name);
+        });
+
         const mapped: CaseItem[] = (data ?? []).map((row: any) => ({
           caseId: row.case_number || String(row.id),
           title: row.title || 'Untitled',
@@ -173,7 +185,7 @@ const Cases: React.FC = () => {
           assignees: Array.isArray(row.assignees) ? row.assignees : (row.employee ? [row.employee] : []),
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          universityName: row.universities?.name || undefined,
+          universityName: row.university_id ? universityMap.get(row.university_id) : undefined,
           courseName: courseMap.get(row.case_number || String(row.id)) || undefined,
           active: [],
           backlog: [],
