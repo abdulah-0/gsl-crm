@@ -14,7 +14,7 @@ interface Service { id: string; name: string; }
 interface Assignment { id?: number; service_id?: string | null; service_name?: string | null; batch_no?: string | null; }
 interface Student { id: string; full_name: string; }
 
-type TabType = 'assign' | 'attendance' | 'timetable';
+type TabType = 'assign' | 'attendance' | 'timetable' | 'mocktests';
 
 const TeachersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,6 +45,14 @@ const TeachersPage: React.FC = () => {
   const [timetable, setTimetable] = useState<{ file_url: string; file_name: string; file_type: string } | null>(null);
   const [loadingTimetable, setLoadingTimetable] = useState(false);
   const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
+
+  // Mock Tests state
+  const [mockTestStudent, setMockTestStudent] = useState<string>('');
+  const [testName, setTestName] = useState('');
+  const [testScore, setTestScore] = useState('');
+  const [testDate, setTestDate] = useState(new Date().toISOString().split('T')[0]);
+  const [testNotes, setTestNotes] = useState('');
+  const [savingTest, setSavingTest] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -254,6 +262,57 @@ const TeachersPage: React.FC = () => {
     }
   };
 
+  // Save mock test score
+  const saveMockTest = async () => {
+    if (!mockTestStudent || !testName || !testScore) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    setSavingTest(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const email = auth.user?.email;
+      const teacherRecord = teachers.find(t => t.email === email);
+
+      if (!teacherRecord) {
+        alert('Teacher record not found');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('student_mock_tests')
+        .insert([{
+          student_id: mockTestStudent,
+          teacher_id: teacherRecord.id,
+          test_name: testName,
+          score: testScore,
+          test_date: testDate,
+          notes: testNotes,
+          created_by: email,
+        }]);
+
+      if (error) {
+        console.error('Error saving mock test:', error);
+        alert('Failed to save test score');
+        return;
+      }
+
+      alert('Test score saved successfully!');
+      // Reset form
+      setMockTestStudent('');
+      setTestName('');
+      setTestScore('');
+      setTestDate(new Date().toISOString().split('T')[0]);
+      setTestNotes('');
+    } catch (error) {
+      console.error('Error saving mock test:', error);
+      alert('Failed to save test score');
+    } finally {
+      setSavingTest(false);
+    }
+  };
+
   return (
     <main className="w-full min-h-screen bg-background-main flex">
       <Helmet><title>Teachers | GSL Pakistan CRM</title></Helmet>
@@ -293,6 +352,15 @@ const TeachersPage: React.FC = () => {
                   }`}
               >
                 Timetable
+              </button>
+              <button
+                onClick={() => setActiveTab('mocktests')}
+                className={`px-6 py-3 font-semibold ${activeTab === 'mocktests'
+                  ? 'border-b-2 border-[#ffa332] text-[#ffa332]'
+                  : 'text-text-secondary'
+                  }`}
+              >
+                Mock Tests
               </button>
             </div>
           </div>
@@ -484,8 +552,8 @@ const TeachersPage: React.FC = () => {
                             <td className="py-2 pr-4">{record.student_name}</td>
                             <td className="py-2 pr-4">
                               <span className={`px-2 py-1 rounded text-xs ${record.status === 'Present'
-                                  ? 'bg-green-100 text-green-700'
-                                  : 'bg-red-100 text-red-700'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700'
                                 }`}>
                                 {record.status}
                               </span>
@@ -521,6 +589,118 @@ const TeachersPage: React.FC = () => {
                     fileType={timetable?.file_type || null}
                   />
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Section D: Mock Tests */}
+          {activeTab === 'mocktests' && (
+            <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
+              <h2 className="text-xl font-bold mb-4">Mock Tests</h2>
+              <p className="text-text-secondary mb-6">
+                Record mock test scores for your assigned students
+              </p>
+
+              <div className="max-w-2xl">
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Student Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Student <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={mockTestStudent}
+                      onChange={(e) => setMockTestStudent(e.target.value)}
+                      className="w-full border rounded p-2"
+                      required
+                    >
+                      <option value="">Select a student</option>
+                      {(() => {
+                        // Get current teacher's assigned students
+                        const currentTeacher = teachers.find(t => t.email === role);
+                        const assignedStudentIds = currentTeacher ? (studentAssignments[currentTeacher.id] || []) : [];
+                        const assignedStudents = students.filter(s => assignedStudentIds.includes(s.id));
+
+                        return assignedStudents.map(student => (
+                          <option key={student.id} value={student.id}>
+                            {student.full_name}
+                          </option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+
+                  {/* Test Name */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Test Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={testName}
+                      onChange={(e) => setTestName(e.target.value)}
+                      placeholder="e.g., IELTS Mock Test 1, PTE Practice Test"
+                      className="w-full border rounded p-2"
+                      required
+                    />
+                  </div>
+
+                  {/* Score/Band */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Score / Band <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={testScore}
+                      onChange={(e) => setTestScore(e.target.value)}
+                      placeholder="e.g., 7.5, 85/100, Band 8"
+                      className="w-full border rounded p-2"
+                      required
+                    />
+                  </div>
+
+                  {/* Test Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Test Date
+                    </label>
+                    <input
+                      type="date"
+                      value={testDate}
+                      onChange={(e) => setTestDate(e.target.value)}
+                      className="w-full border rounded p-2"
+                    />
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-1">
+                      Notes (Optional)
+                    </label>
+                    <textarea
+                      value={testNotes}
+                      onChange={(e) => setTestNotes(e.target.value)}
+                      placeholder="Additional comments or observations"
+                      className="w-full border rounded p-2"
+                      rows={3}
+                    />
+                  </div>
+
+                  {/* Submit Button */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={saveMockTest}
+                      disabled={savingTest || !mockTestStudent || !testName || !testScore}
+                      className={`px-6 py-2 rounded bg-[#ffa332] text-white font-bold ${savingTest || !mockTestStudent || !testName || !testScore
+                        ? 'opacity-50 cursor-not-allowed'
+                        : ''
+                        }`}
+                    >
+                      {savingTest ? 'Saving...' : 'Save Test Score'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
