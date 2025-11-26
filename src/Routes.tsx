@@ -22,7 +22,7 @@ import DailyTasksPage from './pages/DailyTasks';
 import StudentsPage from './pages/Students';
 import ServicesPage from './pages/Services';
 import UsersPage from './pages/Users';
-import TeachersPanel from './pages/Teachers/Panel';
+import TeachersPage from './pages/Teachers';
 import TeacherDetail from './pages/Teachers/Detail';
 
 import UniversitiesPage from './pages/Universities';
@@ -52,14 +52,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
           try {
             const em = data.session.user?.email || '';
             const { data: du } = await supabase.from('dashboard_users').select('status').eq('email', em).maybeSingle();
-            const st = (du?.status||'Active').toString();
+            const st = (du?.status || 'Active').toString();
             if (st === 'Dormant' || st === 'Inactive') {
               await supabase.auth.signOut();
               setAllowed(false);
               navigate('/login', { replace: true });
               return;
             }
-          } catch {}
+          } catch { }
           setAllowed(true);
         } else {
           setAllowed(false);
@@ -76,14 +76,14 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
               try {
                 const em = session.user?.email || '';
                 const { data: du } = await supabase.from('dashboard_users').select('status').eq('email', em).maybeSingle();
-                const st = (du?.status||'Active').toString();
+                const st = (du?.status || 'Active').toString();
                 if (st === 'Dormant' || st === 'Inactive') {
                   await supabase.auth.signOut();
                   setAllowed(false);
                   navigate('/login', { replace: true });
                   return;
                 }
-              } catch {}
+              } catch { }
               setAllowed(true);
             })();
           }
@@ -95,7 +95,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
     })();
     return () => {
       mounted = false;
-      try { authSub?.data?.subscription?.unsubscribe?.(); } catch {}
+      try { authSub?.data?.subscription?.unsubscribe?.(); } catch { }
     };
   }, [navigate]);
 
@@ -153,7 +153,7 @@ const RoleBasedDashboard: React.FC = () => {
       }
     })();
 
-    return () => { mounted = false; try { authSub?.data?.subscription?.unsubscribe?.(); } catch {} };
+    return () => { mounted = false; try { authSub?.data?.subscription?.unsubscribe?.(); } catch { } };
   }, []);
 
   if (role === null) return null; // small loader placeholder
@@ -176,7 +176,7 @@ const AppRoutes = () => {
         <Route path="/teachers/:id" element={<ProtectedRoute><TeacherDetail /></ProtectedRoute>} />
 
         <Route path="/services" element={<ProtectedRoute><ServicesPage /></ProtectedRoute>} />
-        <Route path="/teachers" element={<ProtectedRoute><TeachersPanel /></ProtectedRoute>} />
+        <Route path="/teachers" element={<ProtectedRoute><TeachersPage /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><UsersPage /></ProtectedRoute>} />
         {/* Renamed Finances -> Accounts; keep legacy redirect */}
         <Route path="/finances" element={<ProtectedRoute><Navigate to="/accounts" replace /></ProtectedRoute>} />
