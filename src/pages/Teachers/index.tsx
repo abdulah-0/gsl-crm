@@ -44,6 +44,7 @@ const TeachersPage: React.FC = () => {
   // Timetable state
   const [timetable, setTimetable] = useState<{ file_url: string; file_name: string; file_type: string } | null>(null);
   const [loadingTimetable, setLoadingTimetable] = useState(false);
+  const [attendanceHistory, setAttendanceHistory] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +70,7 @@ const TeachersPage: React.FC = () => {
       await loadAll();
       await loadStudentAssignments();
       await loadTimetable();
+      await loadAttendanceHistory();
     })();
   }, []);
 
@@ -216,9 +218,27 @@ const TeachersPage: React.FC = () => {
       }
 
       alert('Attendance saved successfully!');
+
+      // Reload attendance history
+      await loadAttendanceHistory();
     } catch (error) {
       console.error('Error saving attendance:', error);
       alert('Failed to save attendance');
+    }
+  };
+
+  // Load attendance history
+  const loadAttendanceHistory = async () => {
+    try {
+      const { data } = await supabase
+        .from('teacher_attendance')
+        .select('*, dashboard_students(full_name), dashboard_teachers(full_name)')
+        .order('attendance_date', { ascending: false })
+        .limit(50);
+
+      setAttendanceHistory(data || []);
+    } catch (error) {
+      console.error('Error loading attendance history:', error);
     }
   };
 
@@ -380,13 +400,16 @@ const TeachersPage: React.FC = () => {
                       Mark attendance for your assigned students.
                     </p>
                     <button
-                      onClick={() => {
-                        // For teachers, find their own teacher record
-                        const teacherRecord = teachers.find(t => t.email === role);
+                      onClick={async () => {
+                        // For teachers, find their teacher record by email
+                        const { data: auth } = await supabase.auth.getUser();
+                        const email = auth.user?.email;
+                        const teacherRecord = teachers.find(t => t.email === email);
+
                         if (teacherRecord) {
                           handleOpenAttendance(teacherRecord);
                         } else {
-                          alert('Teacher record not found');
+                          alert('Teacher record not found. Please contact admin.');
                         }
                       }}
                       className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold"
@@ -400,21 +423,24 @@ const TeachersPage: React.FC = () => {
                       Select a teacher to add attendance for their students.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {teachers.filter(t => t.status === 'Active').map(teacher => (
-                        <div key={teacher.id} className="border rounded-lg p-4">
-                          <div className="font-semibold">{teacher.full_name}</div>
-                          <div className="text-sm text-text-secondary">{teacher.email}</div>
-                          <div className="text-xs text-text-secondary mt-2">
-                            Assigned Students: 0
+                      {teachers.filter(t => t.status === 'Active').map(teacher => {
+                        const assignedCount = (studentAssignments[teacher.id] || []).length;
+                        return (
+                          <div key={teacher.id} className="border rounded-lg p-4">
+                            <div className="font-semibold">{teacher.full_name}</div>
+                            <div className="text-sm text-text-secondary">{teacher.email}</div>
+                            <div className="text-xs text-text-secondary mt-2">
+                              Assigned Students: {assignedCount}
+                            </div>
+                            <button
+                              onClick={() => handleOpenAttendance(teacher)}
+                              className="mt-3 px-3 py-1.5 rounded bg-blue-100 text-blue-700 text-sm font-semibold hover:bg-blue-200"
+                            >
+                              Add Attendance
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handleOpenAttendance(teacher)}
-                            className="mt-3 px-3 py-1.5 rounded bg-blue-100 text-blue-700 text-sm font-semibold hover:bg-blue-200"
-                          >
-                            Add Attendance
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -423,10 +449,41 @@ const TeachersPage: React.FC = () => {
               {/* Attendance History */}
               <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">
                 <h3 className="text-lg font-bold mb-4">Attendance History</h3>
-                <div className="text-sm text-text-secondary">
-                  <p>Recent attendance records will be displayed here.</p>
-                  <p className="mt-2">Features: Filter by date, teacher, student, export to Excel.</p>
-                </div>
+                {attendanceHistory.length === 0 ? (
+                  <div className="text-sm text-text-secondary text-center py-4">
+                    No attendance records yet
+                  </div>
+                ) : (
+                  <div className="overflow-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-text-secondary border-b">
+                          <th className="py-2 pr-4">Date</th>
+                          <th className="py-2 pr-4">Teacher</th>
+                          <th className="py-2 pr-4">Student</th>
+                          <th className="py-2 pr-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attendanceHistory.slice(0, 20).map((record: any, idx: number) => (
+                          <tr key={idx} className="border-b">
+                            <td className="py-2 pr-4">{new Date(record.attendance_date).toLocaleDateString()}</td>
+                            <td className="py-2 pr-4">{record.dashboard_teachers?.full_name || 'N/A'}</td>
+                            <td className="py-2 pr-4">{record.dashboard_students?.full_name || 'N/A'}</td>
+                            <td className="py-2 pr-4">
+                              <span className={`px-2 py-1 rounded text-xs ${record.status === 'Present'
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700'
+                                }`}>
+                                {record.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
