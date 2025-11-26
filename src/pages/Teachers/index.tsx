@@ -33,6 +33,8 @@ const TeachersPage: React.FC = () => {
   const [assignMap, setAssignMap] = useState<Record<string, Assignment[]>>({});
   const [studentAssignments, setStudentAssignments] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTeacherForAssign, setSelectedTeacherForAssign] = useState<string | null>(null);
 
   // Attendance state
   const [attendanceModalOpen, setAttendanceModalOpen] = useState(false);
@@ -65,6 +67,7 @@ const TeachersPage: React.FC = () => {
         }
       }
       await loadAll();
+      await loadStudentAssignments();
       await loadTimetable();
     })();
   }, []);
@@ -90,6 +93,72 @@ const TeachersPage: React.FC = () => {
     setStudentAssignments({});
 
     setLoading(false);
+  };
+
+  // Load student-teacher assignments
+  const loadStudentAssignments = async () => {
+    try {
+      const { data } = await supabase
+        .from('dashboard_teacher_student')
+        .select('teacher_id, student_id');
+
+      const assignments: Record<string, string[]> = {};
+      (data || []).forEach((item: any) => {
+        if (!assignments[item.teacher_id]) {
+          assignments[item.teacher_id] = [];
+        }
+        assignments[item.teacher_id].push(item.student_id);
+      });
+      setStudentAssignments(assignments);
+    } catch (error) {
+      console.error('Error loading student assignments:', error);
+    }
+  };
+
+  // Assign student to teacher
+  const handleAssignStudent = async (studentId: string, teacherId: string) => {
+    try {
+      const { error } = await supabase
+        .from('dashboard_teacher_student')
+        .insert([{ teacher_id: teacherId, student_id: studentId }]);
+
+      if (error) {
+        console.error('Error assigning student:', error);
+        alert('Failed to assign student');
+        return;
+      }
+
+      await loadStudentAssignments();
+      alert('Student assigned successfully!');
+    } catch (error) {
+      console.error('Error assigning student:', error);
+      alert('Failed to assign student');
+    }
+  };
+
+  // Unassign student from teacher
+  const handleUnassignStudent = async (studentId: string, teacherId: string) => {
+    if (!confirm('Are you sure you want to unassign this student?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('dashboard_teacher_student')
+        .delete()
+        .eq('teacher_id', teacherId)
+        .eq('student_id', studentId);
+
+      if (error) {
+        console.error('Error unassigning student:', error);
+        alert('Failed to unassign student');
+        return;
+      }
+
+      await loadStudentAssignments();
+      alert('Student unassigned successfully!');
+    } catch (error) {
+      console.error('Error unassigning student:', error);
+      alert('Failed to unassign student');
+    }
   };
 
   const loadTimetable = async () => {
@@ -207,43 +276,85 @@ const TeachersPage: React.FC = () => {
                     <input
                       type="text"
                       placeholder="Search students..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
                       className="w-full border rounded p-2 mb-3 text-sm"
                     />
-                    <div className="border rounded max-h-96 overflow-auto">
-                      {students.map(student => (
-                        <div
-                          key={student.id}
-                          className="p-3 border-b hover:bg-gray-50 flex items-center justify-between"
-                        >
-                          <span className="text-sm">{student.full_name}</span>
-                          <button
-                            className="text-xs px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                          >
-                            Assign
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    {!selectedTeacherForAssign ? (
+                      <div className="border rounded p-4 text-center text-text-secondary">
+                        Select a teacher from the right panel to assign students
+                      </div>
+                    ) : (
+                      <div className="border rounded max-h-96 overflow-auto">
+                        {students
+                          .filter(s =>
+                            s.full_name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+                            !(studentAssignments[selectedTeacherForAssign] || []).includes(s.id)
+                          )
+                          .map(student => (
+                            <div
+                              key={student.id}
+                              className="p-3 border-b hover:bg-gray-50 flex items-center justify-between"
+                            >
+                              <span className="text-sm">{student.full_name}</span>
+                              <button
+                                onClick={() => handleAssignStudent(student.id, selectedTeacherForAssign)}
+                                className="text-xs px-3 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                              >
+                                Assign
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Teachers and Their Assigned Students */}
                   <div>
                     <h3 className="text-sm font-semibold mb-3">Teachers & Assigned Students</h3>
-                    <div className="space-y-4">
-                      {teachers.filter(t => t.status === 'Active').map(teacher => (
-                        <div key={teacher.id} className="border rounded p-4">
-                          <div className="font-semibold mb-2">{teacher.full_name}</div>
-                          <div className="text-xs text-text-secondary mb-2">
-                            {teacher.email}
+                    <div className="space-y-4 max-h-96 overflow-auto">
+                      {teachers.filter(t => t.status === 'Active').map(teacher => {
+                        const assignedStudents = (studentAssignments[teacher.id] || [])
+                          .map(sid => students.find(s => s.id === sid))
+                          .filter(Boolean);
+                        const isSelected = selectedTeacherForAssign === teacher.id;
+
+                        return (
+                          <div
+                            key={teacher.id}
+                            className={`border rounded p-4 cursor-pointer transition ${isSelected ? 'border-blue-500 bg-blue-50' : 'hover:border-gray-400'
+                              }`}
+                            onClick={() => setSelectedTeacherForAssign(teacher.id)}
+                          >
+                            <div className="font-semibold mb-2">{teacher.full_name}</div>
+                            <div className="text-xs text-text-secondary mb-2">
+                              {teacher.email}
+                            </div>
+                            <div className="text-xs text-text-secondary mb-2">
+                              Assigned Students: {assignedStudents.length}
+                            </div>
+                            {assignedStudents.length > 0 && (
+                              <div className="mt-3 space-y-1">
+                                <div className="text-xs font-semibold">Students:</div>
+                                {assignedStudents.map((student: any) => (
+                                  <div key={student.id} className="flex items-center justify-between text-xs bg-white p-2 rounded">
+                                    <span>{student.full_name}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleUnassignStudent(student.id, teacher.id);
+                                      }}
+                                      className="text-red-600 hover:text-red-800"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-xs text-text-secondary mb-2">
-                            Assigned Students: 0
-                          </div>
-                          <div className="text-xs text-blue-600">
-                            Click to view/manage students
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
