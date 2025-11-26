@@ -591,74 +591,94 @@ const Cases: React.FC = () => {
             </div>
 
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Cases Sidebar */}
-              <aside className="lg:col-span-4 xl:col-span-3 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 flex flex-col">
-                <div className="flex items-center justify-between mb-2 cursor-pointer" onClick={() => setIsAllCasesCollapsed(!isAllCasesCollapsed)}>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold">All Cases</h3>
-                    <button className="text-text-secondary hover:text-text-primary">
-                      {isAllCasesCollapsed ? '▶' : '▼'}
-                    </button>
+              {/* Cases Sidebar - Collapsible */}
+              {!isAllCasesCollapsed && (
+                <aside className="lg:col-span-4 xl:col-span-3 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 flex flex-col">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold">All Cases</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-text-secondary">{filteredCases.length} total</span>
+                      <button
+                        onClick={() => setIsAllCasesCollapsed(true)}
+                        className="text-text-secondary hover:text-text-primary p-1"
+                        title="Collapse sidebar"
+                      >
+                        ◀
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-sm text-text-secondary">{filteredCases.length} total</span>
-                </div>
 
-                {!isAllCasesCollapsed && (
-                  <>
-                    {/* Filters */}
-                    <div className="mb-3 grid grid-cols-1 gap-2">
-                      <input value={search} onChange={e => setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
-                      <div className="grid grid-cols-3 gap-2">
-                        <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
-                          {branches.map(b => <option key={b}>{b}</option>)}
-                        </select>
-                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
-                          {statuses.map(s => <option key={s}>{s}</option>)}
-                        </select>
-                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border rounded p-2 text-sm">
-                          {types.map(t => <option key={t}>{t}</option>)}
-                        </select>
-                      </div>
-                      <div className="text-right">
-                        <button type="button" onClick={() => { setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
-                      </div>
+                  {/* Filters */}
+                  <div className="mb-3 grid grid-cols-1 gap-2">
+                    <input value={search} onChange={e => setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
+                    <div className="grid grid-cols-3 gap-2">
+                      <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
+                        {branches.map(b => <option key={b}>{b}</option>)}
+                      </select>
+                      <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
+                        {statuses.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                      <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border rounded p-2 text-sm">
+                        {types.map(t => <option key={t}>{t}</option>)}
+                      </select>
                     </div>
+                    <div className="text-right">
+                      <button type="button" onClick={() => { setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
+                    </div>
+                  </div>
 
-                    <div className="-mx-2 px-2 overflow-y-auto" style={{ maxHeight: '520px' }}>
-                      {filteredCases.map((c, idx) => {
-                        const active = c.caseId === activeCaseId;
-                        return (
-                          <div
-                            key={c.caseId}
-                            draggable
-                            onClick={() => { setActiveCaseId(c.caseId); setContentMode('tasks'); }}
-                            onDragStart={(e) => { e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
-                            className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3 cursor-pointer`}
-                            title="Click to view tasks • Drag onto a Kanban column to change status"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <div className="text-xs text-text-muted">{c.caseId}</div>
-                                <div className="font-semibold">{c.title}</div>
-                              </div>
-                              <button onClick={(e) => { e.stopPropagation(); setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
-                                View details &gt;
-                              </button>
+                  <div className="-mx-2 px-2 overflow-y-auto" style={{ maxHeight: '520px' }}>
+                    {filteredCases.map((c, idx) => {
+                      const active = c.caseId === activeCaseId;
+                      return (
+                        <div
+                          key={c.caseId}
+                          draggable
+                          onClick={() => { setActiveCaseId(c.caseId); setContentMode('tasks'); }}
+                          onDragStart={(e) => { e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
+                          className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3 cursor-pointer`}
+                          title="Click to view tasks • Drag onto a Kanban column to change status"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs text-text-muted">{c.caseId}</div>
+                              <div className="font-semibold">{c.title}</div>
                             </div>
-                            {!active && (
-                              <div className="mt-1 text-xs text-text-secondary">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
-                            )}
+                            <button onClick={(e) => { e.stopPropagation(); setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
+                              View details &gt;
+                            </button>
                           </div>
-                        );
-                      })}
+                          {!active && (
+                            <div className="mt-1 text-xs text-text-secondary">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </aside>
+              )}
+
+              {/* Collapsed Sidebar Toggle Button */}
+              {isAllCasesCollapsed && (
+                <div className="lg:col-span-1 flex items-start">
+                  <button
+                    onClick={() => setIsAllCasesCollapsed(false)}
+                    className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-3 hover:bg-gray-50"
+                    title="Expand sidebar"
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-xl">▶</span>
+                      <span className="text-xs font-semibold writing-mode-vertical transform rotate-180">All Cases</span>
                     </div>
-                  </>
-                )}
-              </aside>
+                  </button>
+                </div>
+              )}
 
               {/* Tasks Section */}
               <section
-                className={`lg:col-span-8 xl:col-span-9 rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 ${isCaseDragOver ? 'border-2 border-dashed border-[#ffa332] bg-orange-50/20' : 'bg-white'}`}
+                className={`${isAllCasesCollapsed ? 'lg:col-span-11 xl:col-span-11' : 'lg:col-span-8 xl:col-span-9'} rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 ${isCaseDragOver ? 'border-2 border-dashed border-[#ffa332] bg-orange-50/20' : 'bg-white'}`}
                 onDragOver={(e) => { if (e.dataTransfer.types.includes('text/case')) { e.preventDefault(); } }}
                 onDragEnter={(e) => { if (e.dataTransfer.types.includes('text/case')) setIsCaseDragOver(true); }}
                 onDragLeave={(e) => { setIsCaseDragOver(false); }}
