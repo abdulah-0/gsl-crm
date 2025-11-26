@@ -22,6 +22,7 @@ const TeachersPage: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>('assign');
@@ -63,6 +64,7 @@ const TeachersPage: React.FC = () => {
         const roleStr = (me?.role || (sess.user as any)?.app_metadata?.role || (sess.user as any)?.user_metadata?.role || '').toString();
         setRole(roleStr);
         setCurrentUserId(me?.id || '');
+        setCurrentUserEmail(email || '');
 
         const rl = roleStr.toLowerCase();
         const admin = rl.includes('super') || rl.includes('admin');
@@ -616,10 +618,19 @@ const TeachersPage: React.FC = () => {
                     >
                       <option value="">Select a student</option>
                       {(() => {
-                        // Get current teacher's assigned students
-                        const currentTeacher = teachers.find(t => t.email === role);
-                        const assignedStudentIds = currentTeacher ? (studentAssignments[currentTeacher.id] || []) : [];
+                        // Get current user's email to find their teacher record
+                        const currentTeacher = teachers.find(t => t.email === currentUserEmail);
+
+                        if (!currentTeacher) {
+                          return <option disabled>No teacher record found</option>;
+                        }
+
+                        const assignedStudentIds = studentAssignments[currentTeacher.id] || [];
                         const assignedStudents = students.filter(s => assignedStudentIds.includes(s.id));
+
+                        if (assignedStudents.length === 0) {
+                          return <option disabled>No students assigned</option>;
+                        }
 
                         return assignedStudents.map(student => (
                           <option key={student.id} value={student.id}>
