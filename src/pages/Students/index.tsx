@@ -200,24 +200,60 @@ const StudentsPage: React.FC = () => {
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     if (sp.get('from_lead') === '1') {
-      if (canAdd) setTab('add');
-      const leadIdStr = sp.get('lead_id');
-      if (leadIdStr) {
-        const parsed = Number(leadIdStr);
-        if (!Number.isNaN(parsed)) setSourceLeadId(parsed);
+      setTab('add');
+      const leadId = sp.get('lead_id');
+      const fullName = sp.get('full_name');
+      const fatherName = sp.get('father_name');
+      const cnic = sp.get('cnic');
+      const email = sp.get('email');
+      const phone = sp.get('phone');
+      const city = sp.get('city');
+      const dob = sp.get('dob');
+      const service = sp.get('service');
+      const enrollType = sp.get('enrollment_type') as EnrollmentType;
+
+      // Set enrollment type based on parameter
+      if (enrollType === 'consultancy') {
+        setEnrollmentType('consultancy');
+        setConsultSf(prev => ({
+          ...prev,
+          basic_name: fullName || '',
+          basic_father_name: fatherName || '',
+          basic_cnic: cnic || '',
+          basic_email: email || '',
+          basic_phone: phone || '',
+          basic_address: city || '',
+          basic_dob: dob || '',
+        }));
+      } else if (enrollType === 'test') {
+        setEnrollmentType('test');
+        const [first, ...rest] = (fullName || '').split(' ');
+        setTestForm(prev => ({
+          ...prev,
+          first_name: first || '',
+          last_name: rest.join(' ') || '',
+          father_name: fatherName || '',
+          cnic: cnic || '',
+          email: email || '',
+          mobile: phone || '',
+          address: city || '',
+          date_of_birth: dob || '',
+        }));
+      } else {
+        // Default to course
+        setEnrollmentType('course');
+        setS(prev => ({
+          ...prev,
+          full_name: fullName || '',
+          father_name: fatherName || '',
+          cnic: cnic || '',
+          email: email || '',
+          phone: phone || '',
+          city: city || '',
+          dob: dob || '',
+          program_title: service || '',
+        }));
       }
-      setS(prev => ({
-        ...prev,
-        full_name: sp.get('full_name') || prev.full_name,
-        father_name: sp.get('father_name') || prev.father_name,
-        cnic: sp.get('cnic') || prev.cnic,
-        email: sp.get('email') || prev.email,
-        phone: sp.get('phone') || prev.phone,
-        city: sp.get('city') || prev.city,
-        dob: sp.get('dob') || prev.dob,
-        program_title: sp.get('service') || prev.program_title,
-        reference: sp.get('reference') || prev.reference,
-      }));
     }
   }, [location.search, canAdd]);
   // Prefill service fee into invoice from selected service price when opening the modal
