@@ -571,9 +571,44 @@ const LeadsPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Excel Upload Modal */}
+        {showUploadModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+              <h2 className="text-xl font-bold mb-4">Upload Excel File</h2>
+              <p className="text-sm text-text-secondary mb-4">
+                Upload an Excel file (.xlsx, .xls) with the following columns:
+              </p>
+              <div className="text-xs bg-gray-50 p-3 rounded mb-4 space-y-1">
+                <div><strong>Required:</strong> Full Name, Father Name, CNIC, Phone, Email</div>
+                <div><strong>Optional:</strong> City, Service, Source</div>
+              </div>
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleExcelUpload}
+                disabled={uploading}
+                className="w-full border rounded p-2 mb-4"
+              />
+              {uploading && (
+                <div className="text-sm text-center text-text-secondary mb-4">
+                  Processing file...
+                </div>
+              )}
+              <button
+                onClick={() => setShowUploadModal(false)}
+                disabled={uploading}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
 };
 
-
+export default LeadsPage;
