@@ -225,6 +225,13 @@ const LeadsPage: React.FC = () => {
     await loadLeads();
   };
 
+  const updateRemarks = async (lead: Lead, remarks: string) => {
+    const { error } = await supabase.from('leads').update({ remarks }).eq('id', lead.id);
+    if (error) { alert(error.message); return; }
+    // Update local state without reloading to avoid losing focus
+    setItems(prev => prev.map(item => item.id === lead.id ? { ...item, remarks } : item));
+  };
+
   const handleConvert = (lead: Lead) => {
     setSelectedLeadForEnroll(lead);
     setShowEnrollModal(true);
@@ -485,6 +492,7 @@ const LeadsPage: React.FC = () => {
                       <th className="text-left p-2">Source</th>
                       <th className="text-left p-2">Status</th>
                       <th className="text-left p-2">Stage</th>
+                      <th className="text-left p-2">Remarks</th>
                       <th className="text-right p-2">Actions</th>
                     </tr>
                   </thead>
@@ -510,6 +518,15 @@ const LeadsPage: React.FC = () => {
                             <option value="Case lose">Case lose</option>
                           </select>
                         </td>
+                        <td className="p-2">
+                          <input
+                            type="text"
+                            value={l.remarks || ''}
+                            onChange={(e) => updateRemarks(l, e.target.value)}
+                            placeholder="Add remarks..."
+                            className="border rounded p-1 text-sm w-full"
+                          />
+                        </td>
                         <td className="p-2 text-right space-x-2">
                           {l.status !== 'confirmed' && (
                             <button onClick={() => updateStatus(l, 'confirmed')} className="text-green-700 hover:underline">Mark Confirmed</button>
@@ -519,7 +536,7 @@ const LeadsPage: React.FC = () => {
                       </tr>
                     ))}
                     {filtered.length === 0 && (
-                      <tr><td className="p-3 text-text-secondary" colSpan={7}>No leads found.</td></tr>
+                      <tr><td className="p-3 text-text-secondary" colSpan={8}>No leads found.</td></tr>
                     )}
                   </tbody>
                 </table>
