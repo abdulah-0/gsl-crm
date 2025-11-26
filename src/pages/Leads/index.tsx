@@ -24,6 +24,7 @@ export type Lead = {
   branch: string | null;
   source: LeadSource | null;
   status: LeadStatus;
+  stage?: string | null;
   assigned_to_email: string | null;
   university_id: number | null;
   tags: string[] | null;
@@ -78,12 +79,16 @@ const LeadsPage: React.FC = () => {
   const [form, setForm] = useState<LeadFormState>(makeDefaultLeadForm());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [services, setServices] = useState<Array<{id:string; name:string}>>([]);
+  const [services, setServices] = useState<Array<{ id: string; name: string }>>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
   const [agreeAll, setAgreeAll] = useState(false);
   const [declTextAgree, setDeclTextAgree] = useState(false);
   const [recentLead, setRecentLead] = useState<Lead | null>(null);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [selectedLeadForEnroll, setSelectedLeadForEnroll] = useState<Lead | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
 
   const loadLeads = async () => {
@@ -214,19 +219,105 @@ const LeadsPage: React.FC = () => {
     await loadLeads();
   };
 
+  const updateStage = async (lead: Lead, stage: string) => {
+    const { error } = await supabase.from('leads').update({ stage }).eq('id', lead.id);
+    if (error) { alert(error.message); return; }
+    await loadLeads();
+  };
+
   const handleConvert = (lead: Lead) => {
+    setSelectedLeadForEnroll(lead);
+    setShowEnrollModal(true);
+  };
+
+  const proceedWithEnrollment = (enrollmentType: 'course' | 'consultancy' | 'test') => {
+    if (!selectedLeadForEnroll) return;
+
     const params = new URLSearchParams();
     params.set('from_lead', '1');
-    params.set('lead_id', String(lead.id));
-    if (lead.full_name) params.set('full_name', lead.full_name);
-    if (lead.father_name) params.set('father_name', lead.father_name);
-    if (lead.cnic) params.set('cnic', lead.cnic);
-    if (lead.email) params.set('email', lead.email);
-    if (lead.phone) params.set('phone', lead.phone);
-    if (lead.city) params.set('city', lead.city);
-    if (lead.dob) params.set('dob', lead.dob);
-    if (lead.service_name) params.set('service', lead.service_name);
+    params.set('lead_id', String(selectedLeadForEnroll.id));
+    params.set('enrollment_type', enrollmentType);
+    if (selectedLeadForEnroll.full_name) params.set('full_name', selectedLeadForEnroll.full_name);
+    if (selectedLeadForEnroll.father_name) params.set('father_name', selectedLeadForEnroll.father_name);
+    if (selectedLeadForEnroll.cnic) params.set('cnic', selectedLeadForEnroll.cnic);
+    if (selectedLeadForEnroll.email) params.set('email', selectedLeadForEnroll.email);
+    if (selectedLeadForEnroll.phone) params.set('phone', selectedLeadForEnroll.phone);
+    if (selectedLeadForEnroll.city) params.set('city', selectedLeadForEnroll.city);
+    if (selectedLeadForEnroll.dob) params.set('dob', selectedLeadForEnroll.dob);
+    if (selectedLeadForEnroll.service_name) params.set('service', selectedLeadForEnroll.service_name);
+
+    setShowEnrollModal(false);
+    setSelectedLeadForEnroll(null);
     navigate(`/students?${params.toString()}`);
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Dynamically import xlsx
+      const XLSX = await import('xlsx');
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+          if (data.length === 0) {
+            alert('Excel file is empty');
+            setUploading(false);
+            return;
+          }
+
+          // Map Excel columns to database fields
+          const leads = data.map((row: any) => ({
+            full_name: row['Full Name'] || row['full_name'] || '',
+            father_name: row['Father Name'] || row['father_name'] || '',
+            cnic: String(row['CNIC'] || row['cnic'] || '').replace(/[^0-9]/g, ''),
+            phone: String(row['Phone'] || row['phone'] || ''),
+            email: row['Email'] || row['email'] || '',
+            city: row['City'] || row['city'] || null,
+            service_name: row['Service'] || row['service'] || null,
+            source: row['Source'] || row['source'] || null,
+            branch: currentBranch || null,
+            status: 'new' as LeadStatus,
+            stage: 'Entry stage',
+            assigned_to_email: currentUserEmail || null,
+            lead_date: new Date().toISOString().slice(0, 10),
+          }));
+
+          // Validate required fields
+          const invalid = leads.filter(l => !l.full_name || !l.father_name || !l.cnic || !l.phone || !l.email);
+          if (invalid.length > 0) {
+            alert(`${invalid.length} rows have missing required fields (Full Name, Father Name, CNIC, Phone, Email)`);
+            setUploading(false);
+            return;
+          }
+
+          // Bulk insert
+          const { error } = await supabase.from('leads').insert(leads);
+          if (error) throw error;
+
+          alert(`Successfully imported ${leads.length} leads`);
+          setShowUploadModal(false);
+          await loadLeads();
+        } catch (err: any) {
+          alert(err?.message || 'Failed to process Excel file');
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsBinaryString(file);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to upload file');
+      setUploading(false);
+    }
   };
 
   return (
@@ -238,13 +329,21 @@ const LeadsPage: React.FC = () => {
         <section className="px-4 sm:px-6 lg:px-8 mt-6">
           <div className="flex items-center justify-between">
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">Leads</h1>
-            <div className="bg-white rounded-full p-1 shadow flex">
-              <button onClick={()=>setTab('add')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='add'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Add Lead</button>
-              <button onClick={()=>setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab==='list'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>All Leads</button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="px-4 py-2 rounded-full text-sm font-semibold bg-green-600 text-white hover:bg-green-700"
+              >
+                📊 Upload Excel
+              </button>
+              <div className="bg-white rounded-full p-1 shadow flex">
+                <button onClick={() => setTab('add')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab === 'add' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Add Lead</button>
+                <button onClick={() => setTab('list')} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab === 'list' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>All Leads</button>
+              </div>
             </div>
           </div>
 
-          {tab==='add' && (
+          {tab === 'add' && (
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
               <form onSubmit={onSubmit} className="lg:col-span-2 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] text-sm">
                 <h3 className="font-bold text-lg">Program Information</h3>
@@ -252,7 +351,7 @@ const LeadsPage: React.FC = () => {
                   <label className="text-sm"><span className="text-text-secondary">Service</span>
                     <select
                       value={form.service_name}
-                      onChange={e=>setForm({...form, service_name:e.target.value})}
+                      onChange={e => setForm({ ...form, service_name: e.target.value })}
                       className="mt-1 w-full border rounded p-2"
                       required
                     >
@@ -273,20 +372,20 @@ const LeadsPage: React.FC = () => {
 
                 <h3 className="mt-6 font-bold text-lg">Personal Details</h3>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Full Name (CAPITAL)</span><input value={form.full_name} onChange={e=>setForm({...form, full_name:e.target.value.toUpperCase()})} className="mt-1 w-full border rounded p-2" required/></label>
-                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={form.father_name} onChange={e=>setForm({...form, father_name:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                  <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                  <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} className="mt-1 w-full border rounded p-2" required/></label>
-                  <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={form.cnic} onChange={e=>setForm({...form, cnic:e.target.value.replace(/[^0-9]/g,'')})} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required/></label>
-                  <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={form.dob} onChange={e=>setForm({...form, dob:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-                  <label className="text-sm"><span className="text-text-secondary">City</span><input value={form.city} onChange={e=>setForm({...form, city:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
-                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Address (optional)</span><input value={form.address} onChange={e=>setForm({...form, address:e.target.value})} className="mt-1 w-full border rounded p-2"/></label>
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Full Name (CAPITAL)</span><input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value.toUpperCase() })} className="mt-1 w-full border rounded p-2" required /></label>
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={form.father_name} onChange={e => setForm({ ...form, father_name: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                  <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                  <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
+                  <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={form.cnic} onChange={e => setForm({ ...form, cnic: e.target.value.replace(/[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                  <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={form.dob} onChange={e => setForm({ ...form, dob: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="text-sm"><span className="text-text-secondary">City</span><input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Address (optional)</span><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                 </div>
 
                 <h3 className="mt-6 font-bold text-lg">Lead Info</h3>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label className="text-sm"><span className="text-text-secondary">Source</span>
-                    <select value={form.source} onChange={e=>setForm({...form, source:e.target.value as LeadSource})} className="mt-1 w-full border rounded p-2">
+                    <select value={form.source} onChange={e => setForm({ ...form, source: e.target.value as LeadSource })} className="mt-1 w-full border rounded p-2">
                       <option value="">Select Source</option>
                       <option value="facebook">Facebook</option>
                       <option value="instagram">Instagram</option>
@@ -297,7 +396,7 @@ const LeadsPage: React.FC = () => {
                     </select>
                   </label>
                   <label className="text-sm"><span className="text-text-secondary">Status</span>
-                    <select value={form.status} onChange={e=>setForm({...form, status:e.target.value as LeadStatus})} className="mt-1 w-full border rounded p-2">
+                    <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value as LeadStatus })} className="mt-1 w-full border rounded p-2">
                       <option value="new">New</option>
                       <option value="documentation">Documentation</option>
                       <option value="university">University</option>
@@ -307,8 +406,8 @@ const LeadsPage: React.FC = () => {
                       <option value="rejected">Rejected</option>
                     </select>
                   </label>
-                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Assigned To (email)</span><input value={form.assigned_to_email} onChange={e=>setForm({...form, assigned_to_email:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
-                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Tags (comma separated)</span><input value={form.tags} onChange={e=>setForm({...form, tags:e.target.value})} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Assigned To (email)</span><input value={form.assigned_to_email} onChange={e => setForm({ ...form, assigned_to_email: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
+                  <label className="sm:col-span-2 text-sm"><span className="text-text-secondary">Tags (comma separated)</span><input value={form.tags} onChange={e => setForm({ ...form, tags: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                 </div>
 
                 <h3 className="mt-6 font-bold text-lg">Terms & Conditions</h3>
@@ -319,16 +418,16 @@ const LeadsPage: React.FC = () => {
                     'Attendance must be 90%.',
                     'Course fee payable before classes commence.',
                     'Tuition fee is non-refundable.',
-                  ].map((t, i)=> (
-                    <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e)=>setAgreeAll(e.target.checked)} className="mt-1"/><span>{t}</span></label>
+                  ].map((t, i) => (
+                    <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e) => setAgreeAll(e.target.checked)} className="mt-1" /><span>{t}</span></label>
                   ))}
                 </div>
 
                 <h3 className="mt-6 font-bold text-lg">Declaration</h3>
-                <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e)=>setDeclTextAgree(e.target.checked)} className="mt-1"/><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
+                <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={declTextAgree} onChange={(e) => setDeclTextAgree(e.target.checked)} className="mt-1" /><span>I declare that I have read and agree with the above rules and regulations. I affirm that the above information is correct to the best of my knowledge. If I violate rules, the institute reserves the right to expel me.</span></label>
 
                 <div className="mt-6 text-right">
-                  <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving?'Saving...':'Save Lead'}</button>
+                  <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving ? 'Saving...' : 'Save Lead'}</button>
                 </div>
               </form>
 
@@ -346,7 +445,7 @@ const LeadsPage: React.FC = () => {
                       <div className="mt-1 text-xs text-text-secondary">{recentLead.full_name} · {recentLead.email} · {recentLead.phone}</div>
                       <button
                         type="button"
-                        onClick={()=>handleConvert(recentLead)}
+                        onClick={() => handleConvert(recentLead)}
                         className="mt-3 inline-flex items-center px-3 py-2 rounded bg-[#ffa332] text-white font-semibold text-xs"
                       >
                         Enroll Lead in Students
@@ -358,12 +457,12 @@ const LeadsPage: React.FC = () => {
             </div>
           )}
 
-          {tab==='list' && (
+          {tab === 'list' && (
             <div className="mt-6 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
               <div className="flex flex-wrap items-center gap-3 justify-between text-sm">
                 <div className="flex items-center gap-2">
-                  <input placeholder="Search by name, email, phone" value={search} onChange={e=>setSearch(e.target.value)} className="border rounded p-2 w-64" />
-                  <select value={statusF} onChange={e=>setStatusF(e.target.value as any)} className="border rounded p-2">
+                  <input placeholder="Search by name, email, phone" value={search} onChange={e => setSearch(e.target.value)} className="border rounded p-2 w-64" />
+                  <select value={statusF} onChange={e => setStatusF(e.target.value as any)} className="border rounded p-2">
                     <option value="All">All Statuses</option>
                     <option value="new">New</option>
                     <option value="documentation">Documentation</option>
@@ -385,6 +484,7 @@ const LeadsPage: React.FC = () => {
                       <th className="text-left p-2">Phone</th>
                       <th className="text-left p-2">Source</th>
                       <th className="text-left p-2">Status</th>
+                      <th className="text-left p-2">Stage</th>
                       <th className="text-right p-2">Actions</th>
                     </tr>
                   </thead>
@@ -396,16 +496,30 @@ const LeadsPage: React.FC = () => {
                         <td className="p-2">{l.phone || '—'}</td>
                         <td className="p-2 capitalize">{l.source || '—'}</td>
                         <td className="p-2 capitalize">{l.status}</td>
+                        <td className="p-2">
+                          <select
+                            value={l.stage || 'Entry stage'}
+                            onChange={(e) => updateStage(l, e.target.value)}
+                            className="border rounded p-1 text-sm w-full"
+                          >
+                            <option value="Entry stage">Entry stage</option>
+                            <option value="Initial Stage">Initial Stage</option>
+                            <option value="Follow up">Follow up</option>
+                            <option value="Near to Confirm">Near to Confirm</option>
+                            <option value="Confirmed">Confirmed</option>
+                            <option value="Case lose">Case lose</option>
+                          </select>
+                        </td>
                         <td className="p-2 text-right space-x-2">
                           {l.status !== 'confirmed' && (
-                            <button onClick={()=>updateStatus(l, 'confirmed')} className="text-green-700 hover:underline">Mark Confirmed</button>
+                            <button onClick={() => updateStatus(l, 'confirmed')} className="text-green-700 hover:underline">Mark Confirmed</button>
                           )}
-                          <button onClick={()=>handleConvert(l)} className="text-blue-600 hover:underline">Enroll Lead in Students</button>
+                          <button onClick={() => handleConvert(l)} className="text-blue-600 hover:underline">Enroll Lead in Students</button>
                         </td>
                       </tr>
                     ))}
-                    {filtered.length===0 && (
-                      <tr><td className="p-3 text-text-secondary" colSpan={6}>No leads found.</td></tr>
+                    {filtered.length === 0 && (
+                      <tr><td className="p-3 text-text-secondary" colSpan={7}>No leads found.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -413,10 +527,53 @@ const LeadsPage: React.FC = () => {
             </div>
           )}
         </section>
+
+        {/* Enrollment Type Selection Modal */}
+        {showEnrollModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl">
+              <h2 className="text-xl font-bold mb-4">Select Enrollment Type</h2>
+              <p className="text-sm text-text-secondary mb-6">
+                Choose the type of enrollment for {selectedLeadForEnroll?.full_name}:
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => proceedWithEnrollment('course')}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg hover:border-[#ffa332] hover:bg-orange-50 transition-colors text-left"
+                >
+                  <div className="font-semibold">Course Enrollment</div>
+                  <div className="text-xs text-text-secondary mt-1">Enroll student in a course program</div>
+                </button>
+                <button
+                  onClick={() => proceedWithEnrollment('consultancy')}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg hover:border-[#ffa332] hover:bg-orange-50 transition-colors text-left"
+                >
+                  <div className="font-semibold">Consultancy</div>
+                  <div className="text-xs text-text-secondary mt-1">Enroll for consultancy services</div>
+                </button>
+                <button
+                  onClick={() => proceedWithEnrollment('test')}
+                  className="w-full p-4 border-2 border-gray-200 rounded-lg hover:border-[#ffa332] hover:bg-orange-50 transition-colors text-left"
+                >
+                  <div className="font-semibold">Test Preparation</div>
+                  <div className="text-xs text-text-secondary mt-1">Enroll for test preparation program</div>
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEnrollModal(false);
+                  setSelectedLeadForEnroll(null);
+                }}
+                className="mt-6 w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
 };
 
-export default LeadsPage;
 
