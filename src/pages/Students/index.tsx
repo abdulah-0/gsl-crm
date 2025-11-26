@@ -182,6 +182,7 @@ const StudentsPage: React.FC = () => {
   const [fBatch, setFBatch] = useState('All');
   const [fCity, setFCity] = useState('All');
   const [editItem, setEditItem] = useState<Student | null>(null);
+  const [mockTests, setMockTests] = useState<any[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -1171,6 +1172,56 @@ const StudentsPage: React.FC = () => {
               <label><span className="text-text-secondary">Batch No.</span><input value={editItem.batch_no} onChange={e => setEditItem({ ...editItem, batch_no: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
               <label><span className="text-text-secondary">Status</span><select value={editItem.status} onChange={e => setEditItem({ ...editItem!, status: e.target.value as Student['status'] })} className="mt-1 w-full border rounded p-2"><option>Active</option><option>Completed</option><option>Withdrawn</option></select></label>
             </div>
+
+            {/* Mock Tests Section */}
+            <div className="mt-4 border-t pt-4">
+              <h4 className="text-sm font-bold mb-2">Mock Test Scores</h4>
+              {(() => {
+                // Load mock tests when modal opens
+                React.useEffect(() => {
+                  if (editItem) {
+                    (async () => {
+                      const { data } = await supabase
+                        .from('student_mock_tests')
+                        .select('*')
+                        .eq('student_id', editItem.id)
+                        .order('test_date', { ascending: false });
+                      setMockTests(data || []);
+                    })();
+                  }
+                }, [editItem?.id]);
+
+                return null;
+              })()}
+
+              {mockTests.length === 0 ? (
+                <div className="text-xs text-text-secondary">No mock test scores recorded yet</div>
+              ) : (
+                <div className="max-h-48 overflow-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left p-2">Test Name</th>
+                        <th className="text-left p-2">Score</th>
+                        <th className="text-left p-2">Date</th>
+                        <th className="text-left p-2">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {mockTests.map((test, idx) => (
+                        <tr key={idx} className="border-t">
+                          <td className="p-2">{test.test_name}</td>
+                          <td className="p-2 font-semibold">{test.score}</td>
+                          <td className="p-2">{new Date(test.test_date).toLocaleDateString()}</td>
+                          <td className="p-2">{test.notes || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
             <div className="mt-5 text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save</button></div>
           </form>
         </div>
