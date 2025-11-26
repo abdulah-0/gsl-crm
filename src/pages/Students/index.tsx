@@ -183,6 +183,8 @@ const StudentsPage: React.FC = () => {
   const [fCity, setFCity] = useState('All');
   const [editItem, setEditItem] = useState<Student | null>(null);
   const [mockTests, setMockTests] = useState<any[]>([]);
+  const [mockTestsModalOpen, setMockTestsModalOpen] = useState(false);
+  const [selectedStudentForTests, setSelectedStudentForTests] = useState<Student | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -1277,9 +1279,70 @@ const StudentsPage: React.FC = () => {
         </div>
       )}
 
+      {/* Mock Tests Modal */}
+      {mockTestsModalOpen && selectedStudentForTests && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+          <div className="bg-white w-full max-w-3xl rounded-xl p-6 shadow-xl max-h-[80vh] overflow-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold">Mock Test Scores</h3>
+                <div className="text-sm text-text-secondary mt-1">
+                  {selectedStudentForTests.full_name} ({selectedStudentForTests.id})
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setMockTestsModalOpen(false);
+                  setSelectedStudentForTests(null);
+                  setMockTests([]);
+                }}
+                className="text-text-secondary hover:text-gray-700 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {mockTests.length === 0 ? (
+              <div className="text-center py-8 text-text-secondary">
+                <p>No mock test scores recorded yet</p>
+              </div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="text-left p-3 font-semibold">Test Name</th>
+                      <th className="text-left p-3 font-semibold">Score</th>
+                      <th className="text-left p-3 font-semibold">Date</th>
+                      <th className="text-left p-3 font-semibold">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mockTests.map((test, idx) => (
+                      <tr key={idx} className="border-t hover:bg-gray-50">
+                        <td className="p-3">{test.test_name}</td>
+                        <td className="p-3">
+                          <span className="font-semibold text-blue-600">{test.score}</span>
+                        </td>
+                        <td className="p-3">{new Date(test.test_date).toLocaleDateString()}</td>
+                        <td className="p-3 text-text-secondary">{test.notes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-4 text-xs text-text-secondary">
+              Total Tests: {mockTests.length}
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 };
 
 export default StudentsPage;
-
