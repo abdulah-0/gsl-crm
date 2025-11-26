@@ -49,6 +49,9 @@ type CaseItem = {
   employee?: string;
   assignees: string[];
   createdAt?: string;
+  updatedAt?: string;
+  universityName?: string;
+  courseName?: string;
   active: Task[];
   backlog: Task[];
 };
@@ -143,9 +146,23 @@ const Cases: React.FC = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at')
+        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, updated_at, university_id, universities(name)')
         .order('created_at', { ascending: false });
       if (!error) {
+        // Fetch course information for each case
+        const caseIds = (data ?? []).map((row: any) => row.case_number || String(row.id));
+        const { data: applications } = await supabase
+          .from('case_university_applications')
+          .select('case_id, course_applied')
+          .in('case_id', caseIds);
+
+        const courseMap = new Map<string, string>();
+        (applications || []).forEach((app: any) => {
+          if (!courseMap.has(app.case_id)) {
+            courseMap.set(app.case_id, app.course_applied);
+          }
+        });
+
         const mapped: CaseItem[] = (data ?? []).map((row: any) => ({
           caseId: row.case_number || String(row.id),
           title: row.title || 'Untitled',
@@ -155,6 +172,9 @@ const Cases: React.FC = () => {
           employee: row.employee || undefined,
           assignees: Array.isArray(row.assignees) ? row.assignees : (row.employee ? [row.employee] : []),
           createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          universityName: row.universities?.name || undefined,
+          courseName: courseMap.get(row.case_number || String(row.id)) || undefined,
           active: [],
           backlog: [],
         }));
@@ -175,6 +195,7 @@ const Cases: React.FC = () => {
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
   const [view, setView] = useState<'list' | 'grid' | 'board'>('list');
   const [contentMode, setContentMode] = useState<'cases' | 'tasks'>('cases');
+  const [isAllCasesCollapsed, setIsAllCasesCollapsed] = useState(false);
 
   const [boardDropCol, setBoardDropCol] = useState<CaseStage | null>(null);
 
@@ -560,58 +581,67 @@ const Cases: React.FC = () => {
             <div className="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Cases Sidebar */}
               <aside className="lg:col-span-4 xl:col-span-3 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4 flex flex-col">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold">All Cases</h3>
+                <div className="flex items-center justify-between mb-2 cursor-pointer" onClick={() => setIsAllCasesCollapsed(!isAllCasesCollapsed)}>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold">All Cases</h3>
+                    <button className="text-text-secondary hover:text-text-primary">
+                      {isAllCasesCollapsed ? '▶' : '▼'}
+                    </button>
+                  </div>
                   <span className="text-sm text-text-secondary">{filteredCases.length} total</span>
                 </div>
 
-                {/* Filters */}
-                <div className="mb-3 grid grid-cols-1 gap-2">
-                  <input value={search} onChange={e => setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
-                  <div className="grid grid-cols-3 gap-2">
-                    <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
-                      {branches.map(b => <option key={b}>{b}</option>)}
-                    </select>
-                    <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
-                      {statuses.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                    <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border rounded p-2 text-sm">
-                      {types.map(t => <option key={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <div className="text-right">
-                    <button type="button" onClick={() => { setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
-                  </div>
-                </div>
-
-                <div className="-mx-2 px-2 overflow-y-auto" style={{ maxHeight: '520px' }}>
-                  {filteredCases.map((c, idx) => {
-                    const active = c.caseId === activeCaseId;
-                    return (
-                      <div
-                        key={c.caseId}
-                        draggable
-                        onClick={() => { setActiveCaseId(c.caseId); setContentMode('tasks'); }}
-                        onDragStart={(e) => { e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
-                        className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3 cursor-pointer`}
-                        title="Click to view tasks • Drag onto a Kanban column to change status"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="text-xs text-text-muted">{c.caseId}</div>
-                            <div className="font-semibold">{c.title}</div>
-                          </div>
-                          <button onClick={(e) => { e.stopPropagation(); setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
-                            View details &gt;
-                          </button>
-                        </div>
-                        {!active && (
-                          <div className="mt-1 text-xs text-text-secondary">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
-                        )}
+                {!isAllCasesCollapsed && (
+                  <>
+                    {/* Filters */}
+                    <div className="mb-3 grid grid-cols-1 gap-2">
+                      <input value={search} onChange={e => setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
+                      <div className="grid grid-cols-3 gap-2">
+                        <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
+                          {branches.map(b => <option key={b}>{b}</option>)}
+                        </select>
+                        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
+                          {statuses.map(s => <option key={s}>{s}</option>)}
+                        </select>
+                        <select value={filterType} onChange={e => setFilterType(e.target.value)} className="border rounded p-2 text-sm">
+                          {types.map(t => <option key={t}>{t}</option>)}
+                        </select>
                       </div>
-                    );
-                  })}
-                </div>
+                      <div className="text-right">
+                        <button type="button" onClick={() => { setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
+                      </div>
+                    </div>
+
+                    <div className="-mx-2 px-2 overflow-y-auto" style={{ maxHeight: '520px' }}>
+                      {filteredCases.map((c, idx) => {
+                        const active = c.caseId === activeCaseId;
+                        return (
+                          <div
+                            key={c.caseId}
+                            draggable
+                            onClick={() => { setActiveCaseId(c.caseId); setContentMode('tasks'); }}
+                            onDragStart={(e) => { e.dataTransfer.setData('text/case', c.caseId); e.dataTransfer.effectAllowed = 'move'; }}
+                            className={`mb-2 rounded-lg border ${active ? 'border-[#ffa332] bg-orange-50/30' : 'border-gray-200'} p-3 cursor-pointer`}
+                            title="Click to view tasks • Drag onto a Kanban column to change status"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-xs text-text-muted">{c.caseId}</div>
+                                <div className="font-semibold">{c.title}</div>
+                              </div>
+                              <button onClick={(e) => { e.stopPropagation(); setActiveCaseId(c.caseId); navigate(`/cases/${c.caseId}`); }} className={`text-xs font-semibold ${active ? 'text-[#ffa332]' : 'text-blue-600'} hover:underline`}>
+                                View details &gt;
+                              </button>
+                            </div>
+                            {!active && (
+                              <div className="mt-1 text-xs text-text-secondary">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </aside>
 
               {/* Tasks Section */}
@@ -739,11 +769,15 @@ const Cases: React.FC = () => {
                   <>
                     {/* Cases list header */}
                     <div className="mt-3 grid grid-cols-12 text-xs text-text-secondary px-2">
-                      <div className="col-span-2">Case ID</div>
-                      <div className="col-span-3">Title</div>
-                      <div className="col-span-2">Branch</div>
-                      <div className="col-span-2">Type</div>
-                      <div className="col-span-2">Assignees</div>
+                      <div className="col-span-1">Case ID</div>
+                      <div className="col-span-2">Title</div>
+                      <div className="col-span-1">Branch</div>
+                      <div className="col-span-1">Type</div>
+                      <div className="col-span-1">University</div>
+                      <div className="col-span-2">Course</div>
+                      <div className="col-span-1">Date Added</div>
+                      <div className="col-span-1">Date Modified</div>
+                      <div className="col-span-1">Assignees</div>
                       <div className="col-span-1 text-right">Stage</div>
                     </div>
 
@@ -758,11 +792,15 @@ const Cases: React.FC = () => {
                         return (
                           <button key={c.caseId} onClick={() => navigate(`/cases/${c.caseId}`)} className="w-full text-left py-3 px-2 hover:bg-gray-50">
                             <div className="grid grid-cols-12 items-center gap-2">
-                              <div className="col-span-2 font-mono text-sm text-text-secondary">{c.caseId}</div>
-                              <div className="col-span-3 font-semibold">{c.title}</div>
-                              <div className="col-span-2">{c.branch || '—'}</div>
-                              <div className="col-span-2">{c.type || '—'}</div>
-                              <div className="col-span-2 truncate text-sm">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
+                              <div className="col-span-1 font-mono text-xs text-text-secondary">{c.caseId}</div>
+                              <div className="col-span-2 font-semibold truncate">{c.title}</div>
+                              <div className="col-span-1 text-sm truncate">{c.branch || '—'}</div>
+                              <div className="col-span-1 text-sm truncate">{c.type || '—'}</div>
+                              <div className="col-span-1 text-sm truncate">{c.universityName || '—'}</div>
+                              <div className="col-span-2 text-sm truncate">{c.courseName || '—'}</div>
+                              <div className="col-span-1 text-xs text-text-secondary">{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : '—'}</div>
+                              <div className="col-span-1 text-xs text-text-secondary">{c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : '—'}</div>
+                              <div className="col-span-1 truncate text-sm">{(c.assignees || []).join(', ') || c.employee || 'Unassigned'}</div>
                               <div className="col-span-1 text-right">
                                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded ${sStyle}`}>
                                   <span>{stage}</span>
