@@ -232,11 +232,23 @@ const TeachersPage: React.FC = () => {
     try {
       const { data } = await supabase
         .from('teacher_attendance')
-        .select('*, dashboard_students(full_name), dashboard_teachers(full_name)')
+        .select('*')
         .order('attendance_date', { ascending: false })
         .limit(50);
 
-      setAttendanceHistory(data || []);
+      if (data) {
+        // Manually add teacher and student names
+        const enrichedData = data.map((record: any) => {
+          const teacher = teachers.find(t => t.id === record.teacher_id);
+          const student = students.find(s => s.id === record.student_id);
+          return {
+            ...record,
+            teacher_name: teacher?.full_name || 'N/A',
+            student_name: student?.full_name || 'N/A',
+          };
+        });
+        setAttendanceHistory(enrichedData);
+      }
     } catch (error) {
       console.error('Error loading attendance history:', error);
     }
@@ -468,12 +480,12 @@ const TeachersPage: React.FC = () => {
                         {attendanceHistory.slice(0, 20).map((record: any, idx: number) => (
                           <tr key={idx} className="border-b">
                             <td className="py-2 pr-4">{new Date(record.attendance_date).toLocaleDateString()}</td>
-                            <td className="py-2 pr-4">{record.dashboard_teachers?.full_name || 'N/A'}</td>
-                            <td className="py-2 pr-4">{record.dashboard_students?.full_name || 'N/A'}</td>
+                            <td className="py-2 pr-4">{record.teacher_name}</td>
+                            <td className="py-2 pr-4">{record.student_name}</td>
                             <td className="py-2 pr-4">
                               <span className={`px-2 py-1 rounded text-xs ${record.status === 'Present'
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
+                                  ? 'bg-green-100 text-green-700'
+                                  : 'bg-red-100 text-red-700'
                                 }`}>
                                 {record.status}
                               </span>
