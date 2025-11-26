@@ -30,6 +30,7 @@ export type Lead = {
   tags: string[] | null;
   lead_date: string | null;
   converted_to_student_id?: string | null;
+  remarks?: string | null;
   created_at?: string;
 };
 
