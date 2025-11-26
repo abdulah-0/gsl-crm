@@ -146,7 +146,7 @@ const Cases: React.FC = () => {
     const load = async () => {
       const { data, error } = await supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, updated_at, university_id')
+        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, university_id')
         .order('created_at', { ascending: false });
       if (!error) {
         // Fetch course information for each case
@@ -184,7 +184,7 @@ const Cases: React.FC = () => {
           employee: row.employee || undefined,
           assignees: Array.isArray(row.assignees) ? row.assignees : (row.employee ? [row.employee] : []),
           createdAt: row.created_at,
-          updatedAt: row.updated_at,
+          updatedAt: undefined, // Column doesn't exist in dashboard_cases
           universityName: row.university_id ? universityMap.get(row.university_id) : undefined,
           courseName: courseMap.get(row.case_number || String(row.id)) || undefined,
           active: [],
