@@ -215,7 +215,7 @@ const StudentsPage: React.FC = () => {
       // Set enrollment type based on parameter
       if (enrollType === 'consultancy') {
         setEnrollmentType('consultancy');
-        setConsultSf(prev => ({
+        setConsultSf((prev: any) => ({
           ...prev,
           basic_name: fullName || '',
           basic_father_name: fatherName || '',
