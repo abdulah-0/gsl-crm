@@ -1,3 +1,26 @@
+/**
+ * @fileoverview Leads Management Page
+ * 
+ * This page provides comprehensive lead management functionality for the GSL CRM system.
+ * It allows users to:
+ * - Add new leads with detailed information
+ * - View and filter all leads
+ * - Update lead status and stage
+ * - Add remarks to leads
+ * - Convert leads to students
+ * - Bulk import leads from Excel files
+ * 
+ * The page includes:
+ * - Two-tab interface (Add Lead / All Leads)
+ * - Form validation for required fields
+ * - Real-time search and filtering
+ * - Excel upload with column mapping
+ * - Enrollment type selection modal
+ * - Integration with Students page for conversion
+ * 
+ * @module pages/Leads
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -5,35 +28,73 @@ import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
-// Types
+/**
+ * Lead source types
+ * Represents the different channels through which leads can be acquired
+ */
 export type LeadSource = 'facebook' | 'instagram' | 'google_form' | 'walk_in' | 'referral' | 'organic' | '';
+
+/**
+ * Lead status types
+ * Represents the different stages in the lead lifecycle
+ */
 export type LeadStatus = 'new' | 'documentation' | 'university' | 'visa' | 'enrolled' | 'rejected' | 'confirmed';
 
+/**
+ * Lead data structure
+ * Represents a lead record in the database
+ */
 export type Lead = {
+  /** Unique identifier */
   id: number;
+  /** Full name of the lead (CAPITAL) */
   full_name: string;
+  /** Father or guardian name */
   father_name: string;
+  /** CNIC number (13 digits) */
   cnic: string;
+  /** Contact phone number */
   phone: string;
+  /** Email address */
   email: string;
+  /** Country (optional) */
   country: string | null;
+  /** City (optional) */
   city: string | null;
+  /** Full address (optional) */
   address: string | null;
+  /** Date of birth (optional) */
   dob: string | null;
+  /** Service/program name */
   service_name: string | null;
+  /** Branch location */
   branch: string | null;
+  /** Lead acquisition source */
   source: LeadSource | null;
+  /** Current status in the pipeline */
   status: LeadStatus;
+  /** Current stage (Entry stage, Follow up, etc.) */
   stage?: string | null;
+  /** Email of assigned user */
   assigned_to_email: string | null;
+  /** Associated university ID */
   university_id: number | null;
+  /** Tags for categorization */
   tags: string[] | null;
+  /** Date lead was created */
   lead_date: string | null;
+  /** Student ID if converted */
   converted_to_student_id?: string | null;
+  /** Additional remarks/notes */
   remarks?: string | null;
+  /** Timestamp of creation */
   created_at?: string;
 };
 
+/**
+ * Lead form state structure
+ * Represents the form data for adding a new lead
+ */
 type LeadFormState = {
   full_name: string;
   father_name: string;
@@ -53,6 +114,12 @@ type LeadFormState = {
   tags: string;
 };
 
+/**
+ * Create default lead form state
+ * Initializes form with empty values and current date
+ * 
+ * @returns Default lead form state
+ */
 const makeDefaultLeadForm = (): LeadFormState => ({
   full_name: '',
   father_name: '',
@@ -72,7 +139,31 @@ const makeDefaultLeadForm = (): LeadFormState => ({
   tags: '',
 });
 
+/**
+ * LeadsPage Component
+ * 
+ * Main component for lead management functionality.
+ * Provides interface for adding, viewing, filtering, and converting leads.
+ * 
+ * **Features:**
+ * - Add new leads with comprehensive form validation
+ * - View all leads in a searchable, filterable table
+ * - Update lead status, stage, and remarks inline
+ * - Convert leads to students with enrollment type selection
+ * - Bulk import leads from Excel files
+ * - Real-time search and status filtering
+ * 
+ * **State Management:**
+ * - Form state for adding new leads
+ * - List of all leads from database
+ * - Search and filter criteria
+ * - Modal states for enrollment and upload
+ * - User context (email, branch)
+ * 
+ * @component
+ */
 const LeadsPage: React.FC = () => {
+  // UI state
   const [tab, setTab] = useState<'add' | 'list'>('list');
   const [items, setItems] = useState<Lead[]>([]);
   const [search, setSearch] = useState('');
@@ -80,18 +171,31 @@ const LeadsPage: React.FC = () => {
   const [form, setForm] = useState<LeadFormState>(makeDefaultLeadForm());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Reference data
   const [services, setServices] = useState<Array<{ id: string; name: string }>>([]);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+
+  // Form agreement states
   const [agreeAll, setAgreeAll] = useState(false);
   const [declTextAgree, setDeclTextAgree] = useState(false);
+
+  // Enrollment modal state
   const [recentLead, setRecentLead] = useState<Lead | null>(null);
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [selectedLeadForEnroll, setSelectedLeadForEnroll] = useState<Lead | null>(null);
+
+  // Excel upload state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+
   const navigate = useNavigate();
 
+  /**
+   * Load all leads from the database
+   * Fetches up to 200 most recent leads, ordered by creation date
+   */
   const loadLeads = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -133,16 +237,27 @@ const LeadsPage: React.FC = () => {
 
   useEffect(() => { loadLeads(); }, []);
 
+  /**
+   * Filtered leads based on search query and status filter
+   * Searches across name, email, phone, and city fields
+   */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(l => {
+      // Filter by status if not 'All'
       if (statusF !== 'All' && l.status !== statusF) return false;
+      // If no search query, include all
       if (!q) return true;
+      // Search across multiple fields
       const bucket = `${l.full_name || ''} ${l.email || ''} ${l.phone || ''} ${l.city || ''}`.toLowerCase();
       return bucket.includes(q);
     });
   }, [items, search, statusF]);
 
+  /**
+   * Reset form to default values while preserving user context
+   * Keeps assigned_to_email and branch from current user
+   */
   const resetForm = () => {
     setForm(prev => ({
       ...makeDefaultLeadForm(),
@@ -153,9 +268,23 @@ const LeadsPage: React.FC = () => {
     setDeclTextAgree(false);
   };
 
+  /**
+   * Handle form submission for adding a new lead
+   * 
+   * Validates:
+   * - Required fields (name, father name, CNIC, phone, email)
+   * - CNIC format (13 digits)
+   * - Phone format (10-15 digits)
+   * - Email format
+   * - Terms & conditions agreement
+   * - Declaration agreement
+   * 
+   * @param e - Form submit event
+   */
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Trim and validate required fields
     const name = form.full_name.trim();
     const father = form.father_name.trim();
     const cnic = form.cnic.trim();
@@ -175,10 +304,13 @@ const LeadsPage: React.FC = () => {
 
     setSaving(true);
     try {
+      // Parse tags from comma-separated string
       const tagsArr = form.tags
         .split(',')
         .map(t => t.trim())
         .filter(Boolean);
+
+      // Build payload for database
       const payload: any = {
         full_name: name,
         father_name: father,
@@ -197,12 +329,15 @@ const LeadsPage: React.FC = () => {
         assigned_to_email: form.assigned_to_email || currentUserEmail || null,
         tags: tagsArr.length ? tagsArr : null,
       };
+
       const { data, error } = await supabase
         .from('leads')
         .insert([payload])
         .select('*')
         .single();
+
       if (error) throw error;
+
       setRecentLead(data as any as Lead);
       resetForm();
       await loadLeads();
@@ -238,9 +373,16 @@ const LeadsPage: React.FC = () => {
     setShowEnrollModal(true);
   };
 
+  /**
+   * Navigate to Students page with lead data for enrollment
+   * Pre-fills student form with lead information
+   * 
+   * @param enrollmentType - Type of enrollment (course, consultancy, or test)
+   */
   const proceedWithEnrollment = (enrollmentType: 'course' | 'consultancy' | 'test') => {
     if (!selectedLeadForEnroll) return;
 
+    // Build URL parameters with lead data
     const params = new URLSearchParams();
     params.set('from_lead', '1');
     params.set('lead_id', String(selectedLeadForEnroll.id));

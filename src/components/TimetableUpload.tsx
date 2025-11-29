@@ -1,10 +1,47 @@
+/**
+ * @fileoverview Timetable Upload Component
+ * 
+ * Component for uploading timetable files to Supabase Storage.
+ * Handles file validation, upload, and database record creation.
+ * 
+ * @module components/TimetableUpload
+ */
+
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+/**
+ * Props for TimetableUpload component
+ */
 type TimetableUploadProps = {
+    /** Callback function called after successful upload */
     onUploadSuccess: () => void;
 };
 
+/**
+ * TimetableUpload Component
+ * 
+ * Handles timetable file uploads with validation and storage.
+ * 
+ * **Features:**
+ * - File type validation (PDF, PNG, JPG)
+ * - File size validation (max 10MB)
+ * - Upload to Supabase Storage
+ * - Automatic deactivation of previous timetables
+ * - Database record creation
+ * - Loading states during upload
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <TimetableUpload
+ *   onUploadSuccess={() => {
+ *     console.log('Upload successful');
+ *     refreshTimetableList();
+ *   }}
+ * />
+ * ```
+ */
 const TimetableUpload: React.FC<TimetableUploadProps> = ({ onUploadSuccess }) => {
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);

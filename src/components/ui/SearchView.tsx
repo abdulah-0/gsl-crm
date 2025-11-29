@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Legacy SearchView Component
+ * 
+ * Custom search input component with icon support and extensive styling options.
+ * Provides a search input with customizable left/right icons.
+ * 
+ * @module components/ui/SearchView
+ */
+
 import React, { useState } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
 import { twMerge } from 'tailwind-merge';
@@ -24,8 +33,8 @@ const searchViewClasses = cva(
   }
 );
 
-interface SearchViewProps extends 
-  React.ComponentPropsWithoutRef<'input'>,
+interface SearchViewProps extends
+  Omit<React.ComponentPropsWithoutRef<'input'>, 'size'>,
   VariantProps<typeof searchViewClasses> {
   // Required parameters with defaults
   placeholder?: string;
@@ -38,13 +47,13 @@ interface SearchViewProps extends
   fill_background_color?: string;
   border_border_radius?: string;
   effect_box_shadow?: string;
-  
+
   // Optional parameters (no defaults)
   layout_gap?: string;
   layout_width?: string;
   padding?: string;
   position?: string;
-  
+
   // Standard React props
   variant?: 'default' | 'filled' | 'outline';
   size?: 'small' | 'medium' | 'large';
@@ -54,8 +63,29 @@ interface SearchViewProps extends
   rightIcon?: React.ReactNode;
 }
 
+/**
+ * SearchView Component
+ * 
+ * A search input component with icon support and customizable styling.
+ * 
+ * **Features:**
+ * - Search icon (default on left)
+ * - Custom left/right icons
+ * - Real-time search callback
+ * - Three variants and sizes
+ * - Customizable styling
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <SearchView
+ *   placeholder="Search users..."
+ *   onSearch={(value) => console.log(value)}
+ * />
+ * ```
+ */
 const SearchView = ({
-  // Required parameters with defaults
+  // Text styling parameters with defaults
   placeholder = "Search",
   text_font_size = "16",
   text_font_family = "Nunito Sans",
@@ -66,13 +96,13 @@ const SearchView = ({
   fill_background_color = "#ffffff",
   border_border_radius = "14px",
   effect_box_shadow = "0px 6px 58px #c3cbd61a",
-  
-  // Optional parameters (no defaults)
+
+  // Optional layout parameters
   layout_gap,
   layout_width,
   padding,
   position,
-  
+
   // Standard React props
   variant,
   size,
@@ -119,11 +149,11 @@ const SearchView = ({
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
     setSearchValue(value);
-    
+
     if (onChange) {
       onChange(event);
     }
-    
+
     if (onSearch) {
       onSearch(value);
     }
@@ -131,7 +161,7 @@ const SearchView = ({
 
   const defaultLeftIcon = (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke={text_color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M21 21L16.514 16.506L21 21ZM19 10.5C19 15.194 15.194 19 10.5 19C5.806 19 2 15.194 2 10.5C2 5.806 5.806 2 10.5 2C15.194 2 19 5.806 19 10.5Z" stroke={text_color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
@@ -149,7 +179,7 @@ const SearchView = ({
           {leftIcon || defaultLeftIcon}
         </div>
       )}
-      
+
       <input
         type="text"
         placeholder={placeholder}
@@ -164,7 +194,7 @@ const SearchView = ({
         )}
         {...props}
       />
-      
+
       {rightIcon && (
         <div className="absolute right-3 flex items-center pointer-events-none">
           {rightIcon}

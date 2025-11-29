@@ -1,3 +1,24 @@
+/**
+ * @fileoverview Universities Page
+ * 
+ * University database management for the GSL CRM system.
+ * Manages partner universities for student placements and consultancy.
+ * 
+ * **Key Features:**
+ * - University database with detailed information
+ * - Excel import functionality
+ * - Manual university addition
+ * - Pagination (25 per page)
+ * - Advanced filtering (country, affiliation type)
+ * - Search functionality
+ * - Contact information management
+ * 
+ * **Import Format:**
+ * Supports Excel files with columns: Name, Country, City, Website, Email, Phone, AffiliationType, Notes
+ * 
+ * @module pages/Universities
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -123,7 +144,7 @@ const UniversitiesPage: React.FC = () => {
       const ws = wb.Sheets[wsName];
       const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: '' });
       const payloads = rows.map((r, idx) => ({
-        name: String(r.Name || r.University || r.UniversityName || '').trim() || `Unnamed ${idx+1}`,
+        name: String(r.Name || r.University || r.UniversityName || '').trim() || `Unnamed ${idx + 1}`,
         country: r.Country || null,
         city: r.City || null,
         website: r.Website || null,
@@ -168,14 +189,14 @@ const UniversitiesPage: React.FC = () => {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <input
               value={search}
-              onChange={e=>setSearch(e.target.value)}
+              onChange={e => setSearch(e.target.value)}
               placeholder="Search by name, country, city, email, website"
               className="w-full sm:w-72 border rounded p-2 text-sm"
             />
-            <select value={countryF} onChange={e=>setCountryF(e.target.value)} className="border rounded p-2 text-sm">
+            <select value={countryF} onChange={e => setCountryF(e.target.value)} className="border rounded p-2 text-sm">
               {countries.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select value={affiliationF} onChange={e=>setAffiliationF(e.target.value)} className="border rounded p-2 text-sm">
+            <select value={affiliationF} onChange={e => setAffiliationF(e.target.value)} className="border rounded p-2 text-sm">
               {affiliations.map(a => <option key={a} value={a}>{a || 'Unspecified'}</option>)}
             </select>
           </div>
@@ -225,13 +246,13 @@ const UniversitiesPage: React.FC = () => {
           {/* Pagination */}
           <div className="mt-3 flex items-center justify-end gap-2 text-sm">
             <button
-              onClick={()=>setPage(p=>Math.max(1,p-1))}
-              disabled={page===1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
               className="px-3 py-1 border rounded disabled:opacity-50"
             >Prev</button>
             <span>Page {page}</span>
             <button
-              onClick={()=>setPage(p=>p+1)}
+              onClick={() => setPage(p => p + 1)}
               className="px-3 py-1 border rounded"
             >Next</button>
           </div>
@@ -242,28 +263,28 @@ const UniversitiesPage: React.FC = () => {
               <h3 className="font-bold text-lg mb-3">Add University Manually</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="text-sm">University Name*
-                  <input value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                  <input value={name} onChange={e => setName(e.target.value)} className="mt-1 w-full border rounded p-2" required />
                 </label>
                 <label className="text-sm">Country
-                  <input value={country} onChange={e=>setCountry(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={country} onChange={e => setCountry(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm">City
-                  <input value={city} onChange={e=>setCity(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={city} onChange={e => setCity(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm">Website URL
-                  <input value={website} onChange={e=>setWebsite(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={website} onChange={e => setWebsite(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm">Contact Email
-                  <input value={email} onChange={e=>setEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={email} onChange={e => setEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm">Contact Phone
-                  <input value={phone} onChange={e=>setPhone(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm">Affiliation Type
-                  <input value={affiliationType} onChange={e=>setAffiliationType(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                  <input value={affiliationType} onChange={e => setAffiliationType(e.target.value)} className="mt-1 w-full border rounded p-2" />
                 </label>
                 <label className="text-sm sm:col-span-2">Notes
-                  <textarea value={notes} onChange={e=>setNotes(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
                 </label>
               </div>
               <button

@@ -1,3 +1,37 @@
+/**
+ * @fileoverview Employees Page
+ * 
+ * Employee directory and management system for the GSL CRM.
+ * Provides employee CRUD operations and activity tracking.
+ * 
+ * **Key Features:**
+ * - Employee directory with pagination
+ * - Add/Edit/Remove employees
+ * - Employee details view
+ * - Activity feed tracking employee actions
+ * - Real-time updates via Supabase
+ * - Automatic user account creation
+ * - Teacher profile synchronization
+ * 
+ * **Employee Information:**
+ * - Full name, email, gender, birthday, position, level
+ * - Age calculation
+ * - Avatar support
+ * 
+ * **Activity Tracking:**
+ * - Profile updates
+ * - Onboarding completion
+ * - Level changes
+ * - Case assignments
+ * 
+ * **Integration:**
+ * - Creates user accounts via RPC `app_create_user_local`
+ * - Syncs with dashboard_users and dashboard_teachers for Teacher roles
+ * - Logs all actions to activity_log
+ * 
+ * @module pages/Employees
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
@@ -90,9 +124,9 @@ const seedActivities = (emps: Employee[]): Activity[] => {
   const out: Activity[] = [];
   let i = 0;
   for (const e of emps) {
-    out.push({ id: `act-${i++}`, employeeId: e.id, text: texts[i % texts.length](e), at: new Date(now - i*3600_000).toISOString() });
+    out.push({ id: `act-${i++}`, employeeId: e.id, text: texts[i % texts.length](e), at: new Date(now - i * 3600_000).toISOString() });
   }
-  return out.sort((a,b)=> b.at.localeCompare(a.at));
+  return out.sort((a, b) => b.at.localeCompare(a.at));
 };
 
 const Employees: React.FC = () => {
@@ -137,7 +171,7 @@ const Employees: React.FC = () => {
       const { data, error } = await supabase
         .from('activity_log')
         .select('id, action, detail, created_at')
-        .eq('entity','employee')
+        .eq('entity', 'employee')
         .order('created_at', { ascending: false })
         .limit(200);
       if (!cancelled && data) {
@@ -171,10 +205,10 @@ const Employees: React.FC = () => {
   const [page, setPage] = useState(1);
   const pageSize = 8;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  useEffect(()=>{ if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
-  const pagedEmployees = useMemo(()=>{
-    const start = (page-1)*pageSize;
-    return employees.slice(start, start+pageSize);
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  const pagedEmployees = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return employees.slice(start, start + pageSize);
   }, [employees, page]);
 
   // Add Employee modal
@@ -209,7 +243,7 @@ const Employees: React.FC = () => {
     // 2) Insert employee row
     const { data: empRow, error: empErr } = await supabase
       .from('employees')
-      .insert([{ user_id: userId, role_title: formPosition, joined_on: new Date().toISOString().slice(0,10) }])
+      .insert([{ user_id: userId, role_title: formPosition, joined_on: new Date().toISOString().slice(0, 10) }])
       .select('id')
       .single();
     if (empErr) {
@@ -263,7 +297,7 @@ const Employees: React.FC = () => {
     const idNum = Number(emp.id.replace(/^emp-/, '')); // tolerate old seed id format
     const { error } = await supabase.from('employees').delete().eq('id', isNaN(idNum) ? emp.id : idNum);
     if (error) alert(`Failed to remove: ${error.message}`);
-    else await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum)? emp.id : idNum, action: `Removed employee ${emp.fullName}`, detail: { employee_id: emp.id, name: emp.fullName, email: emp.email } }]);
+    else await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum) ? emp.id : idNum, action: `Removed employee ${emp.fullName}`, detail: { employee_id: emp.id, name: emp.fullName, email: emp.email } }]);
     setOpenMenuId(null);
   };
 
@@ -290,7 +324,7 @@ const Employees: React.FC = () => {
       .eq('id', isNaN(idNum) ? editEmp.id : idNum);
     if (error) { alert(`Failed to update: ${error.message}`); return; }
 
-    await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum)? editEmp.id : idNum, action: `Updated employee ${editName}`, detail: { employee_id: editEmp.id, name: editName, email: editEmail || editEmp.email, position: editPosition } }]);
+    await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: isNaN(idNum) ? editEmp.id : idNum, action: `Updated employee ${editName}`, detail: { employee_id: editEmp.id, name: editName, email: editEmail || editEmp.email, position: editPosition } }]);
 
     setEditEmp(null);
   };
@@ -319,7 +353,7 @@ const Employees: React.FC = () => {
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>
                 Employees ({total})
               </h1>
-              <button onClick={()=>setShowAdd(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
+              <button onClick={() => setShowAdd(true)} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
                 + Add Employee
               </button>
             </div>
@@ -327,8 +361,8 @@ const Employees: React.FC = () => {
             {/* View toggles + filter */}
             <div className="mt-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <button onClick={()=>setView('list')} className={`px-3 py-1 rounded ${view==='list'?'bg-gray-100 font-semibold':''}`}>List</button>
-                <button onClick={()=>setView('activity')} className={`px-3 py-1 rounded ${view==='activity'?'bg-gray-100 font-semibold':''}`}>Activity</button>
+                <button onClick={() => setView('list')} className={`px-3 py-1 rounded ${view === 'list' ? 'bg-gray-100 font-semibold' : ''}`}>List</button>
+                <button onClick={() => setView('activity')} className={`px-3 py-1 rounded ${view === 'activity' ? 'bg-gray-100 font-semibold' : ''}`}>Activity</button>
               </div>
             </div>
 
@@ -374,14 +408,14 @@ const Employees: React.FC = () => {
                         </div>
                         {/* Actions */}
                         <div className="col-span-4 md:col-span-1 flex justify-end relative">
-                          <button onClick={()=>setOpenMenuId(openMenuId===emp.id?null:emp.id)} className="px-2 py-1 rounded hover:bg-gray-100" aria-haspopup="menu" aria-expanded={openMenuId===emp.id}>
+                          <button onClick={() => setOpenMenuId(openMenuId === emp.id ? null : emp.id)} className="px-2 py-1 rounded hover:bg-gray-100" aria-haspopup="menu" aria-expanded={openMenuId === emp.id}>
                             \u22EE
                           </button>
-                          {openMenuId===emp.id && (
+                          {openMenuId === emp.id && (
                             <div className="absolute right-0 top-8 bg-white border rounded shadow z-10 w-40">
-                              <button onClick={()=>{ openView(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">View</button>
-                              <button onClick={()=>{ openEdit(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">Edit</button>
-                              <button onClick={()=>{ removeEmp(emp); }} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">Remove</button>
+                              <button onClick={() => { openView(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">View</button>
+                              <button onClick={() => { openEdit(emp); closeMenus(); }} className="w-full text-left px-3 py-2 hover:bg-gray-50">Edit</button>
+                              <button onClick={() => { removeEmp(emp); }} className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50">Remove</button>
                             </div>
                           )}
                         </div>
@@ -391,11 +425,11 @@ const Employees: React.FC = () => {
 
                   {/* Pagination */}
                   <div className="flex items-center justify-between mt-3 px-3">
-                    <div className="text-sm text-text-secondary">{`${(page-1)*pageSize+1}\u2013${Math.min(page*pageSize, total)} of ${total}`}</div>
+                    <div className="text-sm text-text-secondary">{`${(page - 1) * pageSize + 1}\u2013${Math.min(page * pageSize, total)} of ${total}`}</div>
                     <div className="flex items-center gap-2">
-                      <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="px-3 py-1 rounded border disabled:opacity-50">Prev</button>
+                      <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 rounded border disabled:opacity-50">Prev</button>
                       <span className="text-sm">Page {page} / {pageCount}</span>
-                      <button disabled={page>=pageCount} onClick={()=>setPage(p=>Math.min(pageCount,p+1))} className="px-3 py-1 rounded border disabled:opacity-50">Next</button>
+                      <button disabled={page >= pageCount} onClick={() => setPage(p => Math.min(pageCount, p + 1))} className="px-3 py-1 rounded border disabled:opacity-50">Next</button>
                     </div>
                   </div>
                 </div>
@@ -409,7 +443,7 @@ const Employees: React.FC = () => {
                         <div key={a.id} className="flex items-start gap-3">
                           <img src={emp.avatar || '/images/img_image.svg'} alt="avatar" className="w-8 h-8 rounded-full" />
                           <div>
-                            <div className="text-sm"><span className="font-semibold">{emp.fullName}</span> <span className="text-text-secondary">{a.text.replace(emp.fullName,'')}</span></div>
+                            <div className="text-sm"><span className="font-semibold">{emp.fullName}</span> <span className="text-text-secondary">{a.text.replace(emp.fullName, '')}</span></div>
                             <div className="text-xs text-text-secondary">{new Date(a.at).toLocaleString()}</div>
                           </div>
                         </div>
@@ -429,20 +463,20 @@ const Employees: React.FC = () => {
           <form onSubmit={saveEmployee} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Add Employee</h3>
-              <button type="button" onClick={()=>setShowAdd(false)} className="text-text-secondary hover:opacity-70">\u2715</button>
+              <button type="button" onClick={() => setShowAdd(false)} className="text-text-secondary hover:opacity-70">\u2715</button>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="text-text-secondary">Full Name</span>
-                <input value={formName} onChange={e=>setFormName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., Evan Yates" required />
+                <input value={formName} onChange={e => setFormName(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g., Evan Yates" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Email</span>
-                <input type="email" value={formEmail} onChange={e=>setFormEmail(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="name@example.com" required />
+                <input type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="name@example.com" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Gender</span>
-                <select value={formGender} onChange={e=>setFormGender(e.target.value as Employee['gender'])} className="mt-1 w-full border rounded p-2">
+                <select value={formGender} onChange={e => setFormGender(e.target.value as Employee['gender'])} className="mt-1 w-full border rounded p-2">
                   <option>Male</option>
                   <option>Female</option>
                   <option>Other</option>
@@ -450,15 +484,15 @@ const Employees: React.FC = () => {
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Birthday</span>
-                <input type="date" value={formBirthday} onChange={e=>setFormBirthday(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input type="date" value={formBirthday} onChange={e => setFormBirthday(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Position</span>
-                <input value={formPosition} onChange={e=>setFormPosition(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input value={formPosition} onChange={e => setFormPosition(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Level</span>
-                <select value={formLevel} onChange={e=>setFormLevel(e.target.value as Level)} className="mt-1 w-full border rounded p-2">
+                <select value={formLevel} onChange={e => setFormLevel(e.target.value as Level)} className="mt-1 w-full border rounded p-2">
                   <option>Junior</option>
                   <option>Middle</option>
                   <option>Senior</option>
@@ -466,7 +500,7 @@ const Employees: React.FC = () => {
               </label>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={()=>setShowAdd(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowAdd(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Employee</button>
 
             </div>
@@ -480,7 +514,7 @@ const Employees: React.FC = () => {
           <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Employee Details</h3>
-              <button type="button" onClick={()=>setViewEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button type="button" onClick={() => setViewEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div>
@@ -501,7 +535,7 @@ const Employees: React.FC = () => {
               </div>
             </div>
             <div className="mt-5 text-right">
-              <button type="button" onClick={()=>setViewEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Close</button>
+              <button type="button" onClick={() => setViewEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Close</button>
             </div>
           </div>
         </div>
@@ -513,28 +547,28 @@ const Employees: React.FC = () => {
           <div className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">Edit Employee</h3>
-              <button type="button" onClick={()=>setEditEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button type="button" onClick={() => setEditEmp(null)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <label className="text-sm">
                 <span className="text-text-secondary">Full Name</span>
-                <input value={editName} onChange={e=>setEditName(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input value={editName} onChange={e => setEditName(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Email</span>
-                <input type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Position</span>
-                <input value={editPosition} onChange={e=>setEditPosition(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input value={editPosition} onChange={e => setEditPosition(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Joined On</span>
-                <input type="date" value={editJoinedOn} onChange={e=>setEditJoinedOn(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                <input type="date" value={editJoinedOn} onChange={e => setEditJoinedOn(e.target.value)} className="mt-1 w-full border rounded p-2" />
               </label>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
-              <button type="button" onClick={()=>setEditEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setEditEmp(null)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="button" onClick={saveEdit} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save</button>
             </div>
           </div>

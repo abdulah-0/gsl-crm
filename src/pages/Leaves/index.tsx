@@ -1,3 +1,33 @@
+/**
+ * @fileoverview Leaves Management Page
+ * 
+ * Employee leave request and approval system for the GSL CRM.
+ * Provides calendar view and summary of employee leaves.
+ * 
+ * **Key Features:**
+ * - Leave request submission (employees and admins)
+ * - Leave types: Sick, Remote (Work from Home), Vacation
+ * - Calendar view with color-coded leave visualization
+ * - Summary view with employee leave totals
+ * - Admin approval/rejection workflow
+ * - Month navigation
+ * - Real-time updates via Supabase
+ * 
+ * **Leave Status:**
+ * - Pending: Awaiting approval
+ * - Approved: Filled circle in calendar
+ * - Rejected: Not shown in calendar
+ * 
+ * **Access Control:**
+ * - Super Admin/Admin: Can approve/reject, add leaves for any employee
+ * - Employees: Can request leaves for themselves
+ * 
+ * **Schema Support:**
+ * - Supports both legacy (employee_id) and modern (employee_email) schemas
+ * 
+ * @module pages/Leaves
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -5,10 +35,10 @@ import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 
 // Types
- type Role = 'super' | 'admin' | 'other';
- type LeaveType = 'Sick' | 'Remote' | 'Vacation';
- type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
- interface LeaveRec {
+type Role = 'super' | 'admin' | 'other';
+type LeaveType = 'Sick' | 'Remote' | 'Vacation';
+type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
+interface LeaveRec {
   id: string;
   employee_email: string;
   type: LeaveType;
@@ -18,19 +48,19 @@ import { supabase } from '../../lib/supabaseClient';
   reason?: string | null;
   created_at?: string;
   created_by?: string | null;
- }
- interface Employee {
+}
+interface Employee {
   email: string;
   full_name?: string;
- }
+}
 
- const COLORS: Record<LeaveType, { fill: string; outline: string }> = {
+const COLORS: Record<LeaveType, { fill: string; outline: string }> = {
   Sick: { fill: 'bg-red-500', outline: 'border-red-500' },
   Remote: { fill: 'bg-blue-500', outline: 'border-blue-500' },
   Vacation: { fill: 'bg-emerald-500', outline: 'border-emerald-500' },
- };
+};
 
- const LeavesPage: React.FC = () => {
+const LeavesPage: React.FC = () => {
   const [role, setRole] = useState<Role>('other');
   const isAdmin = role === 'super' || role === 'admin';
 
@@ -106,12 +136,12 @@ import { supabase } from '../../lib/supabaseClient';
         const me = auth.user?.email || '';
         if (isAdmin) {
           const { data } = await supabase.from('dashboard_users').select('email,full_name').order('full_name', { ascending: true });
-          mounted && setEmployees((data || []).map((d:any) => ({ email: d.email, full_name: d.full_name })));
+          mounted && setEmployees((data || []).map((d: any) => ({ email: d.email, full_name: d.full_name })));
         } else {
           const { data } = await supabase.from('dashboard_users').select('email,full_name').eq('email', me).maybeSingle();
           mounted && setEmployees(data ? [{ email: data.email, full_name: data.full_name }] : [{ email: me }]);
         }
-      } catch {}
+      } catch { }
     })();
   }, [isAdmin]);
 
@@ -124,12 +154,13 @@ import { supabase } from '../../lib/supabaseClient';
       .gte('end_date', monthStartISO);
     if (!error) setLeaves((data as any) || []);
   };
-  useEffect(() => { loadLeaves();
+  useEffect(() => {
+    loadLeaves();
     const ch = supabase
       .channel('realtime:leaves')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, loadLeaves)
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch {} };
+    return () => { try { supabase.removeChannel(ch); } catch { } };
   }, [monthStartISO, monthEndISO]);
 
   const filteredEmployees = useMemo(() => {
@@ -269,7 +300,7 @@ import { supabase } from '../../lib/supabaseClient';
       setRequestOpen(false);
       setReqStart(''); setReqEnd(''); setReqReason(''); setReqForEmail(''); setReqType('Sick');
       await loadLeaves();
-    } catch (err:any) {
+    } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error('Leave request insert failed', { message: err?.message, code: (err as any)?.code, details: (err as any)?.details, hint: (err as any)?.hint });
       const msg = String(err?.message || '').toLowerCase();
@@ -305,27 +336,27 @@ import { supabase } from '../../lib/supabaseClient';
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Leaves</h1>
               <div className="flex items-center gap-2">
                 <button onClick={prevMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">◀</button>
-                <div className="font-semibold min-w-[8rem] sm:w-40 text-center px-2">{new Date(year, month, 1).toLocaleString(undefined,{ month:'long', year:'numeric'})}</div>
+                <div className="font-semibold min-w-[8rem] sm:w-40 text-center px-2">{new Date(year, month, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
                 <button onClick={nextMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">▶</button>
-                <button onClick={()=>setRequestOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Request</button>
+                <button onClick={() => setRequestOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Request</button>
               </div>
             </div>
 
             {/* Tabs */}
             <div className="mt-4 inline-flex bg-white border rounded-lg p-1">
-              <button onClick={()=>setTab('summary')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab==='summary'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Employees’ Leaves</button>
-              <button onClick={()=>setTab('calendar')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='calendar'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Calendar</button>
+              <button onClick={() => setTab('summary')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab === 'summary' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Employees’ Leaves</button>
+              <button onClick={() => setTab('calendar')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'calendar' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Calendar</button>
             </div>
 
             {/* Search */}
             <div className="mt-4">
               <div className="bg-white border rounded-lg shadow-sm p-3">
-                <input className="border rounded px-3 py-2 w-full md:w-96" placeholder="Search employees" value={search} onChange={e=>setSearch(e.target.value)} />
+                <input className="border rounded px-3 py-2 w-full md:w-96" placeholder="Search employees" value={search} onChange={e => setSearch(e.target.value)} />
               </div>
             </div>
 
             {/* Summary view */}
-            {tab==='summary' && (
+            {tab === 'summary' && (
               <div className="mt-6 bg-white border rounded-lg shadow-sm">
                 <div className="p-4">
                   <div className="text-sm text-text-secondary">{filteredEmployees.length} employees</div>
@@ -350,12 +381,12 @@ import { supabase } from '../../lib/supabaseClient';
                               <td className="p-2">{t.Remote}</td>
                               <td className="p-2">{t.Vacation}</td>
                               <td className="p-2 text-right">
-                                <button onClick={()=>setManageEmail(emp.email)} className="text-blue-600 hover:underline">Manage</button>
+                                <button onClick={() => setManageEmail(emp.email)} className="text-blue-600 hover:underline">Manage</button>
                               </td>
                             </tr>
                           );
                         })}
-                        {filteredEmployees.length===0 && (
+                        {filteredEmployees.length === 0 && (
                           <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No employees</td></tr>
                         )}
                       </tbody>
@@ -366,13 +397,13 @@ import { supabase } from '../../lib/supabaseClient';
             )}
 
             {/* Calendar view */}
-            {tab==='calendar' && (
+            {tab === 'calendar' && (
               <div className="mt-4 border rounded-lg bg-white shadow-sm overflow-x-auto">
                 <div className="min-w-[900px]">
                   <div className="grid" style={{ gridTemplateColumns: `240px repeat(${daysInMonth}, minmax(28px,1fr))` }}>
                     {/* Header row */}
                     <div className="sticky left-0 z-10 bg-white border-b p-2 font-semibold">Employee</div>
-                    {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(d => (
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
                       <div key={`h${d}`} className="border-b text-center text-[10px] sm:text-xs p-1 text-text-secondary">{d}</div>
                     ))}
                     {/* Rows */}
@@ -381,12 +412,12 @@ import { supabase } from '../../lib/supabaseClient';
                       return (
                         <React.Fragment key={emp.email}>
                           <div className="sticky left-0 z-10 bg-white border-r p-2 text-sm font-semibold">{emp.full_name || emp.email}</div>
-                          {Array.from({ length: daysInMonth }, (_,i)=>i+1).map(day => {
-                            const date = new Date(year, month, day).toISOString().slice(0,10);
+                          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
+                            const date = new Date(year, month, day).toISOString().slice(0, 10);
                             const lv = empLeaves.find(l => l.start_date <= date && l.end_date >= date);
                             if (!lv) return <div key={day} className="border h-7 sm:h-8" />;
                             const typ = COLORS[lv.type];
-                            const cls = lv.status==='Approved' ? `${typ.fill}` : `border ${typ.outline}`;
+                            const cls = lv.status === 'Approved' ? `${typ.fill}` : `border ${typ.outline}`;
                             return <div key={day} className={`border h-7 sm:h-8 flex items-center justify-center`}>
                               <div title={`${lv.type} (${lv.status})`} className={`h-3 w-3 sm:h-4 sm:w-4 rounded ${cls}`} />
                             </div>;
@@ -394,7 +425,7 @@ import { supabase } from '../../lib/supabaseClient';
                         </React.Fragment>
                       );
                     })}
-                    {filteredEmployees.length===0 && (
+                    {filteredEmployees.length === 0 && (
                       <div className="col-span-full p-4 text-center text-text-secondary">No employees</div>
                     )}
                   </div>
@@ -418,22 +449,22 @@ import { supabase } from '../../lib/supabaseClient';
                   className="mt-1 w-full border rounded px-2 py-1"
                   placeholder="Search name or email"
                   value={reqForEmail}
-                  onChange={e=>{ setReqForEmail(e.target.value); setShowEmpSuggest(true); }}
-                  onFocus={()=> setShowEmpSuggest(true)}
+                  onChange={e => { setReqForEmail(e.target.value); setShowEmpSuggest(true); }}
+                  onFocus={() => setShowEmpSuggest(true)}
                 />
-                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length>0 && (
+                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length > 0 && (
                   <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow max-h-60 overflow-auto">
                     {empSuggestions.map(emp => (
                       <div key={emp.email}
                         className="px-2 py-1 hover:bg-gray-50 cursor-pointer text-sm"
-                        onClick={()=>{ setReqForEmail(emp.email); setShowEmpSuggest(false); }}>
+                        onClick={() => { setReqForEmail(emp.email); setShowEmpSuggest(false); }}>
                         <span className="font-medium">{emp.full_name || emp.email}</span>
                         {emp.full_name && <span className="text-text-secondary"> — {emp.email}</span>}
                       </div>
                     ))}
                   </div>
                 )}
-                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length===0 && (
+                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length === 0 && (
                   <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow px-2 py-2 text-sm text-text-secondary">
                     No matches
                   </div>
@@ -442,7 +473,7 @@ import { supabase } from '../../lib/supabaseClient';
             )}
             <div>
               <label className="text-sm font-semibold">Type</label>
-              <select className="mt-1 w-full border rounded px-2 py-1" value={reqType} onChange={e=>setReqType(e.target.value as LeaveType)}>
+              <select className="mt-1 w-full border rounded px-2 py-1" value={reqType} onChange={e => setReqType(e.target.value as LeaveType)}>
                 <option value="Sick">Sick Leave</option>
                 <option value="Remote">Work Remotely</option>
                 <option value="Vacation">Vacation</option>
@@ -451,19 +482,19 @@ import { supabase } from '../../lib/supabaseClient';
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold">Start date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqStart} onChange={e=>setReqStart(e.target.value)} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqStart} onChange={e => setReqStart(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">End date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqEnd} onChange={e=>setReqEnd(e.target.value)} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqEnd} onChange={e => setReqEnd(e.target.value)} />
               </div>
             </div>
             <div>
               <label className="text-sm font-semibold">Reason (optional)</label>
-              <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={reqReason} onChange={e=>setReqReason(e.target.value)} />
+              <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={reqReason} onChange={e => setReqReason(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={()=>setRequestOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
+              <button type="button" onClick={() => setRequestOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
               <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Submit</button>
             </div>
           </form>
@@ -472,15 +503,15 @@ import { supabase } from '../../lib/supabaseClient';
 
       {/* Manage Modal */}
       {manageEmail && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>setManageEmail(null)}>
-          <div className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl" onClick={e=>e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setManageEmail(null)}>
+          <div className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <div className="text-lg font-semibold">Manage Leaves — {manageEmail}</div>
-              <button onClick={()=>setManageEmail(null)} className="text-sm">✕</button>
+              <button onClick={() => setManageEmail(null)} className="text-sm">✕</button>
             </div>
             {!isAdmin && <div className="text-sm text-red-600 mt-1">Only Admin/Super Admin can approve or reject.</div>}
             <div className="mt-3 max-h-[60vh] overflow-auto divide-y">
-              {leaves.filter(l=>l.employee_email===manageEmail).map(lv => (
+              {leaves.filter(l => l.employee_email === manageEmail).map(lv => (
                 <div key={lv.id} className="py-2 flex items-center justify-between gap-3">
                   <div>
                     <div className="font-semibold text-sm">{lv.type} — {lv.status}</div>
@@ -491,14 +522,14 @@ import { supabase } from '../../lib/supabaseClient';
                     <div className={`h-3 w-3 rounded ${COLORS[lv.type].fill}`} />
                     {isAdmin && (
                       <>
-                        <button onClick={()=>approveReject(lv.id,'Approved')} className="px-2 py-1 text-xs rounded border border-emerald-500 text-emerald-700">Approve</button>
-                        <button onClick={()=>approveReject(lv.id,'Rejected')} className="px-2 py-1 text-xs rounded border border-red-500 text-red-700">Reject</button>
+                        <button onClick={() => approveReject(lv.id, 'Approved')} className="px-2 py-1 text-xs rounded border border-emerald-500 text-emerald-700">Approve</button>
+                        <button onClick={() => approveReject(lv.id, 'Rejected')} className="px-2 py-1 text-xs rounded border border-red-500 text-red-700">Reject</button>
                       </>
                     )}
                   </div>
                 </div>
               ))}
-              {leaves.filter(l=>l.employee_email===manageEmail).length===0 && (
+              {leaves.filter(l => l.employee_email === manageEmail).length === 0 && (
                 <div className="py-6 text-center text-text-secondary">No requests</div>
               )}
             </div>
@@ -507,7 +538,7 @@ import { supabase } from '../../lib/supabaseClient';
       )}
     </>
   );
- };
+};
 
- export default LeavesPage;
+export default LeavesPage;
 

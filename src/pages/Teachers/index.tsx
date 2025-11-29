@@ -1,3 +1,26 @@
+/**
+ * @fileoverview Teachers Page
+ * 
+ * Teacher management page for the GSL CRM system.
+ * Handles teacher-student assignments, attendance tracking, timetable management, and mock test recording.
+ * 
+ * **Key Features:**
+ * - Student assignment to teachers (admin only)
+ * - Daily attendance recording
+ * - Timetable upload and viewing
+ * - Mock test score recording
+ * - Role-based access (admin vs teacher views)
+ * - Real-time data synchronization
+ * 
+ * **Tabs:**
+ * 1. **Assign Students** - Admin can assign/unassign students to teachers
+ * 2. **Daily Attendance** - Mark student attendance
+ * 3. **Timetable** - Upload/view teacher timetables
+ * 4. **Mock Tests** - Record test scores for students
+ * 
+ * @module pages/Teachers
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';

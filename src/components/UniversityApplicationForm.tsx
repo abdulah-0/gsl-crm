@@ -1,12 +1,52 @@
+/**
+ * @fileoverview University Application Form Component
+ * 
+ * Modal form for submitting university applications.
+ * Captures course details, application date, and comments.
+ * 
+ * @module components/UniversityApplicationForm
+ */
+
 import React, { useState } from 'react';
 
+/**
+ * Props for UniversityApplicationForm component
+ */
 type UniversityApplicationFormProps = {
+    /** Whether the modal is open */
     isOpen: boolean;
+    /** Callback to close the modal */
     onClose: () => void;
+    /** Callback to submit application data */
     onSubmit: (data: { courseApplied: string; applicationDate: string; comment: string }) => void;
+    /** Name of the university being applied to */
     universityName: string;
 };
 
+/**
+ * UniversityApplicationForm Component
+ * 
+ * Modal form for submitting university applications.
+ * 
+ * **Features:**
+ * - Course name input
+ * - Application date selection
+ * - Optional comments/notes
+ * - Form validation
+ * - Loading states during submission
+ * - Auto-reset on successful submission
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <UniversityApplicationForm
+ *   isOpen={showForm}
+ *   onClose={() => setShowForm(false)}
+ *   onSubmit={(data) => handleApplicationSubmit(data)}
+ *   universityName="Harvard University"
+ * />
+ * ```
+ */
 const UniversityApplicationForm: React.FC<UniversityApplicationFormProps> = ({
     isOpen,
     onClose,

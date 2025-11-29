@@ -1,3 +1,28 @@
+/**
+ * @fileoverview Consultant Dashboard
+ * 
+ * Specialized dashboard for consultants/counselors in the GSL CRM.
+ * Provides case management, performance tracking, and quick actions.
+ * 
+ * **Key Features:**
+ * - Real-time KPIs (Visa Success, CAS Issued, In Progress, Total Students)
+ * - Branch performance filtering
+ * - Employee performance metrics
+ * - Recent cases with stage tracking
+ * - Active cases by stage (Initial, CAS, Visa)
+ * - Recent activities feed
+ * - Quick action shortcuts
+ * 
+ * **Branch Filtering:**
+ * - All Branches, F-8 Branch, I-8 Branch, PWD Branch, Peshawar Branch
+ * 
+ * **Metrics:**
+ * - Derived from dashboard_cases, vouchers, and activity_log
+ * - Real-time updates via Supabase subscriptions
+ * 
+ * @module pages/Consultant
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
@@ -17,9 +42,9 @@ const timeAgo = (d: string | Date) => {
   const mins = Math.floor(diffMs / 60000);
   if (mins < 60) return `${mins} min ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs===1?'':'s'} ago`;
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
   const days = Math.floor(hrs / 24);
-  return `${days} day${days===1?'':'s'} ago`;
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 };
 
 interface CaseRow { id: string; title: string; branch?: string; status?: string; created_at?: string; employee?: string; }
@@ -56,7 +81,7 @@ const ConsultantDashboard: React.FC = () => {
           name,
           cases: v.cases,
           successRate: v.cases ? Math.round((v.completed / v.cases) * 100) : 0,
-        })).sort((a,b)=> b.cases - a.cases);
+        })).sort((a, b) => b.cases - a.cases);
         setEmployeesPerf(perf);
       }
 
@@ -76,7 +101,7 @@ const ConsultantDashboard: React.FC = () => {
         .gte('occurred_at', monthStart);
       const byBranch: Record<string, number> = {};
       for (const v of (vData || []) as any[]) {
-        if (!['cash_in','online','bank'].includes(v.vtype)) continue;
+        if (!['cash_in', 'online', 'bank'].includes(v.vtype)) continue;
         const key = v.branch || 'Unknown';
         byBranch[key] = (byBranch[key] || 0) + Number(v.amount || 0);
       }
@@ -123,10 +148,10 @@ const ConsultantDashboard: React.FC = () => {
     return dt.getFullYear() === now.getFullYear() && dt.getMonth() === now.getMonth();
   };
   const totalCases = cases.length;
-  const completedCases = cases.filter(c => (c.status||'').toLowerCase().includes('completed')).length;
+  const completedCases = cases.filter(c => (c.status || '').toLowerCase().includes('completed')).length;
   const visaSuccessPct = totalCases ? Math.round((completedCases / totalCases) * 100) : 0;
-  const casIssued = cases.filter(c => (c.status||'').toLowerCase().includes('cas') && isThisMonth(c.created_at)).length;
-  const inProgress = cases.filter(c => (c.status||'').toLowerCase().includes('progress')).length;
+  const casIssued = cases.filter(c => (c.status || '').toLowerCase().includes('cas') && isThisMonth(c.created_at)).length;
+  const inProgress = cases.filter(c => (c.status || '').toLowerCase().includes('progress')).length;
   const totalStudents = Array.from(new Set(cases.filter(c => isThisMonth(c.created_at)).map(c => c.title))).length;
 
   // Employees performance table derived from cases
@@ -134,14 +159,14 @@ const ConsultantDashboard: React.FC = () => {
 
   // Branch metrics from filtered cases + vouchers
   const activeCases = filteredCases.length;
-  const completedInBranch = filteredCases.filter(c => (c.status||'').toLowerCase().includes('completed')).length;
+  const completedInBranch = filteredCases.filter(c => (c.status || '').toLowerCase().includes('completed')).length;
   const successRate = activeCases ? Math.round((completedInBranch / activeCases) * 100) : 0;
-  const revenueForBranch = branch === 'All Branches' ? Object.values(branchRevenue).reduce((a,b)=>a+b,0) : (branchRevenue[branch] || 0);
+  const revenueForBranch = branch === 'All Branches' ? Object.values(branchRevenue).reduce((a, b) => a + b, 0) : (branchRevenue[branch] || 0);
   const staffCount = new Set(filteredCases.map(c => c.employee || 'Unassigned')).size;
   const branchMetrics = [
     { label: 'Active Cases', value: String(activeCases) },
     { label: 'Success Rate', value: `${successRate}%` },
-    { label: 'Revenue', value: `Rs ${Math.round(revenueForBranch/1000)}K` },
+    { label: 'Revenue', value: `Rs ${Math.round(revenueForBranch / 1000)}K` },
     { label: 'Staff', value: String(staffCount) },
   ];
 
@@ -196,7 +221,7 @@ const ConsultantDashboard: React.FC = () => {
               <h2 className="text-xl font-bold text-text-primary">Branch Performance</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 {BRANCHES.slice(1).map(b => (
-                  <button key={b} onClick={()=>setBranch(b)} className={`px-3 py-1 rounded-full border ${branch===b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
+                  <button key={b} onClick={() => setBranch(b)} className={`px-3 py-1 rounded-full border ${branch === b ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}>{b}</button>
                 ))}
               </div>
             </div>
@@ -221,7 +246,7 @@ const ConsultantDashboard: React.FC = () => {
                       </div>
                       <div className="col-span-3"><span className="px-2 py-0.5 text-xs rounded bg-gray-100">{e.cases}</span></div>
                       <div className="col-span-3">
-                        <span className={`px-2 py-0.5 text-xs rounded ${e.successRate>=70?'bg-emerald-100 text-emerald-700': e.successRate>=40? 'bg-yellow-100 text-yellow-800':'bg-red-100 text-red-700'}`}>{e.successRate}%</span>
+                        <span className={`px-2 py-0.5 text-xs rounded ${e.successRate >= 70 ? 'bg-emerald-100 text-emerald-700' : e.successRate >= 40 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-700'}`}>{e.successRate}%</span>
                       </div>
                     </div>
                   ))}
@@ -235,7 +260,7 @@ const ConsultantDashboard: React.FC = () => {
                   {branchMetrics.map((m) => (
                     <div key={m.label} className="bg-gray-50 rounded p-3">
                       <div className="text-text-secondary">{m.label}</div>
-                      <div className={`text-lg font-bold ${m.label==='Revenue'?'text-purple-600':''}`}>{m.value}</div>
+                      <div className={`text-lg font-bold ${m.label === 'Revenue' ? 'text-purple-600' : ''}`}>{m.value}</div>
                     </div>
                   ))}
                 </div>
@@ -251,9 +276,9 @@ const ConsultantDashboard: React.FC = () => {
                 <h2 className="text-xl font-bold text-text-primary">Recent Cases</h2>
               </div>
               <div className="divide-y">
-                {filteredCases.slice(0,6).map((c) => {
-                  const stage = (c.status||'').toLowerCase().includes('cas') ? 'CAS Stage' : (c.status||'').toLowerCase().includes('visa') ? 'Visa Stage' : (c.status||'').toLowerCase().includes('completed') ? 'Completed' : 'Initial Stage';
-                  const stageClass = stage==='Visa Stage' ? 'bg-emerald-100 text-emerald-700' : stage==='CAS Stage' ? 'bg-yellow-100 text-yellow-800' : stage==='Completed' ? 'bg-gray-100 text-gray-700' : 'bg-orange-100 text-orange-800';
+                {filteredCases.slice(0, 6).map((c) => {
+                  const stage = (c.status || '').toLowerCase().includes('cas') ? 'CAS Stage' : (c.status || '').toLowerCase().includes('visa') ? 'Visa Stage' : (c.status || '').toLowerCase().includes('completed') ? 'Completed' : 'Initial Stage';
+                  const stageClass = stage === 'Visa Stage' ? 'bg-emerald-100 text-emerald-700' : stage === 'CAS Stage' ? 'bg-yellow-100 text-yellow-800' : stage === 'Completed' ? 'bg-gray-100 text-gray-700' : 'bg-orange-100 text-orange-800';
                   return (
                     <div key={c.id} className="py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
@@ -285,7 +310,7 @@ const ConsultantDashboard: React.FC = () => {
             <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-4">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-bold text-text-primary">Active Cases (By Stage)</h2>
-                <select value={branch} onChange={(e)=>setBranch(e.target.value as any)} className="border rounded-lg p-1 text-sm">
+                <select value={branch} onChange={(e) => setBranch(e.target.value as any)} className="border rounded-lg p-1 text-sm">
                   {BRANCHES.map(b => (<option key={b}>{b}</option>))}
                 </select>
               </div>

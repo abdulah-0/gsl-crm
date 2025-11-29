@@ -1,7 +1,22 @@
+/**
+ * @fileoverview Legacy CheckBox Component
+ * 
+ * This is the existing CheckBox component used throughout the application.
+ * It provides a customizable checkbox with label support and various styling options.
+ * 
+ * **Note:** A new Radix-based Checkbox component is available at `@/components/radix-components/Checkbox`
+ * with improved accessibility. This component remains for backward compatibility.
+ * 
+ * @module components/ui/CheckBox
+ */
+
 import React, { useState } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
 import { twMerge } from 'tailwind-merge';
 
+/**
+ * Checkbox container variant styles
+ */
 const checkboxClasses = cva(
   'flex items-center cursor-pointer transition-all duration-200',
   {
@@ -24,6 +39,9 @@ const checkboxClasses = cva(
   }
 );
 
+/**
+ * Checkbox input element variant styles
+ */
 const checkboxInputClasses = cva(
   'rounded border-2 transition-all duration-200 focus:ring-2 focus:ring-offset-2 focus:ring-orange-500',
   {
@@ -40,36 +58,93 @@ const checkboxInputClasses = cva(
   }
 );
 
-interface CheckBoxProps extends 
-  React.InputHTMLAttributes<HTMLInputElement>,
+/**
+ * Props for the CheckBox component
+ */
+interface CheckBoxProps extends
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>,
   VariantProps<typeof checkboxClasses> {
-  // Required parameters with defaults
+  /** Label text (default: "Remember me") */
   text?: string;
+  /** Font size in pixels */
   text_font_size?: string;
+  /** Font family */
   text_font_family?: string;
+  /** Font weight */
   text_font_weight?: string;
+  /** Line height */
   text_line_height?: string;
+  /** Text alignment */
   text_text_align?: 'left' | 'center' | 'right' | 'justify';
+  /** Text color */
   text_color?: string;
-  
-  // Optional parameters (no defaults)
+
+  /** Gap between checkbox and label */
   layout_gap?: string;
+  /** Width of the container */
   layout_width?: string;
+  /** CSS position property */
   position?: string;
-  
-  // Standard React props
+
+  /** Visual variant */
   variant?: 'default' | 'primary' | 'secondary';
+  /** Size variant */
   size?: 'small' | 'medium' | 'large';
+  /** Whether checkbox is disabled */
   disabled?: boolean;
+  /** Additional CSS classes */
   className?: string;
+  /** Controlled checked state */
   checked?: boolean;
+  /** Default checked state for uncontrolled */
   defaultChecked?: boolean;
+  /** Change event handler */
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  /** HTML id attribute */
   id?: string;
 }
 
+/**
+ * CheckBox Component
+ * 
+ * A customizable checkbox component with label support.
+ * Can be used in controlled or uncontrolled mode.
+ * 
+ * **Features:**
+ * - Controlled and uncontrolled modes
+ * - Customizable label text and styling
+ * - Three variants: default, primary, secondary
+ * - Three sizes: small, medium, large
+ * - Disabled state support
+ * - Auto-generated unique IDs
+ * 
+ * **Note:** For new features, consider using the Radix-based Checkbox component
+ * at `@/components/radix-components/Checkbox` which provides better accessibility.
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * // Uncontrolled checkbox
+ * <CheckBox text="Accept terms" defaultChecked={false} />
+ * 
+ * // Controlled checkbox
+ * <CheckBox 
+ *   text="Subscribe to newsletter"
+ *   checked={isSubscribed}
+ *   onChange={(e) => setIsSubscribed(e.target.checked)}
+ * />
+ * 
+ * // Custom styling
+ * <CheckBox
+ *   text="Remember me"
+ *   variant="primary"
+ *   size="large"
+ *   text_color="#000000"
+ * />
+ * ```
+ */
 const CheckBox = ({
-  // Required parameters with defaults
+  // Text styling parameters with defaults
   text = "Remember me",
   text_font_size = "16",
   text_font_family = "Nunito Sans",
@@ -77,12 +152,12 @@ const CheckBox = ({
   text_line_height = "22px",
   text_text_align = "left",
   text_color = "#7d8592",
-  
-  // Optional parameters (no defaults)
+
+  // Optional layout parameters
   layout_gap,
   layout_width,
   position,
-  
+
   // Standard React props
   variant,
   size,
@@ -94,6 +169,7 @@ const CheckBox = ({
   id,
   ...props
 }: CheckBoxProps) => {
+  // Internal state for uncontrolled mode
   const [isChecked, setIsChecked] = useState(checked ?? defaultChecked);
 
   // Safe validation for optional parameters
@@ -118,17 +194,24 @@ const CheckBox = ({
     color: text_color,
   };
 
+  /**
+   * Handle checkbox change event
+   * Updates internal state and calls onChange callback
+   * 
+   * @param event - Change event from checkbox input
+   */
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled) return;
-    
+
     const newChecked = event.target.checked;
     setIsChecked(newChecked);
-    
+
     if (onChange) {
       onChange(event);
     }
   };
 
+  // Generate unique ID if not provided
   const checkboxId = id || `checkbox-${Math.random().toString(36).substr(2, 9)}`;
 
   return (
@@ -154,7 +237,7 @@ const CheckBox = ({
         )}
         {...props}
       />
-      
+
       {text && (
         <span
           style={textStyles}

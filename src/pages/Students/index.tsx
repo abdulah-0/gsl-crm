@@ -1,3 +1,34 @@
+/**
+ * @fileoverview Students Page
+ * 
+ * Comprehensive student management page for the GSL CRM system.
+ * Handles three types of enrollments: Courses, Consultancy, and Test preparation.
+ * 
+ * **Key Features:**
+ * - Multi-type enrollment (Course/Consultancy/Test)
+ * - Student registration with validation
+ * - Academic and experience tracking
+ * - Photo upload to Supabase Storage
+ * - Invoice generation post-enrollment
+ * - Lead-to-student conversion
+ * - Mock test management
+ * - Real-time student list updates
+ * - Role-based permissions (CRUD access control)
+ * - Excel-style filtering and search
+ * 
+ * **Enrollment Types:**
+ * 1. **Course** - Standard course enrollment with academics/experience
+ * 2. **Consultancy** - University consultancy with detailed application tracking
+ * 3. **Test** - Test preparation enrollment (IELTS/PTE/TOEFL)
+ * 
+ * **Permissions:**
+ * - Super admins: Full CRUD access
+ * - Other users: Granular permissions via user_permissions table
+ * - Checks: can_add, can_edit, can_delete flags
+ * 
+ * @module pages/Students
+ */
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';

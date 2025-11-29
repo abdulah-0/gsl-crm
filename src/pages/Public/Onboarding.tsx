@@ -1,3 +1,35 @@
+/**
+ * @fileoverview Public Employee Onboarding Page
+ * 
+ * Public-facing onboarding form for new employee candidates.
+ * Accessed via secure token link sent by HR/Admin.
+ * 
+ * **Key Features:**
+ * - 3-step onboarding process
+ * - Secure token-based access
+ * - Personal information collection
+ * - Document upload (Photo, CNIC, Resume, Certificates)
+ * - Draft saving capability
+ * - Final submission to HR for approval
+ * 
+ * **Steps:**
+ * 1. Personal Info: Name, CNIC, contact, address, emergency contact, bank details
+ * 2. Attachments: Photo, CNIC scan, resume, certificates
+ * 3. Review & Submit: Final review before submission
+ * 
+ * **Storage:**
+ * - Files uploaded to Supabase Storage bucket: `employee-files`
+ * - Organized by secure token
+ * 
+ * **Workflow:**
+ * - HR creates onboarding record with secure token
+ * - Candidate receives link with token
+ * - Candidate fills form and submits
+ * - HR approves and creates employee record
+ * 
+ * @module pages/Public/Onboarding
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
@@ -69,7 +101,7 @@ const PublicOnboarding: React.FC = () => {
     if (error) { alert('Upload failed: ' + error.message); return; }
     const { data: pub } = await supabase.storage.from(bucket).getPublicUrl(path);
     const url = pub?.publicUrl || '';
-    const next = { ...(row.attachments||{}), [field]: url };
+    const next = { ...(row.attachments || {}), [field]: url };
     setRow({ ...row, attachments: next });
   };
 
@@ -118,36 +150,36 @@ const PublicOnboarding: React.FC = () => {
           <div className="text-sm text-gray-600 mb-4">for {row.candidate_email}</div>
 
           <div className="flex gap-2 text-sm mb-4">
-            <button onClick={()=>setStep(1)} className={`px-3 py-1 rounded ${step===1?'bg-[#ffa332] text-white':'border'}`}>Personal Info</button>
-            <button onClick={()=>setStep(2)} className={`px-3 py-1 rounded ${step===2?'bg-[#ffa332] text-white':'border'}`}>Attachments</button>
-            <button onClick={()=>setStep(3)} className={`px-3 py-1 rounded ${step===3?'bg-[#ffa332] text-white':'border'}`}>Review & Submit</button>
+            <button onClick={() => setStep(1)} className={`px-3 py-1 rounded ${step === 1 ? 'bg-[#ffa332] text-white' : 'border'}`}>Personal Info</button>
+            <button onClick={() => setStep(2)} className={`px-3 py-1 rounded ${step === 2 ? 'bg-[#ffa332] text-white' : 'border'}`}>Attachments</button>
+            <button onClick={() => setStep(3)} className={`px-3 py-1 rounded ${step === 3 ? 'bg-[#ffa332] text-white' : 'border'}`}>Review & Submit</button>
           </div>
 
-          {step===1 && (
+          {step === 1 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold">Full Name</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.full_name||''} onChange={e=>updateField('full_name', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.full_name || ''} onChange={e => updateField('full_name', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Father/Husband Name</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.father_name||''} onChange={e=>updateField('father_name', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.father_name || ''} onChange={e => updateField('father_name', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">CNIC No</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.cnic_no||''} onChange={e=>updateField('cnic_no', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.cnic_no || ''} onChange={e => updateField('cnic_no', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Personal Contact</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.personal_contact||''} onChange={e=>updateField('personal_contact', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.personal_contact || ''} onChange={e => updateField('personal_contact', e.target.value)} />
               </div>
               <div className="md:col-span-2">
                 <label className="text-sm font-semibold">Current Address</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.current_address||''} onChange={e=>updateField('current_address', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.current_address || ''} onChange={e => updateField('current_address', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Gender</label>
-                <select className="mt-1 w-full border rounded px-2 py-1" value={row.gender||''} onChange={e=>updateField('gender', e.target.value)}>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={row.gender || ''} onChange={e => updateField('gender', e.target.value)}>
                   <option value="">Select</option>
                   <option>Male</option>
                   <option>Female</option>
@@ -156,7 +188,7 @@ const PublicOnboarding: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-semibold">Marital Status</label>
-                <select className="mt-1 w-full border rounded px-2 py-1" value={row.marital_status||''} onChange={e=>updateField('marital_status', e.target.value)}>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={row.marital_status || ''} onChange={e => updateField('marital_status', e.target.value)}>
                   <option value="">Select</option>
                   <option>Single</option>
                   <option>Married</option>
@@ -164,57 +196,57 @@ const PublicOnboarding: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-semibold">Date of Birth</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={row.date_of_birth||''} onChange={e=>updateField('date_of_birth', e.target.value)} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={row.date_of_birth || ''} onChange={e => updateField('date_of_birth', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Blood Group</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.blood_group||''} onChange={e=>updateField('blood_group', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.blood_group || ''} onChange={e => updateField('blood_group', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Qualification</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.qualification||''} onChange={e=>updateField('qualification', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.qualification || ''} onChange={e => updateField('qualification', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Emergency Contact Name</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_contact_name||''} onChange={e=>updateField('emergency_contact_name', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_contact_name || ''} onChange={e => updateField('emergency_contact_name', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Emergency Contact No</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_contact_no||''} onChange={e=>updateField('emergency_contact_no', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_contact_no || ''} onChange={e => updateField('emergency_contact_no', e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Relationship</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_relationship||''} onChange={e=>updateField('emergency_relationship', e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={row.emergency_relationship || ''} onChange={e => updateField('emergency_relationship', e.target.value)} />
               </div>
             </div>
           )}
 
-          {step===2 && (
+          {step === 2 && (
             <div className="space-y-3">
               <div>
                 <label className="text-sm font-semibold">Photo</label>
-                <input type="file" accept="image/*" onChange={e=>{ const f=e.target.files?.[0]; if (f) uploadFile('photo', f); }} />
+                <input type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile('photo', f); }} />
               </div>
               <div>
                 <label className="text-sm font-semibold">CNIC</label>
-                <input type="file" onChange={e=>{ const f=e.target.files?.[0]; if (f) uploadFile('cnic', f); }} />
+                <input type="file" onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile('cnic', f); }} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Resume</label>
-                <input type="file" onChange={e=>{ const f=e.target.files?.[0]; if (f) uploadFile('resume', f); }} />
+                <input type="file" onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile('resume', f); }} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Certificates</label>
-                <input type="file" multiple onChange={async e=>{
-                  const files = Array.from(e.target.files||[]);
+                <input type="file" multiple onChange={async e => {
+                  const files = Array.from(e.target.files || []);
                   for (const f of files) await uploadFile(`cert_${f.name}`, f);
                 }} />
               </div>
-              <div className="text-xs text-gray-500">Uploaded: {JSON.stringify(row.attachments||{})}</div>
+              <div className="text-xs text-gray-500">Uploaded: {JSON.stringify(row.attachments || {})}</div>
             </div>
           )}
 
-          {step===3 && (
+          {step === 3 && (
             <div className="space-y-3">
               <div className="text-sm">Please review your information. You can go back to make changes.</div>
               <pre className="text-xs bg-gray-50 border rounded p-2 overflow-auto">{JSON.stringify(row, null, 2)}</pre>

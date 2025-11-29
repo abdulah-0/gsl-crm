@@ -1,3 +1,23 @@
+/**
+ * @fileoverview Reports Page
+ * 
+ * Role-based reporting dashboard for the GSL CRM.
+ * Provides customized analytics and insights based on user role.
+ * 
+ * **Role-Based Views:**
+ * - **Teacher View:** Student performance, attendance, mock test results
+ * - **Counselor View:** Case progress, student communications, task completion
+ * - **Admin View:** Branch analytics, revenue, employee performance
+ * - **Super Admin View:** Organization-wide metrics, multi-branch comparison
+ * 
+ * **Features:**
+ * - Role detection from Supabase auth and dashboard_users
+ * - Dynamic component rendering based on role
+ * - Real-time data from Supabase
+ * 
+ * @module pages/Reports
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
@@ -9,7 +29,7 @@ import SuperAdminView from './SuperAdminView';
 import CounselorView from './CounselorView';
 
 const Reports: React.FC = () => {
-  const [role, setRole] = useState<'teacher'|'admin'|'super'|'counselor'|'other'|null>(null);
+  const [role, setRole] = useState<'teacher' | 'admin' | 'super' | 'counselor' | 'other' | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -46,11 +66,11 @@ const Reports: React.FC = () => {
               Reports
             </h1>
             {!role && <p className="text-text-secondary">Loading...</p>}
-            {role==='teacher' && <TeacherView />}
-            {role==='counselor' && <CounselorView />}
-            {role==='admin' && <AdminView />}
-            {role==='super' && <SuperAdminView />}
-            {role==='other' && (
+            {role === 'teacher' && <TeacherView />}
+            {role === 'counselor' && <CounselorView />}
+            {role === 'admin' && <AdminView />}
+            {role === 'super' && <SuperAdminView />}
+            {role === 'other' && (
               <div className="bg-white rounded-xl p-6 shadow">You have access to Reports. Please contact an administrator to assign a role for tailored reporting.</div>
             )}
           </section>

@@ -1,3 +1,31 @@
+/**
+ * @fileoverview Users Page
+ * 
+ * User management system for the GSL CRM (Super Admin only).
+ * Manages dashboard users, roles, permissions, and access control.
+ * 
+ * **Key Features:**
+ * - User CRUD operations (Super Admin only)
+ * - Role management (Super Admin, Admin, Counsellor, Staff, Teacher, Custom)
+ * - Granular module permissions (Add, Edit, Delete per module)
+ * - Module access control for 13 modules
+ * - Auth account provisioning
+ * - Teacher profile synchronization
+ * - Real-time user updates
+ * - Status management (Active, Inactive, Dormant)
+ * 
+ * **Modules:**
+ * Dashboard, Students, Products & Services, Cases, Calendar, Accounts,
+ * Universities, Employees, Teachers, Messenger, Info Portal, Reports, Users
+ * 
+ * **Permissions System:**
+ * - Legacy: Array-based permissions
+ * - Modern: Granular per-module permissions (can_add, can_edit, can_delete)
+ * - Super Admin: Full CRUD access to all modules
+ * 
+ * @module pages/Users
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -31,30 +59,30 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'users', label: 'Users' }, // Only super admin can see even if checked
 ];
 
-  type ModulePermissions = { add: boolean; edit: boolean; del: boolean };
-  const normalizeModule = (id: string) => {
-    if (id === 'info-portal') return 'info';
-    if (id === 'finances') return 'accounts';
-    return id;
-  };
-  const MODULE_IDS = ALL_TABS.map(t => t.id);
-  const emptyPermMap = (): Record<string, ModulePermissions> => (
-    Object.fromEntries(MODULE_IDS.map(m => [m, { add: false, edit: false, del: false }])) as Record<string, ModulePermissions>
-  );
-  const rowsFromPerms = (email: string, map: Record<string, ModulePermissions>) => (
-    Object.entries(map).flatMap(([module, p]) => {
-      const hasAny = !!(p?.add || p?.edit || p?.del);
-      if (!hasAny && module !== 'dashboard') return [] as any[];
-      return [{
-        user_email: email,
-        module: normalizeModule(module),
-        access: hasAny ? 'CRUD' : 'VIEW',
-        can_add: !!p?.add,
-        can_edit: !!p?.edit,
-        can_delete: !!p?.del,
-      }];
-    })
-  );
+type ModulePermissions = { add: boolean; edit: boolean; del: boolean };
+const normalizeModule = (id: string) => {
+  if (id === 'info-portal') return 'info';
+  if (id === 'finances') return 'accounts';
+  return id;
+};
+const MODULE_IDS = ALL_TABS.map(t => t.id);
+const emptyPermMap = (): Record<string, ModulePermissions> => (
+  Object.fromEntries(MODULE_IDS.map(m => [m, { add: false, edit: false, del: false }])) as Record<string, ModulePermissions>
+);
+const rowsFromPerms = (email: string, map: Record<string, ModulePermissions>) => (
+  Object.entries(map).flatMap(([module, p]) => {
+    const hasAny = !!(p?.add || p?.edit || p?.del);
+    if (!hasAny && module !== 'dashboard') return [] as any[];
+    return [{
+      user_email: email,
+      module: normalizeModule(module),
+      access: hasAny ? 'CRUD' : 'VIEW',
+      can_add: !!p?.add,
+      can_edit: !!p?.edit,
+      can_delete: !!p?.del,
+    }];
+  })
+);
 
 
 const UsersPage: React.FC = () => {
@@ -66,7 +94,7 @@ const UsersPage: React.FC = () => {
 
   const [q, setQ] = useState('');
   const [roleF, setRoleF] = useState('All');
-  const [nAccess, setNAccess] = useState<Record<string, ModulePermissions>>(()=> emptyPermMap());
+  const [nAccess, setNAccess] = useState<Record<string, ModulePermissions>>(() => emptyPermMap());
 
   const [statusF, setStatusF] = useState('All');
 
@@ -75,7 +103,7 @@ const UsersPage: React.FC = () => {
   const [nEmail, setNEmail] = useState('');
   const [nPassword, setNPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [nRole, setNRole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Teacher'|'Custom'>('Staff');
+  const [nRole, setNRole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Custom'>('Staff');
   const [eAccess, setEAccess] = useState<Record<string, ModulePermissions>>({});
 
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
@@ -87,8 +115,8 @@ const UsersPage: React.FC = () => {
   const [eEmail, setEEmail] = useState('');
   const [ePassword, setEPassword] = useState('');
   const [eShowPw, setEShowPw] = useState(false);
-  const [eRole, setERole] = useState<'Super Admin'|'Admin'|'Counsellor'|'Staff'|'Teacher'|'Custom'>('Staff');
-  const [eStatus, setEStatus] = useState<'Active'|'Inactive'|'Dormant'>('Active');
+  const [eRole, setERole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Custom'>('Staff');
+  const [eStatus, setEStatus] = useState<'Active' | 'Inactive' | 'Dormant'>('Active');
   const [ePerms, setEPerms] = useState<string[]>([]);
 
   useEffect(() => {
@@ -124,7 +152,7 @@ const UsersPage: React.FC = () => {
       .channel('public:dashboard_users')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_users' }, () => load())
       .subscribe();
-    return () => { try { supabase.removeChannel(chan); } catch {} };
+    return () => { try { supabase.removeChannel(chan); } catch { } };
   }, []);
 
   const filtered = useMemo(() => {
@@ -137,7 +165,7 @@ const UsersPage: React.FC = () => {
     });
   }, [items, q, roleF, statusF]);
 
-  const isSuper = (currentRole||'').toLowerCase().includes('super');
+  const isSuper = (currentRole || '').toLowerCase().includes('super');
 
   const togglePerm = (list: string[], setList: (v: string[]) => void, id: string, fullControl?: boolean) => {
     if (fullControl && !isSuper) return; // safety
@@ -153,9 +181,9 @@ const UsersPage: React.FC = () => {
     try {
       const id = `USR${Date.now().toString().slice(-8)}`;
       // Build permissions array (for sidebar gating) and granular rows
-      const baseModules = nRole === 'Super Admin' ? ALL_TABS.map(t=>normalizeModule(t.id)) : nPerms;
+      const baseModules = nRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : nPerms;
       const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
-      const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
+      const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
       await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray }]);
       // If role is Teacher, ensure a teacher profile exists as well (matched by email)
       if (nRole === 'Teacher') {
@@ -173,7 +201,7 @@ const UsersPage: React.FC = () => {
         await supabase.from('user_permissions').upsert(rows, { onConflict: 'user_email,module' });
       }
       // Try to provision an Auth account immediately (secure serverless)
-      const pwd = (nPassword||'').trim();
+      const pwd = (nPassword || '').trim();
       let provisioned = false;
       if (pwd) {
         try {
@@ -191,10 +219,10 @@ const UsersPage: React.FC = () => {
       }
       if (!provisioned) {
         // Fallback: send a magic login link
-        try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch {}
+        try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch { }
       }
       // Reset
-      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(()=> emptyPermMap());
+      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(() => emptyPermMap());
       await load();
       alert(provisioned ? 'User added and Auth account created.' : 'User added. Invitation email sent (if email auth is configured).');
     } catch (err: any) {
@@ -206,17 +234,17 @@ const UsersPage: React.FC = () => {
 
   const openEdit = (u: AppUser) => {
     setEditing(u);
-    setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEPerms(u.permissions||[]);
+    setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEPerms(u.permissions || []);
     // Load granular permissions
-    (async ()=>{
+    (async () => {
       try {
         if (u.role === 'Super Admin') {
-          const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setEAccess(m);
+          const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id => { m[id] = { add: true, edit: true, del: true }; }); setEAccess(m);
           return;
         }
         const { data } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', u.email);
         const base = emptyPermMap();
-        (data||[]).forEach((r:any) => {
+        (data || []).forEach((r: any) => {
           const mod = r.module as string;
           const hasCrud = (r.access === 'CRUD');
           base[mod] = {
@@ -227,7 +255,7 @@ const UsersPage: React.FC = () => {
         });
         if (!data || data.length === 0) {
           // Fallback: from old array permissions — mark those modules as view-only (no flags)
-          (u.permissions||[]).forEach(p => { if (!base[p]) base[p] = { add:false, edit:false, del:false }; });
+          (u.permissions || []).forEach(p => { if (!base[p]) base[p] = { add: false, edit: false, del: false }; });
         }
         setEAccess(base);
       } catch {
@@ -241,9 +269,9 @@ const UsersPage: React.FC = () => {
     if (!editing) return;
     setSaving(true);
     try {
-      const baseModules = eRole === 'Super Admin' ? ALL_TABS.map(t=>normalizeModule(t.id)) : ePerms;
+      const baseModules = eRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : ePerms;
       const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
-      const permsArray = Array.from(new Set([ ...baseModules, ...modulesWithCRUD, 'dashboard' ]));
+      const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
       await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray }).eq('id', editing.id);
       // Ensure teacher profile reflects role/status
       try {
@@ -253,7 +281,7 @@ const UsersPage: React.FC = () => {
           await supabase.from('dashboard_teachers').upsert([
             { id: `TEA${Date.now().toString().slice(-8)}`, full_name: eFull, email: eEmail, status: eStatus }
           ], { onConflict: 'email' } as any);
-        } else if ((editing.role||'').toString() === 'Teacher') {
+        } else if ((editing.role || '').toString() === 'Teacher') {
           // Role changed away from Teacher — mark teacher record inactive
           await supabase.from('dashboard_teachers').update({ status: 'Inactive' }).eq('email', editing.email);
         }
@@ -309,16 +337,16 @@ const UsersPage: React.FC = () => {
           <form onSubmit={saveNew} className="bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a] lg:col-span-1">
             <div className="flex items-center justify-between"><h2 className="text-lg font-bold">Add New User</h2></div>
             <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={nFull} onChange={e=>setNFull(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <label><span className="text-text-secondary">Email</span><input type="email" value={nEmail} onChange={e=>setNEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
+              <label><span className="text-text-secondary">Full Name</span><input value={nFull} onChange={e => setNFull(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
+              <label><span className="text-text-secondary">Email</span><input type="email" value={nEmail} onChange={e => setNEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
               <label><span className="text-text-secondary">Password</span>
                 <div className="mt-1 flex items-center gap-2">
-                  <input type={showPw ? 'text' : 'password'} value={nPassword} onChange={e=>setNPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(Auth created server-side)" />
-                  <button type="button" onClick={()=>setShowPw(s=>!s)} className="px-2 py-1 border rounded text-xs">{showPw?'Hide':'Show'}</button>
+                  <input type={showPw ? 'text' : 'password'} value={nPassword} onChange={e => setNPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(Auth created server-side)" />
+                  <button type="button" onClick={() => setShowPw(s => !s)} className="px-2 py-1 border rounded text-xs">{showPw ? 'Hide' : 'Show'}</button>
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={nRole} onChange={e=>{ const v=e.target.value as any; setNRole(v); if (v==='Super Admin') { const m: Record<string, ModulePermissions> = {}; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setNAccess(m); setNPerms(ALL_TABS.map(t=>normalizeModule(t.id))); } else if (v==='Teacher') { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard','teachers']); } else { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
+                <select value={nRole} onChange={e => { const v = e.target.value as any; setNRole(v); if (v === 'Super Admin') { const m: Record<string, ModulePermissions> = {}; MODULE_IDS.forEach(id => { m[id] = { add: true, edit: true, del: true }; }); setNAccess(m); setNPerms(ALL_TABS.map(t => normalizeModule(t.id))); } else if (v === 'Teacher') { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard', 'teachers']); } else { const m = emptyPermMap(); setNAccess(m); setNPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -331,37 +359,37 @@ const UsersPage: React.FC = () => {
                 <div className="text-text-secondary mb-1">Module Access</div>
                 <div className="border rounded p-2 max-h-64 overflow-auto text-xs divide-y">
                   {ALL_TABS.map(t => {
-                    const perm = nAccess[t.id] || { add:false, edit:false, del:false };
-                    const value = nRole==='Super Admin' ? 'CRUD' : (
+                    const perm = nAccess[t.id] || { add: false, edit: false, del: false };
+                    const value = nRole === 'Super Admin' ? 'CRUD' : (
                       perm.add && perm.edit && perm.del ? 'CRUD' :
-                      perm.add && perm.edit ? 'ADD_EDIT' :
-                      perm.add && perm.del ? 'ADD_DELETE' :
-                      perm.edit && perm.del ? 'EDIT_DELETE' :
-                      perm.add ? 'ADD' :
-                      perm.edit ? 'EDIT' :
-                      perm.del ? 'DELETE' :
-                      (nPerms.includes(normalizeModule(t.id)) ? 'VIEW' : 'NONE')
+                        perm.add && perm.edit ? 'ADD_EDIT' :
+                          perm.add && perm.del ? 'ADD_DELETE' :
+                            perm.edit && perm.del ? 'EDIT_DELETE' :
+                              perm.add ? 'ADD' :
+                                perm.edit ? 'EDIT' :
+                                  perm.del ? 'DELETE' :
+                                    (nPerms.includes(normalizeModule(t.id)) ? 'VIEW' : 'NONE')
                     );
                     return (
                       <div key={t.id} className="flex items-center justify-between gap-3 py-1.5">
                         <span className="truncate">{t.label}</span>
                         <select
-                          disabled={nRole==='Super Admin'}
+                          disabled={nRole === 'Super Admin'}
                           value={value}
                           onChange={(e) => {
-                            const v = e.target.value as 'NONE'|'VIEW'|'ADD'|'EDIT'|'DELETE'|'ADD_EDIT'|'ADD_DELETE'|'EDIT_DELETE'|'CRUD';
+                            const v = e.target.value as 'NONE' | 'VIEW' | 'ADD' | 'EDIT' | 'DELETE' | 'ADD_EDIT' | 'ADD_DELETE' | 'EDIT_DELETE' | 'CRUD';
                             setNAccess(prev => {
-                              const base = { ...(prev[t.id] || { add:false, edit:false, del:false }) };
+                              const base = { ...(prev[t.id] || { add: false, edit: false, del: false }) };
                               switch (v) {
-                                case 'NONE': base.add=false; base.edit=false; base.del=false; break;
-                                case 'VIEW': base.add=false; base.edit=false; base.del=false; break;
-                                case 'ADD': base.add=true; base.edit=false; base.del=false; break;
-                                case 'EDIT': base.add=false; base.edit=true; base.del=false; break;
-                                case 'DELETE': base.add=false; base.edit=false; base.del=true; break;
-                                case 'ADD_EDIT': base.add=true; base.edit=true; base.del=false; break;
-                                case 'ADD_DELETE': base.add=true; base.edit=false; base.del=true; break;
-                                case 'EDIT_DELETE': base.add=false; base.edit=true; base.del=true; break;
-                                case 'CRUD': base.add=true; base.edit=true; base.del=true; break;
+                                case 'NONE': base.add = false; base.edit = false; base.del = false; break;
+                                case 'VIEW': base.add = false; base.edit = false; base.del = false; break;
+                                case 'ADD': base.add = true; base.edit = false; base.del = false; break;
+                                case 'EDIT': base.add = false; base.edit = true; base.del = false; break;
+                                case 'DELETE': base.add = false; base.edit = false; base.del = true; break;
+                                case 'ADD_EDIT': base.add = true; base.edit = true; base.del = false; break;
+                                case 'ADD_DELETE': base.add = true; base.edit = false; base.del = true; break;
+                                case 'EDIT_DELETE': base.add = false; base.edit = true; base.del = true; break;
+                                case 'CRUD': base.add = true; base.edit = true; base.del = true; break;
                               }
                               return { ...prev, [t.id]: base };
                             });
@@ -398,9 +426,9 @@ const UsersPage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2 justify-between">
                 <h2 className="text-lg font-bold">Users</h2>
                 <div className="flex items-center gap-2 text-sm">
-                  <input placeholder="Search" value={q} onChange={e=>setQ(e.target.value)} className="border rounded p-2" />
-                  <select value={roleF} onChange={e=>setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option></select>
-                  <select value={statusF} onChange={e=>setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option><option>Dormant</option></select>
+                  <input placeholder="Search" value={q} onChange={e => setQ(e.target.value)} className="border rounded p-2" />
+                  <select value={roleF} onChange={e => setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option></select>
+                  <select value={statusF} onChange={e => setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option><option>Dormant</option></select>
                 </div>
               </div>
               <div className="mt-3 overflow-auto">
@@ -425,12 +453,12 @@ const UsersPage: React.FC = () => {
                         <td className="py-2 pr-4">{u.role}</td>
                         <td className="py-2 pr-4">{u.status}</td>
                         <td className="py-2 pr-4">
-                          <button onClick={()=>openEdit(u)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                          <button onClick={()=>delUser(u)} className="text-red-600 hover:underline">Delete</button>
+                          <button onClick={() => openEdit(u)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                          <button onClick={() => delUser(u)} className="text-red-600 hover:underline">Delete</button>
                         </td>
                       </tr>
                     ))}
-                    {!loading && filtered.length===0 && (
+                    {!loading && filtered.length === 0 && (
                       <tr><td colSpan={5} className="py-4 text-center text-text-secondary">No users found</td></tr>
                     )}
                   </tbody>
@@ -445,18 +473,18 @@ const UsersPage: React.FC = () => {
       {editing && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
           <form onSubmit={saveEdit} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
-            <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Edit User</h3><button type="button" onClick={()=>setEditing(null)} className="text-text-secondary">✕</button></div>
+            <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Edit User</h3><button type="button" onClick={() => setEditing(null)} className="text-text-secondary">✕</button></div>
             <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={eFull} onChange={e=>setEFull(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
-              <label><span className="text-text-secondary">Email</span><input type="email" value={eEmail} onChange={e=>setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required/></label>
+              <label><span className="text-text-secondary">Full Name</span><input value={eFull} onChange={e => setEFull(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
+              <label><span className="text-text-secondary">Email</span><input type="email" value={eEmail} onChange={e => setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
               <label><span className="text-text-secondary">Password (optional)</span>
                 <div className="mt-1 flex items-center gap-2">
-                  <input type={eShowPw ? 'text' : 'password'} value={ePassword} onChange={e=>setEPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(not stored here)" />
-                  <button type="button" onClick={()=>setEShowPw(s=>!s)} className="px-2 py-1 border rounded text-xs">{eShowPw?'Hide':'Show'}</button>
+                  <input type={eShowPw ? 'text' : 'password'} value={ePassword} onChange={e => setEPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(not stored here)" />
+                  <button type="button" onClick={() => setEShowPw(s => !s)} className="px-2 py-1 border rounded text-xs">{eShowPw ? 'Hide' : 'Show'}</button>
                 </div>
               </label>
               <label><span className="text-text-secondary">Role</span>
-                <select value={eRole} onChange={e=>{ const v=e.target.value as any; setERole(v); if (v==='Super Admin') { const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id=>{ m[id]={add:true,edit:true,del:true}; }); setEAccess(m); setEPerms(ALL_TABS.map(t=>normalizeModule(t.id))); } else if (v==='Teacher') { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard','teachers']); } else { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
+                <select value={eRole} onChange={e => { const v = e.target.value as any; setERole(v); if (v === 'Super Admin') { const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id => { m[id] = { add: true, edit: true, del: true }; }); setEAccess(m); setEPerms(ALL_TABS.map(t => normalizeModule(t.id))); } else if (v === 'Teacher') { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard', 'teachers']); } else { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
                   <option>Super Admin</option>
                   <option>Admin</option>
                   <option>Counsellor</option>
@@ -466,7 +494,7 @@ const UsersPage: React.FC = () => {
                 </select>
               </label>
               <label><span className="text-text-secondary">Status</span>
-                <select value={eStatus} onChange={e=>setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                <select value={eStatus} onChange={e => setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
                   <option>Active</option>
                   <option>Inactive</option>
                   <option>Dormant</option>
@@ -480,15 +508,15 @@ const UsersPage: React.FC = () => {
                       <span className="truncate">{t.label}</span>
                       <div className="flex items-center gap-2">
                         <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.add} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), add: ev.target.checked } }))} />
+                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.add} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), add: ev.target.checked } }))} />
                           <span>Add</span>
                         </label>
                         <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.edit} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), edit: ev.target.checked } }))} />
+                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.edit} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), edit: ev.target.checked } }))} />
                           <span>Edit</span>
                         </label>
                         <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole==='Super Admin'} checked={eRole==='Super Admin' || !!eAccess[t.id]?.del} onChange={(ev)=>setEAccess(prev=>({ ...prev, [t.id]: { ...(prev[t.id]||{add:false,edit:false,del:false}), del: ev.target.checked } }))} />
+                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.del} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), del: ev.target.checked } }))} />
                           <span>Delete</span>
                         </label>
                       </div>

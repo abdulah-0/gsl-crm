@@ -1,21 +1,65 @@
+/**
+ * @fileoverview Multi-Select User Component
+ * 
+ * Dropdown component for selecting multiple users from dashboard_users table.
+ * Provides search functionality and displays selected users as tags.
+ * 
+ * @module components/MultiSelectUser
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+/**
+ * User option data structure
+ */
 export interface UserOption {
+    /** User ID */
     id: string;
+    /** User's full name */
     full_name: string;
+    /** User's email address */
     email: string;
+    /** Optional avatar URL */
     avatar_url?: string;
 }
 
+/**
+ * Props for MultiSelectUser component
+ */
 interface MultiSelectUserProps {
-    selectedIds: string[]; // IDs of selected users
+    /** Array of selected user IDs */
+    selectedIds: string[];
+    /** Callback when selection changes */
     onChange: (ids: string[]) => void;
+    /** Placeholder text */
     placeholder?: string;
+    /** Additional CSS classes */
     className?: string;
 }
 
+/**
+ * MultiSelectUser Component
+ * 
+ * Multi-select dropdown for users with search functionality.
+ * 
+ * **Features:**
+ * - Fetches users from dashboard_users table
+ * - Search by name or email
+ * - Display selected users as removable tags
+ * - Click-outside to close dropdown
+ * - Loading state during data fetch
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <MultiSelectUser
+ *   selectedIds={selectedUserIds}
+ *   onChange={(ids) => setSelectedUserIds(ids)}
+ *   placeholder="Select users..."
+ * />
+ * ```
+ */
 const MultiSelectUser: React.FC<MultiSelectUserProps> = ({
     selectedIds,
     onChange,

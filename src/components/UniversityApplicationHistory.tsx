@@ -1,23 +1,76 @@
+/**
+ * @fileoverview University Application History Component
+ * 
+ * Displays a collapsible list of university applications grouped by university.
+ * Shows application details including course, date, and comments.
+ * 
+ * @module components/UniversityApplicationHistory
+ */
+
 import React, { useState } from 'react';
 
+/**
+ * Single application entry data structure
+ */
 type ApplicationEntry = {
+    /** Unique application ID */
     id: string;
+    /** Course applied for */
     courseApplied: string;
+    /** Application submission date */
     applicationDate: string;
+    /** Optional comment/notes */
     comment: string;
+    /** Timestamp when application was created */
     createdAt: string;
 };
 
+/**
+ * University with associated applications
+ */
 type UniversityWithApplications = {
+    /** University ID */
     universityId: string;
+    /** University name */
     universityName: string;
+    /** List of applications for this university */
     applications: ApplicationEntry[];
 };
 
+/**
+ * Props for UniversityApplicationHistory component
+ */
 type UniversityApplicationHistoryProps = {
+    /** Array of universities with their applications */
     data: UniversityWithApplications[];
 };
 
+/**
+ * UniversityApplicationHistory Component
+ * 
+ * Displays application history grouped by university with expand/collapse functionality.
+ * 
+ * **Features:**
+ * - Collapsible university sections
+ * - Application count badges
+ * - Formatted dates
+ * - Empty state message
+ * - Detailed application information
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <UniversityApplicationHistory
+ *   data={[
+ *     {
+ *       universityId: '1',
+ *       universityName: 'Harvard',
+ *       applications: [{ id: 'a1', courseApplied: 'CS', ... }]
+ *     }
+ *   ]}
+ * />
+ * ```
+ */
 const UniversityApplicationHistory: React.FC<UniversityApplicationHistoryProps> = ({
     data,
 }) => {

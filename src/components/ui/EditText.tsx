@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Legacy EditText Component
+ * 
+ * Custom text input component with label, error message, and icon support.
+ * Provides a flexible input field with extensive styling options.
+ * 
+ * @module components/ui/EditText
+ */
+
 import React, { useState } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
 import { twMerge } from 'tailwind-merge';
@@ -24,8 +33,8 @@ const editTextClasses = cva(
   }
 );
 
-interface EditTextProps extends 
-  React.ComponentProps<'input'>,
+interface EditTextProps extends
+  Omit<React.ComponentProps<'input'>, 'size'>,
   VariantProps<typeof editTextClasses> {
   // Required parameters with defaults
   placeholder?: string;
@@ -39,14 +48,14 @@ interface EditTextProps extends
   border_border?: string;
   border_border_radius?: string;
   effect_box_shadow?: string;
-  
+
   // Optional parameters (no defaults)
   layout_width?: string;
   padding?: string;
   margin?: string;
   position?: string;
   layout_gap?: string;
-  
+
   // Standard React props
   variant?: 'default' | 'filled' | 'outline';
   size?: 'small' | 'medium' | 'large';
@@ -58,8 +67,33 @@ interface EditTextProps extends
   rightIcon?: React.ReactNode;
 }
 
+/**
+ * EditText Component
+ * 
+ * A customizable text input component with label, error message, and icon support.
+ * 
+ * **Features:**
+ * - Optional label above input
+ * - Error message display below input
+ * - Left and right icon support
+ * - Focus state tracking
+ * - Three variants and sizes
+ * - Customizable border and styling
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <EditText
+ *   label="Email"
+ *   placeholder="Enter your email"
+ *   value={email}
+ *   onChange={(e) => setEmail(e.target.value)}
+ *   error={emailError}
+ * />
+ * ```
+ */
 const EditText = ({
-  // Required parameters with defaults
+  // Text styling parameters with defaults
   placeholder = "youremail@gmail.com",
   text_font_size = "14",
   text_font_family = "Nunito Sans",
@@ -71,14 +105,14 @@ const EditText = ({
   border_border = "1 solid #d8e0ef",
   border_border_radius = "24px",
   effect_box_shadow = "0px 1px 2px #b7c8e038",
-  
-  // Optional parameters (no defaults)
+
+  // Optional layout parameters
   layout_width,
   padding,
   margin,
   position,
   layout_gap,
-  
+
   // Standard React props
   variant,
   size,
@@ -108,7 +142,13 @@ const EditText = ({
     hasValidGap ? `gap-[${layout_gap}]` : '',
   ].filter(Boolean).join(' ');
 
-  // Parse border style
+  /**
+   * Parse border string into CSS properties
+   * Format: "width style color" (e.g., "1 solid #d8e0ef")
+   * 
+   * @param borderStr - Border string to parse
+   * @returns Object with width, style, and color properties
+   */
   const parseBorder = (borderStr: string) => {
     const parts = borderStr.split(' ');
     return {
@@ -154,14 +194,14 @@ const EditText = ({
           {label}
         </label>
       )}
-      
+
       <div className="relative">
         {leftIcon && (
           <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
             {leftIcon}
           </div>
         )}
-        
+
         <input
           placeholder={placeholder}
           disabled={disabled}
@@ -171,14 +211,14 @@ const EditText = ({
           onBlur={() => setIsFocused(false)}
           {...props}
         />
-        
+
         {rightIcon && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
             {rightIcon}
           </div>
         )}
       </div>
-      
+
       {error && (
         <p className="mt-1 text-sm text-red-600">
           {error}

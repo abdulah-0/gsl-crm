@@ -1,3 +1,27 @@
+/**
+ * @fileoverview Info Portal Page
+ * 
+ * Internal information portal for the GSL CRM.
+ * Enables admins to post announcements, notices, and media for staff viewing.
+ * 
+ * **Key Features:**
+ * - Post types: Image/Poster, Video, Text/Notice
+ * - Pin important posts
+ * - File upload to Supabase Storage
+ * - Real-time updates via Supabase
+ * - Filtering by post type
+ * - Search by title/description
+ * 
+ * **Access Control:**
+ * - Super Admin/Admin: Create, edit, delete, pin posts
+ * - Other roles: View-only feed
+ * 
+ * **Storage:**
+ * - Media files stored in Supabase Storage bucket: `info`
+ * 
+ * @module pages/Info
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import Sidebar from '../../components/common/Sidebar';
@@ -80,7 +104,7 @@ const InfoPage: React.FC = () => {
       .channel('realtime:info_posts')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'info_posts' }, loadPosts)
       .subscribe();
-    return () => { try { supabase.removeChannel(channel); } catch {} };
+    return () => { try { supabase.removeChannel(channel); } catch { } };
   }, []);
 
   const filtered = useMemo(() => {
@@ -88,7 +112,7 @@ const InfoPage: React.FC = () => {
     if (filterType !== 'all') out = out.filter(p => p.type === filterType);
     if (search.trim()) {
       const s = search.toLowerCase();
-      out = out.filter(p => (p.title||'').toLowerCase().includes(s) || (p.description||'').toLowerCase().includes(s));
+      out = out.filter(p => (p.title || '').toLowerCase().includes(s) || (p.description || '').toLowerCase().includes(s));
     }
     return out;
   }, [posts, filterType, search]);
@@ -147,7 +171,7 @@ const InfoPage: React.FC = () => {
         title: title.trim(),
         description: description.trim() || null,
         type,
-        file_url: (type !== 'text') ? (file_url || (editingId ? posts.find(p=>p.id===editingId)?.file_url || null : null)) : null,
+        file_url: (type !== 'text') ? (file_url || (editingId ? posts.find(p => p.id === editingId)?.file_url || null : null)) : null,
         text_content: type === 'text' ? textContent : null,
       };
 
@@ -164,7 +188,7 @@ const InfoPage: React.FC = () => {
       resetForm();
       setFormOpen(false);
       await loadPosts();
-    } catch (err:any) {
+    } catch (err: any) {
       // eslint-disable-next-line no-alert
       alert(err?.message || 'Failed to save');
     } finally {
@@ -190,7 +214,7 @@ const InfoPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Info</h1>
               {isEditor && (
-                <button onClick={()=>{ setFormOpen(v=>!v); if (!formOpen) resetForm(); }} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">
+                <button onClick={() => { setFormOpen(v => !v); if (!formOpen) resetForm(); }} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">
                   {formOpen ? 'Close' : 'Create New Post'}
                 </button>
               )}
@@ -202,11 +226,11 @@ const InfoPage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm font-semibold">Title</label>
-                    <input className="mt-1 w-full border rounded px-2 py-1" value={title} onChange={e=>setTitle(e.target.value)} required />
+                    <input className="mt-1 w-full border rounded px-2 py-1" value={title} onChange={e => setTitle(e.target.value)} required />
                   </div>
                   <div>
                     <label className="text-sm font-semibold">Type</label>
-                    <select className="mt-1 w-full border rounded px-2 py-1" value={type} onChange={e=>setType(e.target.value as PostType)}>
+                    <select className="mt-1 w-full border rounded px-2 py-1" value={type} onChange={e => setType(e.target.value as PostType)}>
                       <option value="image">Image / Poster</option>
                       <option value="video">Video</option>
                       <option value="text">Text / Notice</option>
@@ -216,19 +240,19 @@ const InfoPage: React.FC = () => {
 
                 <div>
                   <label className="text-sm font-semibold">Description (optional)</label>
-                  <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={description} onChange={e=>setDescription(e.target.value)} />
+                  <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={description} onChange={e => setDescription(e.target.value)} />
                 </div>
 
                 {type !== 'text' ? (
                   <div>
                     <label className="text-sm font-semibold">Upload file ({type === 'image' ? 'image/poster' : 'video'})</label>
-                    <input ref={fileRef} type="file" accept={type==='image'? 'image/*' : 'video/*'} className="mt-1 w-full" />
+                    <input ref={fileRef} type="file" accept={type === 'image' ? 'image/*' : 'video/*'} className="mt-1 w-full" />
                     <p className="text-xs text-text-secondary mt-1">Uploads go to Supabase Storage bucket: info</p>
                   </div>
                 ) : (
                   <div>
                     <label className="text-sm font-semibold">Notice Content</label>
-                    <textarea className="mt-1 w-full border rounded px-2 py-1" rows={8} value={textContent} onChange={e=>setTextContent(e.target.value)} placeholder="Write announcement with basic formatting..." />
+                    <textarea className="mt-1 w-full border rounded px-2 py-1" rows={8} value={textContent} onChange={e => setTextContent(e.target.value)} placeholder="Write announcement with basic formatting..." />
                   </div>
                 )}
 
@@ -238,7 +262,7 @@ const InfoPage: React.FC = () => {
                   <div className="space-y-1">
                     <div className="font-bold">{title || 'Title'}</div>
                     {description && <div className="text-sm text-text-secondary">{description}</div>}
-                    {type==='text' ? (
+                    {type === 'text' ? (
                       <div className="whitespace-pre-wrap text-sm">{textContent || '...'}</div>
                     ) : (
                       <div className="text-sm text-text-secondary">{fileRef.current?.files?.[0]?.name || 'No file selected'}</div>
@@ -247,21 +271,21 @@ const InfoPage: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-end gap-2">
-                  <button type="button" onClick={()=>{ resetForm(); setFormOpen(false); }} className="px-3 py-2 rounded border">Cancel</button>
-                  <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{editingId? 'Update' : 'Publish'}</button>
+                  <button type="button" onClick={() => { resetForm(); setFormOpen(false); }} className="px-3 py-2 rounded border">Cancel</button>
+                  <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{editingId ? 'Update' : 'Publish'}</button>
                 </div>
               </form>
             )}
 
             {/* Filters/Search */}
             <div className="mt-6 flex flex-wrap items-center gap-2">
-              <select className="border rounded px-2 py-1" value={filterType} onChange={e=>setFilterType(e.target.value as any)}>
+              <select className="border rounded px-2 py-1" value={filterType} onChange={e => setFilterType(e.target.value as any)}>
                 <option value="all">All</option>
                 <option value="image">Images</option>
                 <option value="video">Videos</option>
                 <option value="text">Text</option>
               </select>
-              <input className="border rounded px-2 py-1" placeholder="Search by title/description" value={search} onChange={e=>setSearch(e.target.value)} />
+              <input className="border rounded px-2 py-1" placeholder="Search by title/description" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
 
             {/* Editor list view */}
@@ -283,19 +307,19 @@ const InfoPage: React.FC = () => {
                     <tbody className="divide-y">
                       {filtered.map(p => (
                         <tr key={p.id}>
-                          <td className="p-2"><button className={`text-xs px-2 py-1 rounded ${p.pinned? 'bg-amber-100 text-amber-800' : 'bg-gray-100'}`} onClick={()=>togglePin(p)}>{p.pinned? 'Pinned' : 'Pin'}</button></td>
+                          <td className="p-2"><button className={`text-xs px-2 py-1 rounded ${p.pinned ? 'bg-amber-100 text-amber-800' : 'bg-gray-100'}`} onClick={() => togglePin(p)}>{p.pinned ? 'Pinned' : 'Pin'}</button></td>
                           <td className="p-2 font-semibold">{p.title}</td>
                           <td className="p-2 capitalize">{p.type}</td>
                           <td className="p-2">{p.created_at ? new Date(p.created_at).toLocaleString() : ''}</td>
                           <td className="p-2">{p.created_by || ''}</td>
                           <td className="p-2 text-right space-x-2">
-                            <button className="text-blue-600 hover:underline" onClick={()=>window.open(`/info#${p.id}`, '_self')}>View</button>
-                            <button className="text-amber-600 hover:underline" onClick={()=>handleEdit(p)}>Edit</button>
-                            <button className="text-red-600 hover:underline" onClick={()=>handleDelete(p)}>Delete</button>
+                            <button className="text-blue-600 hover:underline" onClick={() => window.open(`/info#${p.id}`, '_self')}>View</button>
+                            <button className="text-amber-600 hover:underline" onClick={() => handleEdit(p)}>Edit</button>
+                            <button className="text-red-600 hover:underline" onClick={() => handleDelete(p)}>Delete</button>
                           </td>
                         </tr>
                       ))}
-                      {filtered.length===0 && (
+                      {filtered.length === 0 && (
                         <tr><td colSpan={6} className="p-4 text-center text-text-secondary">No posts</td></tr>
                       )}
                     </tbody>
@@ -313,15 +337,15 @@ const InfoPage: React.FC = () => {
                     </div>
                     {p.description && <p className="mt-1 text-sm text-text-secondary">{p.description}</p>}
                     <div className="mt-2">
-                      {p.type==='image' && p.file_url && (
+                      {p.type === 'image' && p.file_url && (
                         <img src={p.file_url} alt={p.title} className="w-full h-48 object-cover rounded" />
                       )}
-                      {p.type==='video' && p.file_url && (
+                      {p.type === 'video' && p.file_url && (
                         <video controls className="w-full rounded">
                           <source src={p.file_url} />
                         </video>
                       )}
-                      {p.type==='text' && (
+                      {p.type === 'text' && (
                         <div className="whitespace-pre-wrap text-sm">{p.text_content}</div>
                       )}
                     </div>
@@ -331,7 +355,7 @@ const InfoPage: React.FC = () => {
                     </div>
                   </article>
                 ))}
-                {filtered.length===0 && (
+                {filtered.length === 0 && (
                   <div className="col-span-full text-center text-text-secondary">No posts</div>
                 )}
               </div>

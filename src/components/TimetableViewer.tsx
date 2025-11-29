@@ -1,11 +1,48 @@
+/**
+ * @fileoverview Timetable Viewer Component
+ * 
+ * Component for displaying uploaded timetable files.
+ * Supports PDF and image file previews with download functionality.
+ * 
+ * @module components/TimetableViewer
+ */
+
 import React from 'react';
 
+/**
+ * Props for TimetableViewer component
+ */
 type TimetableViewerProps = {
+    /** URL of the uploaded timetable file */
     fileUrl: string | null;
+    /** Name of the uploaded file */
     fileName: string | null;
+    /** MIME type of the file */
     fileType: string | null;
 };
 
+/**
+ * TimetableViewer Component
+ * 
+ * Displays uploaded timetable files with appropriate preview based on file type.
+ * 
+ * **Features:**
+ * - PDF preview using iframe
+ * - Image preview with responsive sizing
+ * - Download link for all file types
+ * - Fallback message for unsupported file types
+ * - Empty state when no file is uploaded
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <TimetableViewer
+ *   fileUrl="https://example.com/timetable.pdf"
+ *   fileName="timetable.pdf"
+ *   fileType="application/pdf"
+ * />
+ * ```
+ */
 const TimetableViewer: React.FC<TimetableViewerProps> = ({ fileUrl, fileName, fileType }) => {
     if (!fileUrl) {
         return (

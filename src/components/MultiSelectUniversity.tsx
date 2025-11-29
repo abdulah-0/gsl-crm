@@ -1,19 +1,61 @@
+/**
+ * @fileoverview Multi-Select University Component
+ * 
+ * Dropdown component for selecting multiple universities.
+ * Provides search functionality and displays selected universities as tags.
+ * 
+ * @module components/MultiSelectUniversity
+ */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+/**
+ * University option data structure
+ */
 export interface UniversityOption {
+    /** University ID */
     id: number;
+    /** University name */
     name: string;
 }
 
+/**
+ * Props for MultiSelectUniversity component
+ */
 interface MultiSelectUniversityProps {
-    selectedIds: number[]; // IDs of selected universities
+    /** Array of selected university IDs */
+    selectedIds: number[];
+    /** Callback when selection changes */
     onChange: (ids: number[]) => void;
+    /** Placeholder text */
     placeholder?: string;
+    /** Additional CSS classes */
     className?: string;
 }
 
+/**
+ * MultiSelectUniversity Component
+ * 
+ * Multi-select dropdown for universities with search functionality.
+ * 
+ * **Features:**
+ * - Fetches universities from Supabase
+ * - Search/filter universities by name
+ * - Display selected universities as removable tags
+ * - Click-outside to close dropdown
+ * - Loading state during data fetch
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <MultiSelectUniversity
+ *   selectedIds={selectedUniversityIds}
+ *   onChange={(ids) => setSelectedUniversityIds(ids)}
+ *   placeholder="Select universities..."
+ * />
+ * ```
+ */
 const MultiSelectUniversity: React.FC<MultiSelectUniversityProps> = ({
     selectedIds,
     onChange,

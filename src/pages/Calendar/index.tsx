@@ -1,3 +1,21 @@
+/**
+ * @fileoverview Calendar Page
+ * 
+ * Event calendar for the GSL CRM system.
+ * Allows users to create, view, and manage events with categories.
+ * 
+ * **Key Features:**
+ * - Month view with Monday-first week layout
+ * - Event categories (Birthday, Meeting, Work, Personal, Other)
+ * - Add/Edit/Delete events
+ * - Color-coded event display
+ * - LocalStorage persistence
+ * - Duration tracking
+ * - Notes support
+ * 
+ * @module pages/Calendar
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
@@ -60,15 +78,15 @@ const Calendar: React.FC = () => {
     try {
       const raw = localStorage.getItem('crm_calendar_events');
       if (raw) return JSON.parse(raw);
-    } catch {}
+    } catch { }
     return [
       { id: 'demo-1', title: "Anna's Birthday", date: fmtYmd(today), time: '10:00', durationMins: 180, category: 'Birthday' },
-      { id: 'demo-2', title: 'Team Standup', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), Math.max(1, today.getDate()-1))), time: '09:30', durationMins: 30, category: 'Work' },
-      { id: 'demo-3', title: 'Client Presentation', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), today.getDate()+2)), time: '14:00', durationMins: 60, category: 'Meeting' },
+      { id: 'demo-2', title: 'Team Standup', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), Math.max(1, today.getDate() - 1))), time: '09:30', durationMins: 30, category: 'Work' },
+      { id: 'demo-3', title: 'Client Presentation', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2)), time: '14:00', durationMins: 60, category: 'Meeting' },
     ];
   });
   useEffect(() => {
-    try { localStorage.setItem('crm_calendar_events', JSON.stringify(events)); } catch {}
+    try { localStorage.setItem('crm_calendar_events', JSON.stringify(events)); } catch { }
   }, [events]);
 
   // Add/Edit modal state
@@ -99,11 +117,11 @@ const Calendar: React.FC = () => {
   const saveEvent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    const id = isEditing ? editing!.id : `ev-${Date.now()}-${Math.floor(Math.random()*1000)}`;
-    const next: CalEvent = { id, title: title.trim(), date, time, durationMins: Math.max(0, Number(duration)||0), category, notes: notes.trim() || undefined };
+    const id = isEditing ? editing!.id : `ev-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const next: CalEvent = { id, title: title.trim(), date, time, durationMins: Math.max(0, Number(duration) || 0), category, notes: notes.trim() || undefined };
     setEvents(prev => {
       const rest = prev.filter(x => x.id !== id);
-      return [next, ...rest].sort((a,b) => (a.date+a.time).localeCompare(b.date+b.time));
+      return [next, ...rest].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     });
     setShowModal(false);
   };
@@ -119,7 +137,7 @@ const Calendar: React.FC = () => {
   const { days, first, last } = useMemo(() => buildMonthGrid(y, m), [y, m]);
 
   const monthLabel = cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  const weekDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalEvent[]>();
@@ -128,7 +146,7 @@ const Calendar: React.FC = () => {
       arr.push(ev);
       map.set(ev.date, arr);
     }
-    for (const [k, arr] of map) arr.sort((a,b) => a.time.localeCompare(b.time));
+    for (const [k, arr] of map) arr.sort((a, b) => a.time.localeCompare(b.time));
     return map;
   }, [events]);
 
@@ -151,7 +169,7 @@ const Calendar: React.FC = () => {
           <section className="mt-8 lg:mt-12">
             <div className="flex items-center justify-between">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Calendar</h1>
-              <button onClick={()=>openCreate()} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
+              <button onClick={() => openCreate()} className="px-4 py-2 rounded-full font-bold text-white bg-[#ffa332] shadow-[0px_6px_12px_#3f8cff43] hover:opacity-95">
                 + Add Event
               </button>
             </div>
@@ -160,9 +178,9 @@ const Calendar: React.FC = () => {
             <div className="mt-6 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
               {/* Navigation */}
               <div className="flex items-center justify-between">
-                <button aria-label="Prev" onClick={()=>setCursor(new Date(y, m-1, 1))} className="p-2 rounded hover:bg-gray-50">◀</button>
+                <button aria-label="Prev" onClick={() => setCursor(new Date(y, m - 1, 1))} className="p-2 rounded hover:bg-gray-50">◀</button>
                 <div className="text-lg font-bold" style={{ fontFamily: 'Nunito Sans' }}>{monthLabel}</div>
-                <button aria-label="Next" onClick={()=>setCursor(new Date(y, m+1, 1))} className="p-2 rounded hover:bg-gray-50">▶</button>
+                <button aria-label="Next" onClick={() => setCursor(new Date(y, m + 1, 1))} className="p-2 rounded hover:bg-gray-50">▶</button>
               </div>
 
               {/* Weekday headers */}
@@ -179,20 +197,20 @@ const Calendar: React.FC = () => {
                   return (
                     <div key={idx} className={`bg-white min-h-[110px] sm:min-h-[120px] p-2 flex flex-col ${inMonth ? '' : 'opacity-50 bg-gray-50'}`}>
                       <div className="flex items-center justify-between mb-1">
-                        <div className={`text-xs font-bold ${fmtYmd(d)===fmtYmd(today) ? 'text-[#ffa332]' : 'text-text-secondary'}`}>{d.getDate()}</div>
+                        <div className={`text-xs font-bold ${fmtYmd(d) === fmtYmd(today) ? 'text-[#ffa332]' : 'text-text-secondary'}`}>{d.getDate()}</div>
                         {inMonth && (
-                          <button onClick={()=>openCreate(fmtYmd(d))} className="text-xs text-blue-500 hover:underline">Add</button>
+                          <button onClick={() => openCreate(fmtYmd(d))} className="text-xs text-blue-500 hover:underline">Add</button>
                         )}
                       </div>
                       <div className="flex-1 overflow-auto space-y-1">
                         {list.map(ev => {
                           const styles = CAT_STYLES[ev.category];
-                          const arrow = (ev.category==='Work' || ev.category==='Meeting') ? '↑' : '↓';
-                          const hours = Math.max(0, Math.round(ev.durationMins/60));
+                          const arrow = (ev.category === 'Work' || ev.category === 'Meeting') ? '↑' : '↓';
+                          const hours = Math.max(0, Math.round(ev.durationMins / 60));
                           const mins = ev.durationMins % 60;
-                          const dur = hours ? `${hours}h${mins?` ${mins}m`:''}` : `${mins}m`;
+                          const dur = hours ? `${hours}h${mins ? ` ${mins}m` : ''}` : `${mins}m`;
                           return (
-                            <button key={ev.id} onClick={()=>openEdit(ev)} className={`w-full text-left ${styles.bg} ${styles.text} rounded px-2 py-1 text-xs hover:opacity-90`}>
+                            <button key={ev.id} onClick={() => openEdit(ev)} className={`w-full text-left ${styles.bg} ${styles.text} rounded px-2 py-1 text-xs hover:opacity-90`}>
                               <div className="flex items-center gap-1">
                                 <span className={`inline-block w-2 h-2 rounded-full ${styles.chip}`}></span>
                                 <span className="font-semibold truncate flex-1">{ev.title}</span>
@@ -218,39 +236,39 @@ const Calendar: React.FC = () => {
           <form onSubmit={saveEvent} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold">{isEditing ? 'Edit Event' : 'Add Event'}</h3>
-              <button type="button" onClick={()=>setShowModal(false)} className="text-text-secondary hover:opacity-70">✕</button>
+              <button type="button" onClick={() => setShowModal(false)} className="text-text-secondary hover:opacity-70">✕</button>
             </div>
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="text-sm">
                 <span className="text-text-secondary">Event Title</span>
-                <input value={title} onChange={e=>setTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g. Anna's Birthday" required />
+                <input value={title} onChange={e => setTitle(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="e.g. Anna's Birthday" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Date</span>
-                <input type="date" value={date} onChange={e=>setDate(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="mt-1 w-full border rounded p-2" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Time</span>
-                <input type="time" value={time} onChange={e=>setTime(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                <input type="time" value={time} onChange={e => setTime(e.target.value)} className="mt-1 w-full border rounded p-2" required />
               </label>
               <label className="text-sm">
                 <span className="text-text-secondary">Duration (minutes)</span>
-                <input type="number" min={0} value={duration} onChange={e=>setDuration(Number(e.target.value))} className="mt-1 w-full border rounded p-2" required />
+                <input type="number" min={0} value={duration} onChange={e => setDuration(Number(e.target.value))} className="mt-1 w-full border rounded p-2" required />
               </label>
               <label className="text-sm sm:col-span-2">
                 <span className="text-text-secondary">Category</span>
-                <select value={category} onChange={e=>setCategory(e.target.value as Category)} className="mt-1 w-full border rounded p-2">
+                <select value={category} onChange={e => setCategory(e.target.value as Category)} className="mt-1 w-full border rounded p-2">
                   {CATEGORIES.map(c => (<option key={c}>{c}</option>))}
                 </select>
               </label>
               <label className="text-sm sm:col-span-2">
                 <span className="text-text-secondary">Notes</span>
-                <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} className="mt-1 w-full border rounded p-2" placeholder="Optional" />
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="mt-1 w-full border rounded p-2" placeholder="Optional" />
               </label>
             </div>
             <div className="mt-5 flex items-center justify-end gap-2">
               {isEditing && <button type="button" onClick={deleteEvent} className="px-3 py-2 rounded border border-red-200 text-red-600 hover:bg-red-50">Delete</button>}
-              <button type="button" onClick={()=>setShowModal(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={() => setShowModal(false)} className="px-3 py-2 rounded border hover:bg-gray-50">Cancel</button>
               <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold shadow-[0px_6px_12px_#3f8cff43]">Save Event</button>
             </div>
           </form>

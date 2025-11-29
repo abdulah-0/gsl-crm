@@ -1,3 +1,38 @@
+/**
+ * @fileoverview HRM (Human Resource Management) Page
+ * 
+ * Comprehensive HR management system for the GSL CRM.
+ * Manages employee lifecycle, leaves, time tracking, payroll, and assets.
+ * 
+ * **Key Features:**
+ * - **Employees Tab:** Employee directory with branch filtering
+ * - **Onboarding Tab:** Candidate onboarding workflow with secure tokens
+ * - **Leaves Tab:** Leave management with multi-stage approval (Manager → HR → CEO)
+ * - **Time Records Tab:** Employee attendance and overtime tracking
+ * - **Payroll Tab:** Automated payroll generation with salary breakdowns
+ * - **Assets Tab:** Company asset issuance and tracking
+ * 
+ * **Leave Management:**
+ * - Leave types: CL (Casual Leave), SL (Sick Leave), AL (Annual Leave)
+ * - Multi-stage approval workflow
+ * - Leave balance tracking per employee
+ * - Real-time updates via Supabase
+ * 
+ * **Payroll System:**
+ * - Automated batch generation
+ * - Salary components: Basic, Allowances, Deductions
+ * - PDF payslip generation
+ * - Monthly batch processing
+ * 
+ * **Access Control:**
+ * - Super Admin: Full access to all modules
+ * - Admin: CRUD operations within branch
+ * - HR: Leave and payroll management
+ * - Other roles: View-only access
+ * 
+ * @module pages/HRM
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -64,7 +99,7 @@ const HRMPage: React.FC = () => {
   // HRM -> Leaves: Add Leave modal state
   const [addLeaveOpen, setAddLeaveOpen] = useState(false);
   const [addForEmail, setAddForEmail] = useState('');
-  const [addType, setAddType] = useState<'CL'|'SL'|'AL'>('CL');
+  const [addType, setAddType] = useState<'CL' | 'SL' | 'AL'>('CL');
   const [addStart, setAddStart] = useState('');
   const [addEnd, setAddEnd] = useState('');
   const [addReason, setAddReason] = useState('');
@@ -76,7 +111,7 @@ const HRMPage: React.FC = () => {
     const q = addForEmail.trim().toLowerCase();
     if (!q) return [] as EmpRow[];
     return rows
-      .filter(r => ((r.full_name || r.email || '').toLowerCase().includes(q) || (r.email||'').toLowerCase().includes(q)))
+      .filter(r => ((r.full_name || r.email || '').toLowerCase().includes(q) || (r.email || '').toLowerCase().includes(q)))
       .slice(0, 8);
   }, [rows, addForEmail]);
   useEffect(() => {
@@ -88,35 +123,35 @@ const HRMPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-	  interface LeaveBalance {
-	    employee_email: string;
-	    cl_entitlement?: number | null;
-	    sl_entitlement?: number | null;
-	    al_entitlement?: number | null;
-	    cl_availed?: number | null;
-	    sl_availed?: number | null;
-	    al_availed?: number | null;
-	    branch?: string | null;
-	  }
-	  const [lb, setLb] = useState<LeaveBalance | null>(null);
+  interface LeaveBalance {
+    employee_email: string;
+    cl_entitlement?: number | null;
+    sl_entitlement?: number | null;
+    al_entitlement?: number | null;
+    cl_availed?: number | null;
+    sl_availed?: number | null;
+    al_availed?: number | null;
+    branch?: string | null;
+  }
+  const [lb, setLb] = useState<LeaveBalance | null>(null);
 
 
-	  // Load leave balances for selected employee (if any)
-	  useEffect(() => {
-	    const run = async () => {
-	      const em = lEmail.trim();
-	      if (!(tab==='leaves' && em)) { setLb(null); return; }
-	      let qb: any = supabase
-	        .from('employee_leave_balances')
-	        .select('employee_email, cl_entitlement, sl_entitlement, al_entitlement, cl_availed, sl_availed, al_availed, branch')
-	        .eq('employee_email', em)
-	        .maybeSingle();
-	      if (role !== 'super') qb = qb.eq('branch', myBranch);
-	      const { data } = await qb;
-	      setLb((data as any) || null);
-	    };
-	    run();
-	  }, [tab, lEmail, role, myBranch]);
+  // Load leave balances for selected employee (if any)
+  useEffect(() => {
+    const run = async () => {
+      const em = lEmail.trim();
+      if (!(tab === 'leaves' && em)) { setLb(null); return; }
+      let qb: any = supabase
+        .from('employee_leave_balances')
+        .select('employee_email, cl_entitlement, sl_entitlement, al_entitlement, cl_availed, sl_availed, al_availed, branch')
+        .eq('employee_email', em)
+        .maybeSingle();
+      if (role !== 'super') qb = qb.eq('branch', myBranch);
+      const { data } = await qb;
+      setLb((data as any) || null);
+    };
+    run();
+  }, [tab, lEmail, role, myBranch]);
 
   // HRM -> Time Record state
   interface TimeRecordRow {
@@ -159,9 +194,9 @@ const HRMPage: React.FC = () => {
       .limit(500);
     if (role !== 'super') q = q.eq('branch', myBranch);
     const { data } = await q as any;
-    setOnbs(data||[]);
+    setOnbs(data || []);
   };
-  useEffect(() => { if (tab==='onboarding' && (role==='super' || myBranch!==null)) loadOnboardings(); }, [tab, role, myBranch]);
+  useEffect(() => { if (tab === 'onboarding' && (role === 'super' || myBranch !== null)) loadOnboardings(); }, [tab, role, myBranch]);
   const randToken = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   const createOnboarding = async () => {
     if (!isAdmin) return;
@@ -170,7 +205,7 @@ const HRMPage: React.FC = () => {
     const { data: au } = await supabase.auth.getUser();
     const me = au?.user?.email || '';
     const token = randToken();
-    const payload: any = { candidate_email: emailTrim, created_by: me, secure_token: token, status: 'Initiated', branch: role==='super'? null : myBranch };
+    const payload: any = { candidate_email: emailTrim, created_by: me, secure_token: token, status: 'Initiated', branch: role === 'super' ? null : myBranch };
     const { error } = await supabase.from('employee_onboardings').insert(payload);
     if (error) return alert(error.message);
     await supabase.from('activity_log').insert([{ entity: 'employee_onboarding', entity_id: String(token), action: `Onboarding initiated`, detail: { candidate_email: emailTrim, token, initiated_by: me, branch: payload.branch } }]);
@@ -188,13 +223,13 @@ const HRMPage: React.FC = () => {
       designation: row.designation,
       reporting_manager_email: row.reporting_manager_email,
       work_email: row.work_email,
-      branch: role==='super'? null : myBranch,
+      branch: role === 'super' ? null : myBranch,
       attachments: row.attachments || null,
       updated_by: me,
     };
     const { error: mErr } = await supabase.from('employees_master').upsert(master, { onConflict: 'email' } as any);
     if (mErr) return alert(mErr.message);
-    await supabase.from('employee_leave_balances').upsert({ employee_email: row.candidate_email, branch: role==='super'? null : myBranch }, { onConflict: 'employee_email' } as any);
+    await supabase.from('employee_leave_balances').upsert({ employee_email: row.candidate_email, branch: role === 'super' ? null : myBranch }, { onConflict: 'employee_email' } as any);
     const { error: uErr } = await supabase.from('employee_onboardings').update({ status: 'Approved', approved_by: me, approved_at: new Date().toISOString() }).eq('id', row.id);
     if (uErr) return alert(uErr.message);
     await supabase.from('activity_log').insert([{ entity: 'employee_onboarding', entity_id: String(row.id), action: `Onboarding approved`, detail: { candidate_email: row.candidate_email, approved_by: me } }]);
@@ -233,17 +268,17 @@ const HRMPage: React.FC = () => {
       .limit(500);
     if (role !== 'super') q = q.eq('branch', myBranch);
     const { data } = await q as any;
-    setAssets(data||[]);
+    setAssets(data || []);
   };
-  useEffect(() => { if (tab==='assets' && (role==='super' || myBranch!==null)) loadAssets(); }, [tab, role, myBranch]);
+  useEffect(() => { if (tab === 'assets' && (role === 'super' || myBranch !== null)) loadAssets(); }, [tab, role, myBranch]);
   const openAddAsset = () => {
-    setEditAsset({ id: 0 as any, employee_email: '', asset_category: '', asset_name: '', brand_model: '', serial_imei: '', quantity: 1, issued_date: new Date().toISOString().slice(0,10), issued_by: '', condition_at_issuance: '', return_status: 'Issued', remarks: '', acknowledgement: false, branch: myBranch||null });
+    setEditAsset({ id: 0 as any, employee_email: '', asset_category: '', asset_name: '', brand_model: '', serial_imei: '', quantity: 1, issued_date: new Date().toISOString().slice(0, 10), issued_by: '', condition_at_issuance: '', return_status: 'Issued', remarks: '', acknowledgement: false, branch: myBranch || null });
     setShowAssetModal(true);
   };
   const saveAsset = async () => {
     if (!isAdmin || !editAsset) { setShowAssetModal(false); return; }
     const payload: any = { ...editAsset };
-    payload.branch = role==='super' ? (editAsset.branch||null) : (myBranch||null);
+    payload.branch = role === 'super' ? (editAsset.branch || null) : (myBranch || null);
     if (editAsset.id && editAsset.id !== 0) {
       const { error } = await supabase.from('employee_assets').update(payload).eq('id', editAsset.id);
       if (error) return alert(error.message);
@@ -276,12 +311,12 @@ const HRMPage: React.FC = () => {
     const { data } = await q;
     setTrs((data as any) || []);
   };
-  useEffect(() => { if (tab==='timerecord' && (role==='super' || myBranch!==null)) loadTimeRecords(); }, [tab, role, myBranch, tEmail, tFrom, tTo]);
+  useEffect(() => { if (tab === 'timerecord' && (role === 'super' || myBranch !== null)) loadTimeRecords(); }, [tab, role, myBranch, tEmail, tFrom, tTo]);
 
   // Add/Edit modal
   const [showTRModal, setShowTRModal] = useState(false);
   const [editTR, setEditTR] = useState<TimeRecordRow | null>(null);
-  const openAddTR = () => { setEditTR({ id: 0, employee_email: '', work_date: new Date().toISOString().slice(0,10), check_in: null, check_out: null, hours: null, overtime: null, branch: myBranch||null }); setShowTRModal(true); };
+  const openAddTR = () => { setEditTR({ id: 0, employee_email: '', work_date: new Date().toISOString().slice(0, 10), check_in: null, check_out: null, hours: null, overtime: null, branch: myBranch || null }); setShowTRModal(true); };
   const openEditTR = (r: TimeRecordRow) => { setEditTR(r); setShowTRModal(true); };
   const saveTR = async () => {
     if (!isAdmin || !editTR) { setShowTRModal(false); return; }
@@ -292,7 +327,7 @@ const HRMPage: React.FC = () => {
       check_out: editTR.check_out || null,
       hours: editTR.hours,
       overtime: editTR.overtime,
-      branch: role==='super' ? (editTR.branch||null) : (myBranch||null),
+      branch: role === 'super' ? (editTR.branch || null) : (myBranch || null),
     };
     if (editTR.id && editTR.id !== 0) {
       const { error } = await supabase.from('time_records').update(payload).eq('id', editTR.id);
@@ -314,7 +349,7 @@ const HRMPage: React.FC = () => {
   interface PayrollItem { id: number; batch_id: number; employee_email: string; payable_amount: number | null; details?: any; }
   const [payrollBatches, setPayrollBatches] = useState<PayrollBatch[]>([]);
   const [batchItems, setBatchItems] = useState<PayrollItem[]>([]);
-  const [pyMonth, setPyMonth] = useState<number>(new Date().getMonth()+1);
+  const [pyMonth, setPyMonth] = useState<number>(new Date().getMonth() + 1);
   const [pyYear, setPyYear] = useState<number>(new Date().getFullYear());
   const [activeBatchId, setActiveBatchId] = useState<number | null>(null);
 
@@ -328,12 +363,12 @@ const HRMPage: React.FC = () => {
     const { data } = await supabase.from('payroll_items').select('id, batch_id, employee_email, payable_amount, details').eq('batch_id', batchId).order('employee_email', { ascending: true });
     setBatchItems((data as any) || []);
   };
-  useEffect(() => { if (tab==='payroll' && (role==='super' || myBranch!==null)) loadBatches(); }, [tab, role, myBranch]);
+  useEffect(() => { if (tab === 'payroll' && (role === 'super' || myBranch !== null)) loadBatches(); }, [tab, role, myBranch]);
 
   const generatePayroll = async () => {
     if (!isAdmin) return;
     // 1) Create batch
-    const batchPayload: any = { year: pyYear, month: pyMonth, branch: role==='super' ? null : myBranch };
+    const batchPayload: any = { year: pyYear, month: pyMonth, branch: role === 'super' ? null : myBranch };
     const { data: batch, error: bErr } = await supabase.from('payroll_batches').insert(batchPayload).select().single();
     if (bErr) return alert(bErr.message);
     // 2) gather employees in scope
@@ -347,12 +382,12 @@ const HRMPage: React.FC = () => {
     if (role !== 'super') mQ = mQ.eq('branch', myBranch);
     const { data: masters } = await mQ as any;
     const mByEmail: Record<string, any> = {};
-    for (const m of (masters||[])) mByEmail[m.email] = m;
+    for (const m of (masters || [])) mByEmail[m.email] = m;
 
     // 4) For each employee, compute payroll using master fields
-    for (const emp of (emps||[])) {
+    for (const emp of (emps || [])) {
       const m = mByEmail[emp.email] || {};
-      const n = (v: any) => Number(v||0);
+      const n = (v: any) => Number(v || 0);
       const gross = n(m.basic_salary) + n(m.medical_allowance) + n(m.work_transportation) + n(m.other_allowances) + n(m.arrears) + n(m.bonus);
       const deductions = n(m.income_tax) + n(m.life_insurance) + n(m.health_insurance) + n(m.employee_loan) + n(m.lunch_deduction) + n(m.advance_salary) + n(m.esb) + n(m.other_deductions);
       const net = Math.round(gross - deductions);
@@ -382,7 +417,7 @@ const HRMPage: React.FC = () => {
       doc.text('Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234', 105, 24, { align: 'center' });
 
       // Main title
-      const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const monthIndex = (details.month ?? 1) - 1;
       const monthName = monthNames[monthIndex] || 'Unknown';
       const year = details.year || new Date().getFullYear();
@@ -491,7 +526,7 @@ const HRMPage: React.FC = () => {
       doc.setFontSize(16);
       doc.text('Employee Profile', 14, 18);
 
-      const head = [['Field','Value']];
+      const head = [['Field', 'Value']];
       const body = [
         ['Employee Code', (m as any)?.employee_code || '-'],
         ['Name', (m as any)?.full_name || '-'],
@@ -503,26 +538,26 @@ const HRMPage: React.FC = () => {
         ['Basic Salary', String((m as any)?.basic_salary ?? 0)],
         ['Payment Mode', (m as any)?.payment_mode || '-'],
       ];
-      (autoTable as any)(doc, { head, body, startY: 26, styles: { fontSize: 10 }, headStyles: { fillColor: [255,163,50] } });
+      (autoTable as any)(doc, { head, body, startY: 26, styles: { fontSize: 10 }, headStyles: { fillColor: [255, 163, 50] } });
       // @ts-ignore
       let y = (doc as any).lastAutoTable?.finalY || 26;
 
       if (b) {
-        const head2 = [['Leave Type','Entitled','Availed','Balance']];
+        const head2 = [['Leave Type', 'Entitled', 'Availed', 'Balance']];
         const body2 = [
-          ['CL', b.cl_entitlement||0, b.cl_availed||0, (b.cl_entitlement||0)-(b.cl_availed||0)],
-          ['SL', b.sl_entitlement||0, b.sl_availed||0, (b.sl_entitlement||0)-(b.sl_availed||0)],
-          ['AL', b.al_entitlement||0, b.al_availed||0, (b.al_entitlement||0)-(b.al_availed||0)],
+          ['CL', b.cl_entitlement || 0, b.cl_availed || 0, (b.cl_entitlement || 0) - (b.cl_availed || 0)],
+          ['SL', b.sl_entitlement || 0, b.sl_availed || 0, (b.sl_entitlement || 0) - (b.sl_availed || 0)],
+          ['AL', b.al_entitlement || 0, b.al_availed || 0, (b.al_entitlement || 0) - (b.al_availed || 0)],
         ];
-        (autoTable as any)(doc, { head: head2, body: body2, startY: y + 6, styles: { fontSize: 9 }, headStyles: { fillColor: [255,163,50] } });
+        (autoTable as any)(doc, { head: head2, body: body2, startY: y + 6, styles: { fontSize: 9 }, headStyles: { fillColor: [255, 163, 50] } });
         // @ts-ignore
         y = (doc as any).lastAutoTable?.finalY || (y + 6);
       }
 
       if (Array.isArray(a) && a.length) {
-        const head3 = [['Asset ID','Category','Name','Serial/IMEI','Issued','Status']];
-        const body3 = (a as any[]).map(x => [x.asset_id||'-', x.asset_category||'-', x.asset_name||'-', x.serial_imei||'-', x.issued_date||'-', x.return_status||'-']);
-        (autoTable as any)(doc, { head: head3, body: body3, startY: y + 6, styles: { fontSize: 8 }, headStyles: { fillColor: [255,163,50] } });
+        const head3 = [['Asset ID', 'Category', 'Name', 'Serial/IMEI', 'Issued', 'Status']];
+        const body3 = (a as any[]).map(x => [x.asset_id || '-', x.asset_category || '-', x.asset_name || '-', x.serial_imei || '-', x.issued_date || '-', x.return_status || '-']);
+        (autoTable as any)(doc, { head: head3, body: body3, startY: y + 6, styles: { fontSize: 8 }, headStyles: { fillColor: [255, 163, 50] } });
       }
 
       const blob = doc.output('blob');
@@ -578,7 +613,7 @@ const HRMPage: React.FC = () => {
     setLeaves((data as any) || []);
   };
   // Load on filters/tab/role/branch change
-  useEffect(() => { if (tab==='leaves' && (role==='super' || myBranch!==null)) loadLeaves(); }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
+  useEffect(() => { if (tab === 'leaves' && (role === 'super' || myBranch !== null)) loadLeaves(); }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
   // Realtime subscription to reflect inserts/updates/deletes
   useEffect(() => {
     if (tab !== 'leaves') return;
@@ -586,7 +621,7 @@ const HRMPage: React.FC = () => {
       .channel('realtime:hrm-leaves')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, () => { loadLeaves(); })
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch {} };
+    return () => { try { supabase.removeChannel(ch); } catch { } };
   }, [tab, role, myBranch, lEmail, lType, lStatus, lFrom, lTo]);
 
   const approveAsManager = async (id: number) => {
@@ -640,16 +675,16 @@ const HRMPage: React.FC = () => {
         // So we directly create a new employees row (user_id left null; allowed by schema)
         const { data: eIns, error: eErr } = await supabase
           .from('employees')
-          .insert({ joined_on: new Date().toISOString().slice(0,10) })
+          .insert({ joined_on: new Date().toISOString().slice(0, 10) })
           .select('id')
           .single();
         if (!eErr && eIns?.id) employeeId = Number(eIns.id);
-      } catch {}
+      } catch { }
 
       // Common fields
       const statusInit = 'Pending';
       const reasonVal = addReason || null;
-      const emp = rows.find(r => (r.email||'') === target);
+      const emp = rows.find(r => (r.email || '') === target);
       const branchVal = role !== 'super' ? (myBranch || null) : (emp?.branch || null);
       const typeLegacy = addType === 'CL' ? 'Sick' : addType === 'SL' ? 'Remote' : 'Vacation';
 
@@ -659,20 +694,20 @@ const HRMPage: React.FC = () => {
         const withMeta = { ...base, created_by: me, leave_type: addType, type: typeLegacy, branch: branchVal };
         let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
         let error = res.error as any;
-        if (error && (error.code === '42703' || String(error.message||'').toLowerCase().includes('column'))) {
+        if (error && (error.code === '42703' || String(error.message || '').toLowerCase().includes('column'))) {
           // Drop unknown columns and retry (created_by/type/leave_type/branch)
           const minimal = { ...base };
           let res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
           error = res2.error as any;
-          if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
+          if (error && (String(error.message || '').toLowerCase().includes('status') && String(error.message || '').toLowerCase().includes('check'))) {
             // Some schemas require lowercase status
-            const lower = { ...minimal, status: String(minimal.status||'').toLowerCase() };
+            const lower = { ...minimal, status: String(minimal.status || '').toLowerCase() };
             const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
             error = res3.error as any;
           }
-        } else if (error && (String(error.message||'').toLowerCase().includes('status') && String(error.message||'').toLowerCase().includes('check'))) {
+        } else if (error && (String(error.message || '').toLowerCase().includes('status') && String(error.message || '').toLowerCase().includes('check'))) {
           // Retry with lowercase status
-          const lower = { ...base, status: String(base.status||'').toLowerCase(), created_by: me, leave_type: addType, type: typeLegacy, branch: branchVal };
+          const lower = { ...base, status: String(base.status || '').toLowerCase(), created_by: me, leave_type: addType, type: typeLegacy, branch: branchVal };
           const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
           error = res3.error as any;
         }
@@ -703,7 +738,7 @@ const HRMPage: React.FC = () => {
       // eslint-disable-next-line no-console
       console.error('HRM Add Leave failed', { message: err?.message, code: err?.code, details: err?.details });
       // Specific guidance when schema requires employee_id but mapping is missing
-      if (String(err?.message||'').toLowerCase().includes('employee_id') && String(err?.message||'').toLowerCase().includes('not-null')) {
+      if (String(err?.message || '').toLowerCase().includes('employee_id') && String(err?.message || '').toLowerCase().includes('not-null')) {
         alert('This database requires employee_id. Please ensure the person exists in Employees and is linked to a user. Then try again.');
       } else {
         alert(err?.message || 'Failed to add leave');
@@ -796,16 +831,16 @@ const HRMPage: React.FC = () => {
     const { data } = await query;
     setRows((data as any) || []);
   };
-  useEffect(() => { if (role==='super' || myBranch!==null) loadEmployees(); }, [role, myBranch]);
+  useEffect(() => { if (role === 'super' || myBranch !== null) loadEmployees(); }, [role, myBranch]);
 
   const filtered = useMemo(() => {
 
 
     const s = search.toLowerCase();
     return rows.filter(r =>
-      (!s || (r.full_name||'').toLowerCase().includes(s) || (r.email||'').toLowerCase().includes(s)) &&
-      (!filterRole || (r.role||'').toLowerCase() === filterRole.toLowerCase()) &&
-      (!filterStatus || (r.status||'').toLowerCase() === filterStatus.toLowerCase())
+      (!s || (r.full_name || '').toLowerCase().includes(s) || (r.email || '').toLowerCase().includes(s)) &&
+      (!filterRole || (r.role || '').toLowerCase() === filterRole.toLowerCase()) &&
+      (!filterStatus || (r.status || '').toLowerCase() === filterStatus.toLowerCase())
     );
   }, [rows, search, filterRole, filterStatus]);
 
@@ -813,11 +848,11 @@ const HRMPage: React.FC = () => {
   const [showEmpModal, setShowEmpModal] = useState(false);
   const [editRow, setEditRow] = useState<EmpRow | null>(null);
 
-  const openAdd = () => { setEditRow({ email: '', full_name: '', role: 'Employee', status: 'Active', branch: myBranch||'' }); setShowEmpModal(true); };
+  const openAdd = () => { setEditRow({ email: '', full_name: '', role: 'Employee', status: 'Active', branch: myBranch || '' }); setShowEmpModal(true); };
   const openEdit = (r: EmpRow) => { setEditRow(r); setShowEmpModal(true); };
   const onSave = async () => {
     if (!isAdmin || !editRow) { setShowEmpModal(false); return; }
-    const branchVal = role==='super' ? (editRow.branch || null) : (myBranch || null);
+    const branchVal = role === 'super' ? (editRow.branch || null) : (myBranch || null);
     const payload = {
       email: editRow.email,
       full_name: editRow.full_name,
@@ -865,20 +900,20 @@ const HRMPage: React.FC = () => {
 
             {/* Sub-tabs */}
             <div className="mt-4 inline-flex bg-white border rounded-lg p-1">
-              <button onClick={()=>setTab('onboarding')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab==='onboarding'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Onboarding</button>
-              <button onClick={()=>setTab('employees')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='employees'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Employees</button>
-              <button onClick={()=>setTab('leaves')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='leaves'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Leaves</button>
-              <button onClick={()=>setTab('timerecord')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='timerecord'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Time Record</button>
-              <button onClick={()=>setTab('payroll')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='payroll'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Payroll</button>
-              <button onClick={()=>setTab('assets')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab==='assets'?'bg-[#ffa332] text-white':'text-text-secondary'}`}>Assets</button>
+              <button onClick={() => setTab('onboarding')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab === 'onboarding' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Onboarding</button>
+              <button onClick={() => setTab('employees')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'employees' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Employees</button>
+              <button onClick={() => setTab('leaves')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'leaves' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Leaves</button>
+              <button onClick={() => setTab('timerecord')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'timerecord' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Time Record</button>
+              <button onClick={() => setTab('payroll')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'payroll' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Payroll</button>
+              <button onClick={() => setTab('assets')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'assets' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Assets</button>
             </div>
 
             {/* Employees tab */}
-            {tab==='employees' && (
+            {tab === 'employees' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Search name or email" value={search} onChange={e=>setSearch(e.target.value)} />
-                  <select className="border rounded px-2 py-2" value={filterRole} onChange={e=>setFilterRole(e.target.value)}>
+                  <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Search name or email" value={search} onChange={e => setSearch(e.target.value)} />
+                  <select className="border rounded px-2 py-2" value={filterRole} onChange={e => setFilterRole(e.target.value)}>
                     <option value="">All Roles</option>
                     <option value="super admin">Super Admin</option>
                     <option value="admin">Admin</option>
@@ -886,7 +921,7 @@ const HRMPage: React.FC = () => {
                     <option value="counselor">Counselor</option>
                     <option value="employee">Employee</option>
                   </select>
-                  <select className="border rounded px-2 py-2" value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
+                  <select className="border rounded px-2 py-2" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
                     <option value="">All Statuses</option>
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
@@ -923,9 +958,9 @@ const HRMPage: React.FC = () => {
                           <td className="p-2 text-right">
                             {isAdmin ? (
                               <>
-                                <button onClick={()=>openEdit(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                                <button onClick={()=>exportEmployeePDF(r.email)} className="text-[#ffa332] hover:underline mr-3">Export PDF</button>
-                                <button onClick={()=>onDelete(r.email)} className="text-red-600 hover:underline">Remove</button>
+                                <button onClick={() => openEdit(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={() => exportEmployeePDF(r.email)} className="text-[#ffa332] hover:underline mr-3">Export PDF</button>
+                                <button onClick={() => onDelete(r.email)} className="text-red-600 hover:underline">Remove</button>
                               </>
                             ) : (
                               <span className="text-text-secondary">View only</span>
@@ -933,7 +968,7 @@ const HRMPage: React.FC = () => {
                           </td>
                         </tr>
                       ))}
-                      {filtered.length===0 && (
+                      {filtered.length === 0 && (
                         <tr><td colSpan={8} className="p-4 text-center text-text-secondary">No employees</td></tr>
                       )}
                     </tbody>
@@ -944,12 +979,12 @@ const HRMPage: React.FC = () => {
 
 
             {/* Onboarding tab */}
-            {tab==='onboarding' && (
+            {tab === 'onboarding' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
                   {isAdmin && (
                     <>
-                      <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Candidate Email" value={newOnbEmail} onChange={e=>setNewOnbEmail(e.target.value)} />
+                      <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Candidate Email" value={newOnbEmail} onChange={e => setNewOnbEmail(e.target.value)} />
                       <button onClick={createOnboarding} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Link</button>
                     </>
                   )}
@@ -977,36 +1012,36 @@ const HRMPage: React.FC = () => {
                           <td className="p-2">
                             {o.secure_token ? (
                               <a className="text-blue-600 hover:underline" href={`/onboard?token=${o.secure_token}`} target="_blank" rel="noreferrer">Open</a>
-                            ) : '-' }
+                            ) : '-'}
                           </td>
                           <td className="p-2 text-right">
 
-	                {lb && (
-	                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-	                    <div className="font-semibold mb-1">Leave Entitlements</div>
-	                    <div className="flex flex-wrap gap-6">
-	                      <div>
-	                        CL: {lb.cl_entitlement||0}/{lb.cl_availed||0} (Bal {(lb.cl_entitlement||0) - (lb.cl_availed||0)})
-	                      </div>
-	                      <div>
-	                        SL: {lb.sl_entitlement||0}/{lb.sl_availed||0} (Bal {(lb.sl_entitlement||0) - (lb.sl_availed||0)})
-	                      </div>
-	                      <div>
-	                        AL: {lb.al_entitlement||0}/{lb.al_availed||0} (Bal {(lb.al_entitlement||0) - (lb.al_availed||0)})
-	                      </div>
-	                    </div>
-	                  </div>
-	                )}
+                            {lb && (
+                              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                                <div className="font-semibold mb-1">Leave Entitlements</div>
+                                <div className="flex flex-wrap gap-6">
+                                  <div>
+                                    CL: {lb.cl_entitlement || 0}/{lb.cl_availed || 0} (Bal {(lb.cl_entitlement || 0) - (lb.cl_availed || 0)})
+                                  </div>
+                                  <div>
+                                    SL: {lb.sl_entitlement || 0}/{lb.sl_availed || 0} (Bal {(lb.sl_entitlement || 0) - (lb.sl_availed || 0)})
+                                  </div>
+                                  <div>
+                                    AL: {lb.al_entitlement || 0}/{lb.al_availed || 0} (Bal {(lb.al_entitlement || 0) - (lb.al_availed || 0)})
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             {isAdmin ? (
-                              <button disabled={o.status==='Approved'} onClick={()=>approveOnboarding(o)} className="text-green-600 hover:underline disabled:text-gray-400">Approve</button>
+                              <button disabled={o.status === 'Approved'} onClick={() => approveOnboarding(o)} className="text-green-600 hover:underline disabled:text-gray-400">Approve</button>
                             ) : (
                               <span className="text-text-secondary">View only</span>
                             )}
                           </td>
                         </tr>
                       ))}
-                      {onbs.length===0 && (
+                      {onbs.length === 0 && (
                         <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No onboarding records</td></tr>
                       )}
                     </tbody>
@@ -1016,69 +1051,69 @@ const HRMPage: React.FC = () => {
             )}
 
             {/* Leaves tab: branch-scoped approvals with filters */}
-            {tab==='leaves' && (
+            {tab === 'leaves' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Search by name or email" value={lEmail} onChange={e=>setLEmail(e.target.value)} />
-                  <select className="border rounded px-2 py-2" value={lType} onChange={e=>setLType(e.target.value)}>
+                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Search by name or email" value={lEmail} onChange={e => setLEmail(e.target.value)} />
+                  <select className="border rounded px-2 py-2" value={lType} onChange={e => setLType(e.target.value)}>
                     <option value="">All Types</option>
                     <option value="CL">Casual Leave (CL)</option>
                     <option value="SL">Sick Leave (SL)</option>
                     <option value="AL">Annual Leave (AL)</option>
                   </select>
-                  <select className="border rounded px-2 py-2" value={lStatus} onChange={e=>setLStatus(e.target.value)}>
+                  <select className="border rounded px-2 py-2" value={lStatus} onChange={e => setLStatus(e.target.value)}>
                     <option value="">All Status</option>
                     <option value="Pending">Pending</option>
                     <option value="Approved">Approved</option>
                     <option value="Rejected">Rejected</option>
                   </select>
-                  <input type="date" className="border rounded px-2 py-2" value={lFrom} onChange={e=>setLFrom(e.target.value)} />
+                  <input type="date" className="border rounded px-2 py-2" value={lFrom} onChange={e => setLFrom(e.target.value)} />
                   <span className="text-text-secondary">to</span>
-                  <input type="date" className="border rounded px-2 py-2" value={lTo} onChange={e=>setLTo(e.target.value)} />
+                  <input type="date" className="border rounded px-2 py-2" value={lTo} onChange={e => setLTo(e.target.value)} />
                   <button onClick={loadLeaves} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Apply</button>
                   {isAdmin && (
-                    <button onClick={()=>setAddLeaveOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Leave</button>
+                    <button onClick={() => setAddLeaveOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Leave</button>
                   )}
                 </div>
 
                 <div className="mt-2 inline-flex bg-white border rounded-lg p-1">
                   <button
                     onClick={() => setLStatus('Pending')}
-                    className={`px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Pending' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                    className={`px-3 py-1 rounded-md text-sm font-semibold ${lStatus === 'Pending' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
                   >
                     Pending
                   </button>
                   <button
                     onClick={() => setLStatus('Approved')}
-                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Approved' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus === 'Approved' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
                   >
                     Approved
                   </button>
                   <button
                     onClick={() => setLStatus('Rejected')}
-                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus==='Rejected' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
+                    className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${lStatus === 'Rejected' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}
                   >
                     Rejected
                   </button>
                 </div>
 
 
-	                {lb && (
-	                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-	                    <div className="font-semibold mb-1">Leave Entitlements</div>
-	                    <div className="flex flex-wrap gap-6">
-	                      <div>
-	                        CL: {lb.cl_entitlement||0}/{lb.cl_availed||0} (Bal {(lb.cl_entitlement||0) - (lb.cl_availed||0)})
-	                      </div>
-	                      <div>
-	                        SL: {lb.sl_entitlement||0}/{lb.sl_availed||0} (Bal {(lb.sl_entitlement||0) - (lb.sl_availed||0)})
-	                      </div>
-	                      <div>
-	                        AL: {lb.al_entitlement||0}/{lb.al_availed||0} (Bal {(lb.al_entitlement||0) - (lb.al_availed||0)})
-	                      </div>
-	                    </div>
-	                  </div>
-	                )}
+                {lb && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                    <div className="font-semibold mb-1">Leave Entitlements</div>
+                    <div className="flex flex-wrap gap-6">
+                      <div>
+                        CL: {lb.cl_entitlement || 0}/{lb.cl_availed || 0} (Bal {(lb.cl_entitlement || 0) - (lb.cl_availed || 0)})
+                      </div>
+                      <div>
+                        SL: {lb.sl_entitlement || 0}/{lb.sl_availed || 0} (Bal {(lb.sl_entitlement || 0) - (lb.sl_availed || 0)})
+                      </div>
+                      <div>
+                        AL: {lb.al_entitlement || 0}/{lb.al_availed || 0} (Bal {(lb.al_entitlement || 0) - (lb.al_availed || 0)})
+                      </div>
+                    </div>
+                  </div>
+                )}
 
 
                 <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
@@ -1091,7 +1126,7 @@ const HRMPage: React.FC = () => {
                         <th className="p-2">End</th>
                         <th className="p-2">Status</th>
                         <th className="p-2">Reason</th>
-                        {role==='super' && <th className="p-2">Branch</th>}
+                        {role === 'super' && <th className="p-2">Branch</th>}
                         <th className="p-2 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -1105,13 +1140,12 @@ const HRMPage: React.FC = () => {
                           <td className="p-2">
                             {l.status ? (
                               <span
-                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                  l.status === 'Approved'
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${l.status === 'Approved'
                                     ? 'bg-emerald-100 text-emerald-700'
                                     : l.status === 'Rejected'
-                                    ? 'bg-red-100 text-red-700'
-                                    : 'bg-amber-100 text-amber-700'
-                                }`}
+                                      ? 'bg-red-100 text-red-700'
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}
                               >
                                 {l.status}
                               </span>
@@ -1120,12 +1154,12 @@ const HRMPage: React.FC = () => {
                             )}
                           </td>
                           <td className="p-2">{l.reason || '-'}</td>
-                          {role==='super' && <td className="p-2">{l.branch || '-'}</td>}
+                          {role === 'super' && <td className="p-2">{l.branch || '-'}</td>}
                           <td className="p-2 text-right">
                             {isAdmin && (l.status || '').toLowerCase() === 'pending' ? (
                               <div className="inline-flex items-center gap-3">
-                                <button onClick={()=>approveLeave(l.id)} className="text-green-700 hover:underline">Approve</button>
-                                <button onClick={()=>rejectLeave(l.id)} className="text-red-600 hover:underline">Reject</button>
+                                <button onClick={() => approveLeave(l.id)} className="text-green-700 hover:underline">Approve</button>
+                                <button onClick={() => rejectLeave(l.id)} className="text-red-600 hover:underline">Reject</button>
                               </div>
                             ) : (
                               <span className="text-xs text-text-secondary">No actions</span>
@@ -1133,8 +1167,8 @@ const HRMPage: React.FC = () => {
                           </td>
                         </tr>
                       ))}
-                      {leaves.length===0 && (
-                        <tr><td colSpan={role==='super'?8:7} className="p-4 text-center text-text-secondary">No leaves</td></tr>
+                      {leaves.length === 0 && (
+                        <tr><td colSpan={role === 'super' ? 8 : 7} className="p-4 text-center text-text-secondary">No leaves</td></tr>
                       )}
                     </tbody>
                   </table>
@@ -1143,13 +1177,13 @@ const HRMPage: React.FC = () => {
             )}
 
             {/* Time Record tab: CRUD + filters */}
-            {tab==='timerecord' && (
+            {tab === 'timerecord' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={tEmail} onChange={e=>setTEmail(e.target.value)} />
-                  <input type="date" className="border rounded px-2 py-2" value={tFrom} onChange={e=>setTFrom(e.target.value)} />
+                  <input className="border rounded px-3 py-2 w-full md:w-64" placeholder="Filter by employee email" value={tEmail} onChange={e => setTEmail(e.target.value)} />
+                  <input type="date" className="border rounded px-2 py-2" value={tFrom} onChange={e => setTFrom(e.target.value)} />
                   <span className="text-text-secondary">to</span>
-                  <input type="date" className="border rounded px-2 py-2" value={tTo} onChange={e=>setTTo(e.target.value)} />
+                  <input type="date" className="border rounded px-2 py-2" value={tTo} onChange={e => setTTo(e.target.value)} />
                   <button onClick={loadTimeRecords} className="px-3 py-2 rounded border">Apply</button>
                   {isAdmin && <button onClick={openAddTR} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Record</button>}
                 </div>
@@ -1179,8 +1213,8 @@ const HRMPage: React.FC = () => {
                           <td className="p-2 text-right">
                             {isAdmin ? (
                               <>
-                                <button onClick={()=>openEditTR(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
-                                <button onClick={()=>deleteTR(r.id)} className="text-red-600 hover:underline">Delete</button>
+                                <button onClick={() => openEditTR(r)} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={() => deleteTR(r.id)} className="text-red-600 hover:underline">Delete</button>
                               </>
                             ) : (
                               <span className="text-text-secondary">View only</span>
@@ -1188,7 +1222,7 @@ const HRMPage: React.FC = () => {
                           </td>
                         </tr>
                       ))}
-                      {trs.length===0 && (
+                      {trs.length === 0 && (
                         <tr><td colSpan={7} className="p-4 text-center text-text-secondary">No records</td></tr>
                       )}
 
@@ -1202,7 +1236,7 @@ const HRMPage: React.FC = () => {
             {/* Payroll tab: batches, generate, and items */}
 
             {/* Assets tab */}
-            {tab==='assets' && (
+            {tab === 'assets' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
                   {isAdmin && <button onClick={openAddAsset} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Issue/Record Asset</button>}
@@ -1237,8 +1271,8 @@ const HRMPage: React.FC = () => {
                           <td className="p-2 text-right">
                             {isAdmin ? (
                               <>
-                                <button onClick={()=>{ setEditAsset(a); setShowAssetModal(true); }} className="text-blue-600 hover:underline mr-3">Edit</button>
-                                <button onClick={()=>deleteAsset(a.id)} className="text-red-600 hover:underline">Delete</button>
+                                <button onClick={() => { setEditAsset(a); setShowAssetModal(true); }} className="text-blue-600 hover:underline mr-3">Edit</button>
+                                <button onClick={() => deleteAsset(a.id)} className="text-red-600 hover:underline">Delete</button>
                               </>
                             ) : (
                               <span className="text-text-secondary">View only</span>
@@ -1246,7 +1280,7 @@ const HRMPage: React.FC = () => {
                           </td>
                         </tr>
                       ))}
-                      {assets.length===0 && (
+                      {assets.length === 0 && (
                         <tr><td colSpan={8} className="p-4 text-center text-text-secondary">No assets</td></tr>
                       )}
                     </tbody>
@@ -1255,13 +1289,13 @@ const HRMPage: React.FC = () => {
               </div>
             )}
 
-            {tab==='payroll' && (
+            {tab === 'payroll' && (
               <div className="mt-6 space-y-3">
                 <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  <select className="border rounded px-2 py-2" value={pyMonth} onChange={e=>setPyMonth(Number(e.target.value))}>
-                    {Array.from({length:12}).map((_,i)=> <option key={i+1} value={i+1}>{i+1}</option>)}
+                  <select className="border rounded px-2 py-2" value={pyMonth} onChange={e => setPyMonth(Number(e.target.value))}>
+                    {Array.from({ length: 12 }).map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
-                  <input type="number" className="border rounded px-2 py-2 w-28" value={pyYear} onChange={e=>setPyYear(Number(e.target.value))} />
+                  <input type="number" className="border rounded px-2 py-2 w-28" value={pyYear} onChange={e => setPyYear(Number(e.target.value))} />
                   {isAdmin && <button onClick={generatePayroll} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Payroll</button>}
                 </div>
 
@@ -1271,11 +1305,11 @@ const HRMPage: React.FC = () => {
                     {payrollBatches.map(b => (
                       <div key={b.id} className="p-3">
                         <div className="flex items-center gap-2">
-                          <div className="font-semibold">{b.year}-{String(b.month).padStart(2,'0')}</div>
+                          <div className="font-semibold">{b.year}-{String(b.month).padStart(2, '0')}</div>
                           {b.branch && <div className="text-sm text-text-secondary">Branch: {b.branch}</div>}
-                          <button onClick={()=>{ setActiveBatchId(b.id); loadBatchItems(b.id); }} className="ml-auto text-blue-600 hover:underline">View</button>
+                          <button onClick={() => { setActiveBatchId(b.id); loadBatchItems(b.id); }} className="ml-auto text-blue-600 hover:underline">View</button>
                         </div>
-                        {activeBatchId===b.id && (
+                        {activeBatchId === b.id && (
                           <div className="mt-3 overflow-x-auto">
                             <table className="min-w-full text-sm">
                               <thead className="bg-gray-50">
@@ -1291,11 +1325,11 @@ const HRMPage: React.FC = () => {
                                     <td className="p-2 font-semibold text-text-primary">{it.employee_email}</td>
                                     <td className="p-2">{it.payable_amount ?? 0}</td>
                                     <td className="p-2 text-right">
-                                      <button onClick={()=>printPayslip(it)} className="text-[#ffa332] hover:underline">Print Payslip</button>
+                                      <button onClick={() => printPayslip(it)} className="text-[#ffa332] hover:underline">Print Payslip</button>
                                     </td>
                                   </tr>
                                 ))}
-                                {batchItems.length===0 && (
+                                {batchItems.length === 0 && (
                                   <tr><td colSpan={3} className="p-4 text-center text-text-secondary">No items</td></tr>
                                 )}
                               </tbody>
@@ -1304,7 +1338,7 @@ const HRMPage: React.FC = () => {
                         )}
                       </div>
                     ))}
-                    {payrollBatches.length===0 && (
+                    {payrollBatches.length === 0 && (
                       <div className="p-4 text-center text-text-secondary">No payroll batches</div>
                     )}
                   </div>
@@ -1320,52 +1354,52 @@ const HRMPage: React.FC = () => {
       {/* Add/Edit Employee Modal */}
       {showEmpModal && editRow && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={(e)=>{e.preventDefault(); onSave();}} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
             <div className="text-lg font-semibold">{editRow?.email ? 'Edit Employee' : 'Add Employee'}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold">Full name</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.full_name||''} onChange={e=>setEditRow({...editRow, full_name: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.full_name || ''} onChange={e => setEditRow({ ...editRow, full_name: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Email</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.email} onChange={e=>setEditRow({...editRow, email: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.email} onChange={e => setEditRow({ ...editRow, email: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Branch</label>
-                {role==='super' ? (
-                  <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.branch||''} onChange={e=>setEditRow({...editRow, branch: e.target.value})} />
+                {role === 'super' ? (
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.branch || ''} onChange={e => setEditRow({ ...editRow, branch: e.target.value })} />
                 ) : (
-                  <input className="mt-1 w-full border rounded px-2 py-1 bg-gray-50" value={myBranch||''} disabled />
+                  <input className="mt-1 w-full border rounded px-2 py-1 bg-gray-50" value={myBranch || ''} disabled />
                 )}
               </div>
               <div>
                 <label className="text-sm font-semibold">Role</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.role||''} onChange={e=>setEditRow({...editRow, role: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.role || ''} onChange={e => setEditRow({ ...editRow, role: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Department</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.department||''} onChange={e=>setEditRow({...editRow, department: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.department || ''} onChange={e => setEditRow({ ...editRow, department: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Designation</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.designation||''} onChange={e=>setEditRow({...editRow, designation: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.designation || ''} onChange={e => setEditRow({ ...editRow, designation: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Joining Date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editRow.joining_date||''} onChange={e=>setEditRow({...editRow, joining_date: e.target.value})} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editRow.joining_date || ''} onChange={e => setEditRow({ ...editRow, joining_date: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Status</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.status||''} onChange={e=>setEditRow({...editRow, status: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editRow.status || ''} onChange={e => setEditRow({ ...editRow, status: e.target.value })} />
               </div>
             </div>
             <div className="flex items-center justify-between gap-2 pt-2">
               {editRow.email && (
-                <button type="button" onClick={()=>exportEmployeePDF(editRow.email)} className="text-[#ffa332] hover:underline">Export Profile to PDF</button>
+                <button type="button" onClick={() => exportEmployeePDF(editRow.email)} className="text-[#ffa332] hover:underline">Export Profile to PDF</button>
               )}
               <div className="ml-auto flex items-center gap-2">
-                <button type="button" onClick={()=>{setShowEmpModal(false); setEditRow(null);}} className="px-3 py-2 rounded border">Cancel</button>
+                <button type="button" onClick={() => { setShowEmpModal(false); setEditRow(null); }} className="px-3 py-2 rounded border">Cancel</button>
                 {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
               </div>
             </div>
@@ -1384,16 +1418,16 @@ const HRMPage: React.FC = () => {
                   className="mt-1 w-full border rounded px-2 py-1"
                   placeholder="Search name or email"
                   value={addForEmail}
-                  onChange={e=>{ setAddForEmail(e.target.value); setShowAddSuggest(true); }}
-                  onFocus={()=>setShowAddSuggest(true)}
+                  onChange={e => { setAddForEmail(e.target.value); setShowAddSuggest(true); }}
+                  onFocus={() => setShowAddSuggest(true)}
                 />
                 {showAddSuggest && addForEmail.trim() && (
-                  addSuggestions.length>0 ? (
+                  addSuggestions.length > 0 ? (
                     <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow max-h-60 overflow-auto">
                       {addSuggestions.map(emp => (
                         <div key={emp.email}
                           className="px-2 py-1 hover:bg-gray-50 cursor-pointer text-sm"
-                          onClick={()=>{ setAddForEmail(emp.email); setShowAddSuggest(false); }}>
+                          onClick={() => { setAddForEmail(emp.email); setShowAddSuggest(false); }}>
                           <span className="font-medium">{emp.full_name || emp.email}</span>
                           {emp.full_name && <span className="text-text-secondary"> — {emp.email}</span>}
                         </div>
@@ -1408,7 +1442,7 @@ const HRMPage: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-semibold">Type</label>
-                <select className="mt-1 w-full border rounded px-2 py-1" value={addType} onChange={e=>setAddType(e.target.value as any)}>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={addType} onChange={e => setAddType(e.target.value as any)}>
                   <option value="CL">CL</option>
                   <option value="SL">SL</option>
                   <option value="AL">AL</option>
@@ -1416,20 +1450,20 @@ const HRMPage: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-semibold">Start date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addStart} onChange={e=>setAddStart(e.target.value)} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addStart} onChange={e => setAddStart(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm font-semibold">End date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addEnd} onChange={e=>setAddEnd(e.target.value)} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={addEnd} onChange={e => setAddEnd(e.target.value)} />
               </div>
               <div className="md:col-span-2">
                 <label className="text-sm font-semibold">Reason</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={addReason} onChange={e=>setAddReason(e.target.value)} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={addReason} onChange={e => setAddReason(e.target.value)} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={()=>setAddLeaveOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
-              {isAdmin && <button disabled={addSubmitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{addSubmitting? 'Saving...' : 'Save'}</button>}
+              <button type="button" onClick={() => setAddLeaveOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
+              {isAdmin && <button disabled={addSubmitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">{addSubmitting ? 'Saving...' : 'Save'}</button>}
             </div>
           </form>
         </div>
@@ -1438,42 +1472,42 @@ const HRMPage: React.FC = () => {
       {/* Add/Edit Time Record Modal */}
       {showTRModal && editTR && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={(e)=>{e.preventDefault(); saveTR();}} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
-            <div className="text-lg font-semibold">{editTR.id? 'Edit Time Record' : 'Add Time Record'}</div>
+          <form onSubmit={(e) => { e.preventDefault(); saveTR(); }} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-xl space-y-3">
+            <div className="text-lg font-semibold">{editTR.id ? 'Edit Time Record' : 'Add Time Record'}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold">Employee Email</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.employee_email} onChange={e=>setEditTR({...editTR, employee_email: e.target.value})} required />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.employee_email} onChange={e => setEditTR({ ...editTR, employee_email: e.target.value })} required />
               </div>
               <div>
                 <label className="text-sm font-semibold">Date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editTR.work_date} onChange={e=>setEditTR({...editTR, work_date: e.target.value})} required />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editTR.work_date} onChange={e => setEditTR({ ...editTR, work_date: e.target.value })} required />
               </div>
-              {role==='super' && (
+              {role === 'super' && (
                 <div>
                   <label className="text-sm font-semibold">Branch</label>
-                  <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.branch||''} onChange={e=>setEditTR({...editTR, branch: e.target.value})} />
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editTR.branch || ''} onChange={e => setEditTR({ ...editTR, branch: e.target.value })} />
                 </div>
               )}
               <div>
                 <label className="text-sm font-semibold">Check-in</label>
-                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_in || ''} onChange={e=>setEditTR({...editTR, check_in: e.target.value})} />
+                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_in || ''} onChange={e => setEditTR({ ...editTR, check_in: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Check-out</label>
-                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_out || ''} onChange={e=>setEditTR({...editTR, check_out: e.target.value})} />
+                <input type="datetime-local" className="mt-1 w-full border rounded px-2 py-1" value={editTR.check_out || ''} onChange={e => setEditTR({ ...editTR, check_out: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Hours</label>
-                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.hours ?? ''} onChange={e=>setEditTR({...editTR, hours: e.target.value===''? null : Number(e.target.value)})} />
+                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.hours ?? ''} onChange={e => setEditTR({ ...editTR, hours: e.target.value === '' ? null : Number(e.target.value) })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Overtime</label>
-                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.overtime ?? ''} onChange={e=>setEditTR({...editTR, overtime: e.target.value===''? null : Number(e.target.value)})} />
+                <input type="number" step="0.1" className="mt-1 w-full border rounded px-2 py-1" value={editTR.overtime ?? ''} onChange={e => setEditTR({ ...editTR, overtime: e.target.value === '' ? null : Number(e.target.value) })} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={()=>{setShowTRModal(false); setEditTR(null);}} className="px-3 py-2 rounded border">Cancel</button>
+              <button type="button" onClick={() => { setShowTRModal(false); setEditTR(null); }} className="px-3 py-2 rounded border">Cancel</button>
               {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
             </div>
           </form>
@@ -1482,58 +1516,58 @@ const HRMPage: React.FC = () => {
       {/* Add/Edit Asset Modal */}
       {showAssetModal && editAsset && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={(e)=>{e.preventDefault(); saveAsset();}} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl space-y-3">
-            <div className="text-lg font-semibold">{editAsset.id? 'Edit Asset' : 'Record Asset'}</div>
+          <form onSubmit={(e) => { e.preventDefault(); saveAsset(); }} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl space-y-3">
+            <div className="text-lg font-semibold">{editAsset.id ? 'Edit Asset' : 'Record Asset'}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="text-sm font-semibold">Employee Email</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.employee_email} onChange={e=>setEditAsset({...editAsset, employee_email: e.target.value})} required />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.employee_email} onChange={e => setEditAsset({ ...editAsset, employee_email: e.target.value })} required />
               </div>
               <div>
                 <label className="text-sm font-semibold">Asset ID</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_id||''} onChange={e=>setEditAsset({...editAsset, asset_id: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_id || ''} onChange={e => setEditAsset({ ...editAsset, asset_id: e.target.value })} />
               </div>
-              {role==='super' && (
+              {role === 'super' && (
                 <div>
                   <label className="text-sm font-semibold">Branch</label>
-                  <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.branch||''} onChange={e=>setEditAsset({...editAsset, branch: e.target.value})} />
+                  <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.branch || ''} onChange={e => setEditAsset({ ...editAsset, branch: e.target.value })} />
                 </div>
               )}
               <div>
                 <label className="text-sm font-semibold">Category</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_category||''} onChange={e=>setEditAsset({...editAsset, asset_category: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_category || ''} onChange={e => setEditAsset({ ...editAsset, asset_category: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Name</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_name||''} onChange={e=>setEditAsset({...editAsset, asset_name: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.asset_name || ''} onChange={e => setEditAsset({ ...editAsset, asset_name: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Brand/Model</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.brand_model||''} onChange={e=>setEditAsset({...editAsset, brand_model: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.brand_model || ''} onChange={e => setEditAsset({ ...editAsset, brand_model: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Serial/IMEI</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.serial_imei||''} onChange={e=>setEditAsset({...editAsset, serial_imei: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.serial_imei || ''} onChange={e => setEditAsset({ ...editAsset, serial_imei: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Quantity</label>
-                <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.quantity ?? 1} onChange={e=>setEditAsset({...editAsset, quantity: Number(e.target.value)||1})} />
+                <input type="number" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.quantity ?? 1} onChange={e => setEditAsset({ ...editAsset, quantity: Number(e.target.value) || 1 })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Issued Date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_date||''} onChange={e=>setEditAsset({...editAsset, issued_date: e.target.value})} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_date || ''} onChange={e => setEditAsset({ ...editAsset, issued_date: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Issued By</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_by||''} onChange={e=>setEditAsset({...editAsset, issued_by: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.issued_by || ''} onChange={e => setEditAsset({ ...editAsset, issued_by: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Condition at Issuance</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.condition_at_issuance||''} onChange={e=>setEditAsset({...editAsset, condition_at_issuance: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.condition_at_issuance || ''} onChange={e => setEditAsset({ ...editAsset, condition_at_issuance: e.target.value })} />
               </div>
               <div>
                 <label className="text-sm font-semibold">Return Status</label>
-                <select className="mt-1 w-full border rounded px-2 py-1" value={editAsset.return_status||'Issued'} onChange={e=>setEditAsset({...editAsset, return_status: e.target.value})}>
+                <select className="mt-1 w-full border rounded px-2 py-1" value={editAsset.return_status || 'Issued'} onChange={e => setEditAsset({ ...editAsset, return_status: e.target.value })}>
                   <option>Issued</option>
                   <option>Returned</option>
                   <option>Lost</option>
@@ -1542,19 +1576,19 @@ const HRMPage: React.FC = () => {
               </div>
               <div>
                 <label className="text-sm font-semibold">Actual Return Date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.actual_return_date||''} onChange={e=>setEditAsset({...editAsset, actual_return_date: e.target.value})} />
+                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={editAsset.actual_return_date || ''} onChange={e => setEditAsset({ ...editAsset, actual_return_date: e.target.value })} />
               </div>
               <div className="md:col-span-2">
                 <label className="text-sm font-semibold">Remarks</label>
-                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.remarks||''} onChange={e=>setEditAsset({...editAsset, remarks: e.target.value})} />
+                <input className="mt-1 w-full border rounded px-2 py-1" value={editAsset.remarks || ''} onChange={e => setEditAsset({ ...editAsset, remarks: e.target.value })} />
               </div>
               <div className="md:col-span-2 flex items-center gap-2">
-                <input id="ack" type="checkbox" className="h-4 w-4" checked={!!editAsset.acknowledgement} onChange={e=>setEditAsset({...editAsset, acknowledgement: e.target.checked})} />
+                <input id="ack" type="checkbox" className="h-4 w-4" checked={!!editAsset.acknowledgement} onChange={e => setEditAsset({ ...editAsset, acknowledgement: e.target.checked })} />
                 <label htmlFor="ack" className="text-sm">Acknowledgement received</label>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={()=>{setShowAssetModal(false); setEditAsset(null);}} className="px-3 py-2 rounded border">Cancel</button>
+              <button type="button" onClick={() => { setShowAssetModal(false); setEditAsset(null); }} className="px-3 py-2 rounded border">Cancel</button>
               {isAdmin && <button className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>}
             </div>
           </form>

@@ -1,3 +1,12 @@
+/**
+ * @fileoverview Legacy DatePicker Component
+ * 
+ * Custom date picker component with calendar popup and month navigation.
+ * Provides a visual calendar interface for date selection.
+ * 
+ * @module components/ui/DatePicker
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
 import { twMerge } from 'tailwind-merge';
@@ -24,8 +33,8 @@ const datePickerClasses = cva(
   }
 );
 
-interface DatePickerProps extends 
-  React.HTMLAttributes<HTMLDivElement>,
+interface DatePickerProps extends
+  Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'>,
   VariantProps<typeof datePickerClasses> {
   // Required parameters with defaults
   placeholder?: string;
@@ -37,13 +46,13 @@ interface DatePickerProps extends
   text_color?: string;
   fill_background_color?: string;
   border_border_radius?: string;
-  
+
   // Optional parameters (no defaults)
   layout_gap?: string;
   layout_width?: string;
   padding?: string;
   position?: string;
-  
+
   // Standard React props
   variant?: 'default' | 'filled' | 'outline';
   size?: 'small' | 'medium' | 'large';
@@ -57,8 +66,31 @@ interface DatePickerProps extends
   isRange?: boolean;
 }
 
+/**
+ * DatePicker Component
+ * 
+ * A date picker with calendar popup for selecting dates.
+ * 
+ * **Features:**
+ * - Calendar popup with month/year navigation
+ * - Click-outside to close
+ * - Keyboard support (Enter, Space)
+ * - Customizable date format
+ * - Range selection support (isRange prop)
+ * - Left/right icon support
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <DatePicker
+ *   value={selectedDate}
+ *   onChange={(date) => setSelectedDate(date)}
+ *   placeholder="Select date"
+ * />
+ * ```
+ */
 const DatePicker = ({
-  // Required parameters with defaults
+  // Text styling parameters with defaults
   placeholder = "Nov 16, 2020 - Dec 16, 2020",
   text_font_size = "16",
   text_font_family = "Nunito Sans",
@@ -68,13 +100,13 @@ const DatePicker = ({
   text_color = "#0a1629",
   fill_background_color = "#e6ecf4",
   border_border_radius = "14px",
-  
-  // Optional parameters (no defaults)
+
+  // Optional layout parameters
   layout_gap,
   layout_width,
   padding,
   position,
-  
+
   // Standard React props
   variant,
   size,
@@ -131,23 +163,36 @@ const DatePicker = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  /**
+   * Handle date selection from calendar
+   * Formats date and triggers onChange callback
+   * 
+   * @param date - Selected date object
+   */
   const handleDateSelect = (date: Date) => {
     if (disabled) return;
-    
+
     const formattedDate = date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric'
     });
-    
+
     setSelectedDate(formattedDate);
     setIsOpen(false);
-    
+
     if (onChange) {
       onChange(formattedDate);
     }
   };
 
+  /**
+   * Get all days in the current month for calendar display
+   * Includes empty cells for proper calendar grid alignment
+   * 
+   * @param date - Date object for the month to display
+   * @returns Array of Date objects and null values for empty cells
+   */
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -157,20 +202,25 @@ const DatePicker = ({
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < startingDayOfWeek; i++) {
       days.push(null);
     }
-    
+
     // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       days.push(new Date(year, month, day));
     }
-    
+
     return days;
   };
 
+  /**
+   * Navigate to previous or next month
+   * 
+   * @param direction - 'prev' for previous month, 'next' for next month
+   */
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentMonth(prev => {
       const newMonth = new Date(prev);
@@ -192,7 +242,7 @@ const DatePicker = ({
 
   const defaultRightIcon = (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke={text_color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M8 2V6M16 2V6M3 10H21M5 4H19C20.1046 4 21 4.89543 21 6V20C21 21.1046 20.1046 22 19 22H5C3.89543 22 3 21.1046 3 20V6C3 4.89543 3.89543 4 5 4Z" stroke={text_color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 
@@ -236,7 +286,7 @@ const DatePicker = ({
             {displayText}
           </span>
         </div>
-        
+
         <div className="ml-3 flex-shrink-0">
           {rightIcon || defaultRightIcon}
         </div>
@@ -252,21 +302,21 @@ const DatePicker = ({
               type="button"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M15 18L9 12L15 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
-            
+
             <h3 className="text-lg font-semibold">
               {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
             </h3>
-            
+
             <button
               onClick={() => navigateMonth('next')}
               className="p-1 hover:bg-gray-100 rounded"
               type="button"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           </div>

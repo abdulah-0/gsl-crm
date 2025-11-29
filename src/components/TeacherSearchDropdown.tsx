@@ -1,20 +1,68 @@
+/**
+ * @fileoverview Teacher Search Dropdown Component
+ * 
+ * Searchable dropdown for selecting a teacher from dashboard_users.
+ * Features debounced search and real-time filtering.
+ * 
+ * @module components/TeacherSearchDropdown
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+/**
+ * Props for TeacherSearchDropdown component
+ */
 export interface TeacherSearchDropdownProps {
+  /** Selected teacher ID */
   value: string;
+  /** Callback when teacher is selected */
   onChange: (teacherId: string, teacherName: string, teacherAvatar?: string) => void;
+  /** Placeholder text */
   placeholder?: string;
+  /** Additional CSS classes */
   className?: string;
 }
 
+/**
+ * Teacher option data structure
+ */
 interface TeacherOption {
+  /** Teacher ID */
   id: string;
+  /** Teacher's full name */
   full_name: string;
+  /** Teacher's email */
   email: string;
+  /** Optional avatar URL */
   avatar_url?: string | null;
 }
 
+/**
+ * TeacherSearchDropdown Component
+ * 
+ * Searchable dropdown for selecting a teacher.
+ * 
+ * **Features:**
+ * - Debounced search (300ms delay)
+ * - Filters users by role='teacher'
+ * - Search by name or email
+ * - Click-outside to close
+ * - Loading state during fetch
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <TeacherSearchDropdown
+ *   value={selectedTeacherId}
+ *   onChange={(id, name, avatar) => {
+ *     setSelectedTeacherId(id);
+ *     setSelectedTeacherName(name);
+ *   }}
+ *   placeholder="Search for a teacher..."
+ * />
+ * ```
+ */
 const TeacherSearchDropdown: React.FC<TeacherSearchDropdownProps> = ({
   value,
   onChange,

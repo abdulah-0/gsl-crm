@@ -1,3 +1,27 @@
+/**
+ * @fileoverview Profile Page
+ * 
+ * User profile management page for the GSL CRM system.
+ * Allows users to view and edit their personal information and settings.
+ * 
+ * **Key Features:**
+ * - Profile overview with avatar
+ * - Profile settings (name, phone, city, job title, about)
+ * - Avatar upload to Supabase Storage
+ * - Password change functionality
+ * - Real-time profile updates
+ * - Tab-based navigation (Overview, Settings, Security, Notifications)
+ * - Auto-create profile row if missing
+ * 
+ * **Tabs:**
+ * 1. **Overview** - Display account info and permissions
+ * 2. **Settings** - Edit profile information and avatar
+ * 3. **Security** - Change password
+ * 4. **Notifications** - Notification preferences (coming soon)
+ * 
+ * @module pages/Profile
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
@@ -44,12 +68,12 @@ const ProfilePage: React.FC = () => {
       !!avatarFile
     );
   }, [me, name, phone, city, title, about, avatarFile]);
-  const canSavePass = useMemo(()=> newPass.length >= 8 && newPass === confirmPass, [newPass, confirmPass]);
+  const canSavePass = useMemo(() => newPass.length >= 8 && newPass === confirmPass, [newPass, confirmPass]);
 
   useEffect(() => {
     const t = (params.get('tab') as TabKey) || 'overview';
     setTab(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -219,7 +243,7 @@ const ProfilePage: React.FC = () => {
             ) : me ? (
               <div className="flex items-center gap-4">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="avatar" className="w-12 h-12 rounded-full object-cover"/>
+                  <img src={avatarUrl} alt="avatar" className="w-12 h-12 rounded-full object-cover" />
                 ) : (
                   <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center font-bold text-lg">
                     {me.full_name?.[0] || me.email?.[0] || 'U'}
@@ -238,12 +262,12 @@ const ProfilePage: React.FC = () => {
           {/* Tabs */}
           <div className="mt-6 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a]">
             <div className="p-3 border-b flex flex-wrap gap-2">
-              {(['overview','settings','security','notifications'] as TabKey[]).map(t => (
-                <button key={t} onClick={()=>changeTab(t)} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab===t? 'bg-[#ffa332] text-white':'text-text-secondary'}`}>{t[0].toUpperCase()+t.slice(1)}</button>
+              {(['overview', 'settings', 'security', 'notifications'] as TabKey[]).map(t => (
+                <button key={t} onClick={() => changeTab(t)} className={`px-4 py-2 rounded-full text-sm font-semibold ${tab === t ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>{t[0].toUpperCase() + t.slice(1)}</button>
               ))}
             </div>
             <div className="p-4">
-              {tab==='overview' && (
+              {tab === 'overview' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="border rounded p-3">
                     <div className="font-semibold mb-2">Account</div>
@@ -258,71 +282,71 @@ const ProfilePage: React.FC = () => {
                   <div className="border rounded p-3">
                     <div className="font-semibold mb-2">Permissions</div>
                     <div className="flex flex-wrap gap-2">
-                      {(me?.permissions||[]).map(p => (<span key={p} className="px-2 py-1 rounded bg-orange-50 text-[#ffa332] text-xs">{p}</span>))}
-                      {(!me?.permissions || me.permissions.length===0) && <span className="text-text-secondary">No permissions</span>}
+                      {(me?.permissions || []).map(p => (<span key={p} className="px-2 py-1 rounded bg-orange-50 text-[#ffa332] text-xs">{p}</span>))}
+                      {(!me?.permissions || me.permissions.length === 0) && <span className="text-text-secondary">No permissions</span>}
                     </div>
                   </div>
                 </div>
               )}
 
-              {tab==='settings' && (
+              {tab === 'settings' && (
                 <form onSubmit={saveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="border rounded p-3 space-y-2">
                     <div className="font-semibold">Profile Settings</div>
                     <label className="block">
                       <span className="text-text-secondary">Full Name</span>
-                      <input value={name} onChange={e=>setName(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input value={name} onChange={e => setName(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <label className="block">
                       <span className="text-text-secondary">Job Title</span>
-                      <input value={title} onChange={e=>setTitle(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input value={title} onChange={e => setTitle(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <label className="block">
                       <span className="text-text-secondary">Phone</span>
-                      <input value={phone} onChange={e=>setPhone(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input value={phone} onChange={e => setPhone(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <label className="block">
                       <span className="text-text-secondary">City</span>
-                      <input value={city} onChange={e=>setCity(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input value={city} onChange={e => setCity(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <label className="block">
                       <span className="text-text-secondary">About</span>
-                      <textarea value={about} onChange={e=>setAbout(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3}/>
+                      <textarea value={about} onChange={e => setAbout(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
                     </label>
                   </div>
                   <div className="border rounded p-3 space-y-3">
                     <div className="font-semibold">Avatar</div>
                     <div className="flex items-center gap-3">
                       {avatarUrl ? (
-                        <img src={avatarUrl} alt="avatar" className="w-16 h-16 rounded-full object-cover"/>
+                        <img src={avatarUrl} alt="avatar" className="w-16 h-16 rounded-full object-cover" />
                       ) : (
                         <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center font-bold text-lg">
                           {name?.[0] || me?.full_name?.[0] || 'U'}
                         </div>
                       )}
                       <div>
-                        <input type="file" accept="image/*" onChange={e=>setAvatarFile((e.target.files&&e.target.files[0])||null)} />
+                        <input type="file" accept="image/*" onChange={e => setAvatarFile((e.target.files && e.target.files[0]) || null)} />
                         <div className="text-xs text-text-secondary">PNG/JPG up to ~2MB recommended</div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <button type="submit" disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">{saving? 'Saving...' : 'Save Changes'}</button>
+                      <button type="submit" disabled={!canSaveName || saving} className="px-3 py-2 rounded bg-[#ffa332] text-white font-bold">{saving ? 'Saving...' : 'Save Changes'}</button>
                     </div>
                   </div>
                 </form>
               )}
 
-              {tab==='security' && (
+              {tab === 'security' && (
                 <form onSubmit={changePassword} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="border rounded p-3">
                     <div className="font-semibold mb-2">Change Password</div>
                     <label className="block mb-2">
                       <span className="text-text-secondary">New Password</span>
-                      <input type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <label className="block mb-2">
                       <span className="text-text-secondary">Confirm Password</span>
-                      <input type="password" value={confirmPass} onChange={e=>setConfirmPass(e.target.value)} className="mt-1 w-full border rounded p-2"/>
+                      <input type="password" value={confirmPass} onChange={e => setConfirmPass(e.target.value)} className="mt-1 w-full border rounded p-2" />
                     </label>
                     <div className="text-right"><button disabled={!canSavePass} className="px-3 py-2 rounded bg-gray-800 text-white font-bold">Update Password</button></div>
                   </div>
@@ -336,7 +360,7 @@ const ProfilePage: React.FC = () => {
                 </form>
               )}
 
-              {tab==='notifications' && (
+              {tab === 'notifications' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="border rounded p-3">
                     <div className="font-semibold mb-2">Notifications</div>

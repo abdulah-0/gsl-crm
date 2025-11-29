@@ -1,18 +1,64 @@
+/**
+ * @fileoverview Attendance Modal Component
+ * 
+ * Modal component for recording daily student attendance.
+ * Allows teachers to mark students as Present or Absent for a specific date.
+ * 
+ * @module components/AttendanceModal
+ */
+
 import React, { useState } from 'react';
 
+/**
+ * Student data structure for attendance tracking
+ */
 type Student = {
+    /** Unique student identifier */
     id: string;
+    /** Student's full name */
     full_name: string;
 };
 
+/**
+ * Props for AttendanceModal component
+ */
 type AttendanceModalProps = {
+    /** Whether the modal is open */
     isOpen: boolean;
+    /** Callback to close the modal */
     onClose: () => void;
+    /** Callback to submit attendance data */
     onSubmit: (data: { date: string; attendance: { studentId: string; status: 'Present' | 'Absent' }[] }) => Promise<void>;
+    /** List of students to mark attendance for */
     students: Student[];
+    /** ID of the teacher recording attendance */
     teacherId: string;
 };
 
+/**
+ * AttendanceModal Component
+ * 
+ * Modal for recording daily student attendance.
+ * 
+ * **Features:**
+ * - Date selection for attendance record
+ * - Individual student status toggle (Present/Absent)
+ * - Bulk actions (Mark All Present/Absent)
+ * - Form validation and submission
+ * - Loading states during submission
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <AttendanceModal
+ *   isOpen={showModal}
+ *   onClose={() => setShowModal(false)}
+ *   onSubmit={handleAttendanceSubmit}
+ *   students={studentList}
+ *   teacherId={teacher.id}
+ * />
+ * ```
+ */
 const AttendanceModal: React.FC<AttendanceModalProps> = ({
     isOpen,
     onClose,
@@ -134,8 +180,8 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
                                                 type="button"
                                                 onClick={() => handleToggle(student.id)}
                                                 className={`px-4 py-1.5 rounded text-sm font-semibold ${status === 'Present'
-                                                        ? 'bg-green-100 text-green-700'
-                                                        : 'bg-red-100 text-red-700'
+                                                    ? 'bg-green-100 text-green-700'
+                                                    : 'bg-red-100 text-red-700'
                                                     }`}
                                             >
                                                 {status}

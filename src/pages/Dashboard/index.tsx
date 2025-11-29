@@ -1,3 +1,28 @@
+/**
+ * @fileoverview Dashboard Page
+ * 
+ * Main dashboard page for the GSL CRM system.
+ * Provides an overview of tasks, ongoing cases, and team activity.
+ * 
+ * **Key Features:**
+ * - Welcome message with user's name
+ * - Date range picker for filtering
+ * - Recent tasks display (top 3)
+ * - Ongoing cases overview (top 3)
+ * - Activity stream with real-time updates
+ * - Real-time data synchronization via Supabase subscriptions
+ * - Priority indicators for tasks and cases
+ * - Quick navigation to detailed views
+ * 
+ * **Real-time Updates:**
+ * - Tasks table changes
+ * - Cases table changes
+ * - Activity log updates
+ * - User profile updates
+ * 
+ * @module pages/Dashboard
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { useNavigate } from 'react-router-dom';
@@ -70,7 +95,7 @@ const Dashboard = () => {
 
 
   useEffect(() => {
-    const priorityColor = (p: 'high'|'medium'|'low') => p === 'high' ? '#ff4757' : p === 'medium' ? '#ffa332' : '#0ac846';
+    const priorityColor = (p: 'high' | 'medium' | 'low') => p === 'high' ? '#ff4757' : p === 'medium' ? '#ffa332' : '#0ac846';
 
     const loadTasks = async () => {
       const { data, error } = await supabase
@@ -82,7 +107,7 @@ const Dashboard = () => {
         const mapped: Task[] = data.map((t: any) => {
           const deadline = t.deadline ? new Date(t.deadline) : null;
           const timeLabel = deadline ? `${deadline.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} | ${deadline.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}` : 'No deadline';
-          const prio: 'low'|'medium'|'high' = (t.priority as any) ?? 'medium';
+          const prio: 'low' | 'medium' | 'high' = (t.priority as any) ?? 'medium';
           return {
             id: String(t.id),
             title: t.title,
@@ -123,8 +148,8 @@ const Dashboard = () => {
       if (!error && data) {
         const mapped: CaseData[] = data.map((c: any) => {
           const stage: string = (c.stage || c.status || 'Initial Stage') as string;
-          const highStages = ['Visa Applied','Visa Received','CAS Applied','CAS Received','Interview'];
-          const mediumStages = ['Offer Applied','Offer Received','Fee Paid'];
+          const highStages = ['Visa Applied', 'Visa Received', 'CAS Applied', 'CAS Received', 'Interview'];
+          const mediumStages = ['Offer Applied', 'Offer Received', 'Fee Paid'];
           const prio: 'low' | 'medium' | 'high' = highStages.includes(stage)
             ? 'high'
             : mediumStages.includes(stage)
@@ -171,7 +196,7 @@ const Dashboard = () => {
       supabase.removeChannel(actChannel);
       supabase.removeChannel(casesChannel);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

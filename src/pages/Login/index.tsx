@@ -1,3 +1,28 @@
+/**
+ * @fileoverview Login Page
+ * 
+ * Authentication page for the GSL CRM system.
+ * Handles user sign-in with email and password.
+ * 
+ * **Key Features:**
+ * - Email/password authentication via Supabase
+ * - Remember me functionality
+ * - Password visibility toggle
+ * - Auto-redirect if already logged in
+ * - Error handling and display
+ * - Loading states
+ * - Fallback auth user creation for existing dashboard users
+ * 
+ * **Flow:**
+ * 1. Check for existing session on mount
+ * 2. Redirect to dashboard if logged in
+ * 3. Handle sign-in with Supabase Auth
+ * 4. If auth user doesn't exist, attempt to create from dashboard_users
+ * 5. Redirect to dashboard on successful login
+ * 
+ * @module pages/Login
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { Link, useNavigate } from 'react-router-dom';
@@ -23,7 +48,7 @@ const Login = () => {
         if (data.session) {
           navigate('/dashboard');
         }
-      } catch {}
+      } catch { }
     })();
   }, [navigate]);
 
@@ -259,12 +284,12 @@ const Login = () => {
 
                   {/* Sign In Button */}
 
-	                  {/* Error message */}
-	                  {error && (
-	                    <div className="mt-4 text-red-600 bg-red-50 border border-red-200 rounded-md p-2 text-sm">
-	                      {error}
-	                    </div>
-	                  )}
+                  {/* Error message */}
+                  {error && (
+                    <div className="mt-4 text-red-600 bg-red-50 border border-red-200 rounded-md p-2 text-sm">
+                      {error}
+                    </div>
+                  )}
 
                   <div className="flex justify-center" style={{ marginTop: '48px' }}>
                     <Button

@@ -1,3 +1,38 @@
+/**
+ * @fileoverview Super Admin Dashboard
+ * 
+ * Comprehensive analytics and management dashboard for Super Admins.
+ * Provides organization-wide insights, performance metrics, and administrative controls.
+ * 
+ * **Key Features:**
+ * - Branch performance analytics
+ * - Employee performance tracking
+ * - Case pipeline visualization (13 stages)
+ * - Financial overview and cash flow
+ * - Revenue growth charts
+ * - Recent activities feed
+ * - Student communication summary
+ * - Branch management (CRUD)
+ * - Case management
+ * - Real-time updates across all metrics
+ * 
+ * **Metrics Tracked:**
+ * - Visa successes
+ * - Cases issued (monthly)
+ * - In-progress cases
+ * - Revenue (monthly)
+ * - Cash in/out
+ * - Branch revenue distribution
+ * - Employee success rates
+ * 
+ * **Case Stages:**
+ * Initial Stage, Offer Applied, Offer Received, Fee Paid, Interview,
+ * CAS Applied, CAS Received, Visa Applied, Visa Received, Enrollment,
+ * Not Enrolled, Backout, Visa Rejected
+ * 
+ * @module pages/SuperAdmin
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';

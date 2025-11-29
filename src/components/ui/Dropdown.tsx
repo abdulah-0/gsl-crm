@@ -1,3 +1,15 @@
+/**
+ * @fileoverview Legacy Dropdown Component
+ * 
+ * Custom dropdown/select component with extensive styling options.
+ * Provides a clickable dropdown with customizable options and icons.
+ * 
+ * **Note:** A new Radix-based Select component is available at `@/components/radix-components/Select`
+ * with improved accessibility and keyboard navigation.
+ * 
+ * @module components/ui/Dropdown
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { cva, VariantProps } from 'class-variance-authority';
 import { twMerge } from 'tailwind-merge';
@@ -24,14 +36,20 @@ const dropdownClasses = cva(
   }
 );
 
+/**
+ * Dropdown option data structure
+ */
 interface DropdownOption {
+  /** Unique value for the option */
   value: string;
+  /** Display label for the option */
   label: string;
+  /** Whether the option is disabled */
   disabled?: boolean;
 }
 
-interface DropdownProps extends 
-  React.ComponentPropsWithoutRef<'div'>,
+interface DropdownProps extends
+  Omit<React.ComponentPropsWithoutRef<'div'>, 'onChange'>,
   VariantProps<typeof dropdownClasses> {
   // Required parameters with defaults
   placeholder?: string;
@@ -44,13 +62,13 @@ interface DropdownProps extends
   fill_background_color?: string;
   border_border_radius?: string;
   effect_box_shadow?: string;
-  
+
   // Optional parameters (no defaults)
   layout_gap?: string;
   layout_width?: string;
   padding?: string;
   position?: string;
-  
+
   // Standard React props
   variant?: 'default' | 'filled' | 'outline';
   size?: 'small' | 'medium' | 'large';
@@ -64,8 +82,34 @@ interface DropdownProps extends
   rightIcon?: React.ReactNode;
 }
 
+/**
+ * Dropdown Component
+ * 
+ * A custom dropdown/select component with click-outside detection and keyboard support.
+ * 
+ * **Features:**
+ * - Customizable options with labels and values
+ * - Click-outside to close
+ * - Keyboard navigation (Enter, Space)
+ * - Left and right icon support
+ * - Disabled state for individual options
+ * - Three variants and sizes
+ * 
+ * @component
+ * @example
+ * ```tsx
+ * <Dropdown
+ *   options={[
+ *     { value: '1', label: 'Option 1' },
+ *     { value: '2', label: 'Option 2' }
+ *   ]}
+ *   value={selected}
+ *   onChange={(val) => setSelected(val)}
+ * />
+ * ```
+ */
 const Dropdown = ({
-  // Required parameters with defaults
+  // Text styling parameters with defaults
   placeholder = "Evan Yates",
   text_font_size = "16",
   text_font_family = "Nunito Sans",
@@ -76,13 +120,13 @@ const Dropdown = ({
   fill_background_color = "#ffffff",
   border_border_radius = "14px",
   effect_box_shadow = "0px 6px 58px #c3cbd61a",
-  
-  // Optional parameters (no defaults)
+
+  // Optional layout parameters
   layout_gap,
   layout_width,
   padding,
   position,
-  
+
   // Standard React props
   variant,
   size,
@@ -145,10 +189,10 @@ const Dropdown = ({
 
   const handleSelect = (optionValue: string) => {
     if (disabled) return;
-    
+
     setSelectedValue(optionValue);
     setIsOpen(false);
-    
+
     if (onChange) {
       onChange(optionValue);
     }
@@ -158,19 +202,19 @@ const Dropdown = ({
   const displayText = selectedOption ? selectedOption.label : placeholder;
 
   const defaultRightIcon = (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
     >
-      <path 
-        d="M6 9L12 15L18 9" 
-        stroke={text_color} 
-        strokeWidth="2" 
-        strokeLinecap="round" 
+      <path
+        d="M6 9L12 15L18 9"
+        stroke={text_color}
+        strokeWidth="2"
+        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>
@@ -215,7 +259,7 @@ const Dropdown = ({
             {displayText}
           </span>
         </div>
-        
+
         <div className="ml-3 flex-shrink-0">
           {rightIcon || defaultRightIcon}
         </div>

@@ -1,3 +1,13 @@
+/**
+ * @fileoverview Header Component
+ * 
+ * Main header component for the GSL CRM application.
+ * Displays search bar, notifications, and user profile dropdown.
+ * Includes real-time notification updates via Supabase subscriptions.
+ * 
+ * @module components/common/Header
+ */
+
 import React, { useEffect, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import SearchView from '../ui/SearchView';
@@ -5,13 +15,43 @@ import Dropdown from '../ui/Dropdown';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 
+/**
+ * Props for Header component
+ */
 interface HeaderProps {
+  /** Additional CSS classes */
   className?: string;
+  /** Callback when search is performed */
   onSearch?: (value: string) => void;
+  /** Callback when profile option is selected */
   onProfileSelect?: (value: string) => void;
+  /** Callback when notification icon is clicked */
   onNotificationClick?: () => void;
 }
 
+/**
+ * Header Component
+ * 
+ * Application header with search, notifications, and user profile.
+ * 
+ * **Features:**
+ * - Global search functionality
+ * - Real-time notification system
+ * - Role-based notification filtering
+ * - User profile dropdown (Profile, Settings, Logout)
+ * - Auto-mark notifications as read
+ * - Real-time user data updates via Supabase
+ * - Avatar display with fallback
+ * 
+ * **Notification System:**
+ * - Fetches notifications on mount
+ * - Filters by recipient email or role
+ * - Real-time updates via postgres_changes subscription
+ * - Unread count badge
+ * - Dropdown panel with notification list
+ * 
+ * @component
+ */
 const Header = ({
   className,
   onSearch,
@@ -39,7 +79,7 @@ const Header = ({
       setDisplayName(u?.full_name || em || 'User');
       setAvatarUrl(u?.avatar_url || '');
       const roleLower = (u?.role || '').toString().toLowerCase();
-      const wantedRoles = roleLower.includes('super') ? ['super','admin','finance'] : (roleLower ? [roleLower] : []);
+      const wantedRoles = roleLower.includes('super') ? ['super', 'admin', 'finance'] : (roleLower ? [roleLower] : []);
 
       // Load initial notifications (email-targeted or role-targeted)
       let notificationsReady = true;
@@ -50,15 +90,15 @@ const Header = ({
           .order('created_at', { ascending: false })
           .limit(50);
         if (nErr) throw nErr;
-        const filtered = (ns || []).filter((n:any) => {
+        const filtered = (ns || []).filter((n: any) => {
           const rr = (n.recipient_role || n.role || '').toString().toLowerCase();
-          const byRole = wantedRoles.some((w:string) => rr.includes(w));
+          const byRole = wantedRoles.some((w: string) => rr.includes(w));
           const targetEmail = n.recipient_email || n.email;
           return targetEmail === em || byRole;
         });
-        const list = filtered.map((n:any)=>({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
+        const list = filtered.map((n: any) => ({ id: n.id, title: n.title, body: n.body, created_at: n.created_at }));
         setNotifs(list as any);
-        setNotifCount(filtered.filter((n:any)=>(("read_at" in n) ? !n.read_at : true) && ((n.recipient_email || n.email) === em)).length);
+        setNotifCount(filtered.filter((n: any) => (("read_at" in n) ? !n.read_at : true) && ((n.recipient_email || n.email) === em)).length);
       } catch (_) {
         notificationsReady = false; // Table/columns may vary in this environment; skip realtime for it
         setNotifs([]);
@@ -76,10 +116,10 @@ const Header = ({
           }
         });
       if (notificationsReady) {
-        chan = chan.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        chan = chan.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload: any) => {
           const row: any = payload.new;
           const rr = (row?.recipient_role || row?.role || '').toString().toLowerCase();
-          const byRole = wantedRoles.some((w:string) => rr.includes(w));
+          const byRole = wantedRoles.some((w: string) => rr.includes(w));
           const targetEmail = row?.recipient_email || row?.email;
           if (targetEmail === em || byRole) {
             setNotifs(prev => [{ id: row.id, title: row.title, body: row.body, created_at: row.created_at }, ...prev].slice(0, 10));
@@ -89,7 +129,7 @@ const Header = ({
       }
       chan = chan.subscribe();
     })();
-    return () => { mounted = false; try { if (chan) supabase.removeChannel(chan); } catch {} };
+    return () => { mounted = false; try { if (chan) supabase.removeChannel(chan); } catch { } };
   }, []);
 
   const profileOptions = [
@@ -123,7 +163,7 @@ const Header = ({
     setShowNotif(s => !s);
     if (!showNotif && email) {
       // mark all unread as read
-      try { await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('recipient_email', email).is('read_at', null); setNotifCount(0); } catch {}
+      try { await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('recipient_email', email).is('read_at', null); setNotifCount(0); } catch { }
     }
     if (onNotificationClick) {
       onNotificationClick();
@@ -191,7 +231,7 @@ const Header = ({
                     {n.created_at && <div className="text-[10px] text-text-secondary mt-1">{new Date(n.created_at).toLocaleString()}</div>}
                   </div>
                 ))}
-                {notifs.length===0 && <div className="px-3 py-2 text-xs text-text-secondary">No notifications</div>}
+                {notifs.length === 0 && <div className="px-3 py-2 text-xs text-text-secondary">No notifications</div>}
               </div>
             </div>
           )}

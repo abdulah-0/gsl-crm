@@ -1,3 +1,36 @@
+/**
+ * @fileoverview Cases Page
+ * 
+ * Comprehensive case management page for the GSL CRM system.
+ * Handles consultancy cases with task tracking, Kanban board, and student information.
+ * 
+ * **Key Features:**
+ * - Case creation with student linking
+ * - Task management (Active/Backlog)
+ * - Multiple views (List, Grid, Kanban Board)
+ * - Drag-and-drop task status updates
+ * - Drag-and-drop case stage updates
+ * - Student information form integration
+ * - University application tracking
+ * - Real-time updates via Supabase
+ * - Role-based permissions (CRUD access control)
+ * - Advanced filtering (branch, status, type, search)
+ * 
+ * **Case Stages:**
+ * Initial Stage, Offer Applied, Offer Received, Fee Paid, Interview,
+ * CAS Applied, CAS Received, Visa Applied, Visa Received, Enrollment,
+ * Not Enrolled, Backout, Visa Rejected
+ * 
+ * **Task Management:**
+ * - Active tasks with status tracking (Todo, In Progress, In Review, Done)
+ * - Backlog for future tasks
+ * - Priority levels (Low, Medium, High)
+ * - Time estimation and tracking
+ * - Assignee management
+ * 
+ * @module pages/Cases
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';

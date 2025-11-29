@@ -1,15 +1,60 @@
+/**
+ * @fileoverview Sidebar Component
+ * 
+ * Main navigation sidebar for the GSL CRM application.
+ * Provides role-based menu access with dynamic permission checking.
+ * 
+ * @module components/common/Sidebar
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { twMerge } from 'tailwind-merge';
 import { useLocation, useNavigate } from 'react-router-dom';
 import logo from '../../assets/logo.png';
 import { supabase } from '../../lib/supabaseClient';
 
+/**
+ * Props for Sidebar component
+ */
 interface SidebarProps {
+  /** Additional CSS classes */
   className?: string;
+  /** Whether sidebar is collapsed */
   isCollapsed?: boolean;
+  /** Callback when sidebar is toggled */
   onToggle?: () => void;
 }
 
+/**
+ * Sidebar Component
+ * 
+ * Navigation sidebar with role-based access control.
+ * 
+ * **Features:**
+ * - Role-based menu filtering
+ * - Granular permission checking via user_permissions table
+ * - Super admin and admin full access
+ * - Teacher-specific default permissions
+ * - Active route highlighting
+ * - Logout functionality
+ * - Support button
+ * - Responsive design (hidden on mobile)
+ * 
+ * **Permission System:**
+ * - Checks auth metadata role first
+ * - Falls back to dashboard_users.role
+ * - Supports granular permissions from user_permissions table
+ * - Super admins see all tabs including Users
+ * - Admins see all tabs except Users
+ * - Other roles see only permitted modules
+ * 
+ * **Menu Items:**
+ * Dashboard, Cases, Leads, Students, Services, Calendar, Accounts,
+ * Universities, Teachers, Employees, Leaves, HRM, Daily Task,
+ * Messenger, Info, Reports, Users (super admin only)
+ * 
+ * @component
+ */
 const Sidebar = ({
   className,
   isCollapsed = false,
@@ -36,17 +81,17 @@ const Sidebar = ({
         const superRole = role.includes('super');
         const adminRole = role.includes('admin');
         setIsSuper(superRole);
-        const ALL = ['dashboard','students','services','cases','leads','calendar','accounts','universities','teachers','employees','leaves','hrm','dailytask','messenger','info','reports','users'];
+        const ALL = ['dashboard', 'students', 'services', 'cases', 'leads', 'calendar', 'accounts', 'universities', 'teachers', 'employees', 'leaves', 'hrm', 'dailytask', 'messenger', 'info', 'reports', 'users'];
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
-        const normalizedPerms = (perms||[]).map(p => p === 'info-portal' ? 'info' : p);
+        const normalizedPerms = (perms || []).map(p => p === 'info-portal' ? 'info' : p);
         // Prefer granular permissions when present
         const { data: up } = await supabase
           .from('user_permissions')
           .select('module, access, can_add, can_edit, can_delete')
           .eq('user_email', email);
-        const granularAllowed = (up||[])
-          .filter((r:any) => (r.can_add || r.can_edit || r.can_delete || (r.access && ['VIEW','CRUD'].includes(r.access))))
-          .map((r:any) => (r.module === 'info-portal' ? 'info' : (r.module as string)));
+        const granularAllowed = (up || [])
+          .filter((r: any) => (r.can_add || r.can_edit || r.can_delete || (r.access && ['VIEW', 'CRUD'].includes(r.access))))
+          .map((r: any) => (r.module === 'info-portal' ? 'info' : (r.module as string)));
         if (superRole || adminRole) {
           // Super Admin and Admin can access all tabs (Users tab still restricted below to super only)
           setAllowed(ALL);
@@ -54,7 +99,7 @@ const Sidebar = ({
           setAllowed(Array.from(new Set(granularAllowed)));
         } else if (role.includes('teacher')) {
           // Teachers by default only see Teachers unless explicitly granted more (fallback)
-          setAllowed((normalizedPerms && normalizedPerms.length>0) ? normalizedPerms : ['teachers']);
+          setAllowed((normalizedPerms && normalizedPerms.length > 0) ? normalizedPerms : ['teachers']);
         } else {
           setAllowed(normalizedPerms.length ? normalizedPerms : null);
         }

@@ -1,3 +1,32 @@
+/**
+ * @fileoverview Finances Page
+ * 
+ * Comprehensive financial management system for the GSL CRM.
+ * Handles vouchers, cash flow, revenue tracking, and student payment management.
+ * 
+ * **Key Features:**
+ * - Voucher generation (Cash In/Out, Online, Bank, Transfer)
+ * - Student payment tracking with pending students search
+ * - Voucher categories (Admission, Installment, Consultancy, Test Fee, Miscellaneous)
+ * - PDF generation and storage for vouchers
+ * - Excel/CSV export functionality
+ * - Real-time updates via Supabase
+ * - Role-based permissions (View/CRUD access)
+ * - Branch management
+ * - Quick Cash Out generator
+ * - Bill upload support
+ * - Financial charts and analytics
+ * 
+ * **Voucher Types:**
+ * - Cash Receipt, Cash Payment, Online Payment, Bank Deposit, Transfer
+ * 
+ * **Permissions:**
+ * - Super Admin: Full access
+ * - Granular permissions: can_add, can_edit, can_delete per user
+ * 
+ * @module pages/Finances
+ */
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
@@ -89,7 +118,7 @@ function mapDbToRow(v: DBVoucher): VoucherRow {
 
 
 const BRANCHES = ['Main Branch', 'North Branch', 'South Branch', 'East Branch', 'West Branch'];
-const CASH_OUT_CATEGORIES = ['Salaries','Bills','Rent','Utilities','Maintenance','Marketing','Travel','Other'];
+const CASH_OUT_CATEGORIES = ['Salaries', 'Bills', 'Rent', 'Utilities', 'Maintenance', 'Marketing', 'Travel', 'Other'];
 
 
 const initialVouchers: VoucherRow[] = [
@@ -142,7 +171,7 @@ async function exportExcel(filename: string, rows: VoucherRow[]) {
 async function exportPDF(filename: string, rows: VoucherRow[]) {
   try {
     const doc = new jsPDF();
-    const head = [['Voucher ID','Type','Amount','Branch','Date','Status','Description']];
+    const head = [['Voucher ID', 'Type', 'Amount', 'Branch', 'Date', 'Status', 'Description']];
     const body = rows.map(r => [r.id, r.type, r.amount, r.branch, new Date(r.date).toLocaleDateString(), r.status, r.description ?? '']);
 
     if (typeof (autoTable as any) === 'function') {
@@ -164,10 +193,10 @@ async function exportPDF(filename: string, rows: VoucherRow[]) {
 }
 
 function downloadCSV(filename: string, rows: VoucherRow[]) {
-  const header = ['Voucher ID','Type','Amount','Branch','Date','Status','Description'];
+  const header = ['Voucher ID', 'Type', 'Amount', 'Branch', 'Date', 'Status', 'Description'];
   const lines = rows.map(r => [r.id, r.type, r.amount, r.branch, r.date, r.status, r.description ?? '']);
   const csv = [header, ...lines]
-    .map(arr => arr.map(x => `"${String(x).replace(/\"/g,'\"\"')}"`).join(','))
+    .map(arr => arr.map(x => `"${String(x).replace(/\"/g, '\"\"')}"`).join(','))
     .join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -187,7 +216,7 @@ function generateVoucherPDF(row: VoucherRow) {
     const lines = [
       ['Voucher ID', row.id],
       ['Type', row.type],
-      ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount>=0?'(In)':'(Out)'}`],
+      ['Amount', `Rs ${Math.abs(row.amount).toLocaleString()} ${row.amount >= 0 ? '(In)' : '(Out)'}`],
 
       ['Branch', row.branch],
       ['Date', new Date(row.date).toLocaleString()],
@@ -457,38 +486,38 @@ const Finances: React.FC = () => {
   const [qBillError, setQBillError] = useState<string>('');
 
 
-	  const [finAccess, setFinAccess] = useState<'NONE'|'VIEW'|'CRUD'>('NONE'); // legacy fallback
-	  const [isSuper, setIsSuper] = useState(false);
-	  const [permFlags, setPermFlags] = useState<{add:boolean; edit:boolean; del:boolean}>({add:false, edit:false, del:false});
-	  const canAdd = isSuper || permFlags.add || finAccess === 'CRUD';
-	  const canEdit = isSuper || permFlags.edit || finAccess === 'CRUD';
-	  const canDelete = isSuper || permFlags.del || finAccess === 'CRUD';
+  const [finAccess, setFinAccess] = useState<'NONE' | 'VIEW' | 'CRUD'>('NONE'); // legacy fallback
+  const [isSuper, setIsSuper] = useState(false);
+  const [permFlags, setPermFlags] = useState<{ add: boolean; edit: boolean; del: boolean }>({ add: false, edit: false, del: false });
+  const canAdd = isSuper || permFlags.add || finAccess === 'CRUD';
+  const canEdit = isSuper || permFlags.edit || finAccess === 'CRUD';
+  const canDelete = isSuper || permFlags.del || finAccess === 'CRUD';
 
-	  useEffect(() => {
-	    (async () => {
-	      try {
-	        const { data: auth } = await supabase.auth.getUser();
-	        const email = auth.user?.email;
-	        if (!email) return;
-	        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
-	        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
-	        const isSuperRole = roleStr.includes('super');
-	        setIsSuper(isSuperRole);
-	        if (isSuperRole) { setFinAccess('CRUD'); setPermFlags({add:true, edit:true, del:true}); return; }
-	        const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'accounts');
-	        if (up && up.length) {
-	          const r: any = up[0];
-	          setPermFlags({ add: !!r.can_add || r.access==='CRUD', edit: !!r.can_edit || r.access==='CRUD', del: !!r.can_delete || r.access==='CRUD' });
-	          setFinAccess((r.access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
-	        } else {
-	          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
-	          setFinAccess(perms.includes('accounts') ? 'CRUD' : 'NONE');
-	        }
-	      } catch {
-	        // ignore
-	      }
-	    })();
-	  }, []);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email;
+        if (!email) return;
+        const { data: u } = await supabase.from('dashboard_users').select('role, permissions').eq('email', email).maybeSingle();
+        const roleStr = (u?.role || (auth.user as any)?.app_metadata?.role || (auth.user as any)?.user_metadata?.role || '').toString().toLowerCase();
+        const isSuperRole = roleStr.includes('super');
+        setIsSuper(isSuperRole);
+        if (isSuperRole) { setFinAccess('CRUD'); setPermFlags({ add: true, edit: true, del: true }); return; }
+        const { data: up } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email).eq('module', 'accounts');
+        if (up && up.length) {
+          const r: any = up[0];
+          setPermFlags({ add: !!r.can_add || r.access === 'CRUD', edit: !!r.can_edit || r.access === 'CRUD', del: !!r.can_delete || r.access === 'CRUD' });
+          setFinAccess((r.access as any) === 'CRUD' ? 'CRUD' : 'VIEW');
+        } else {
+          const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
+          setFinAccess(perms.includes('accounts') ? 'CRUD' : 'NONE');
+        }
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
 
 
@@ -506,7 +535,7 @@ const Finances: React.FC = () => {
         if (error) { console.error('Load accounts error', error); if (!cancelled) setAccounts([]); return; }
         const rows = (invs as any[]) || [];
         const ids = Array.from(new Set(rows.map(r => r.student_id).filter(Boolean)));
-        let nameMap: Record<string,string> = {};
+        let nameMap: Record<string, string> = {};
         if (ids.length) {
           const { data: studs } = await supabase.from('dashboard_students').select('id, full_name').in('id', ids);
           (studs as any[] || []).forEach(s => { nameMap[s.id] = s.full_name; });
@@ -521,7 +550,7 @@ const Finances: React.FC = () => {
           grouped[sid].remaining += Number(r.remaining_amount || 0);
           if (r.due_date && (!grouped[sid].next_due || new Date(r.due_date) < new Date(grouped[sid].next_due!))) grouped[sid].next_due = r.due_date;
         });
-        if (!cancelled) setAccounts(Object.values(grouped).sort((a,b)=> b.remaining - a.remaining).slice(0, 10));
+        if (!cancelled) setAccounts(Object.values(grouped).sort((a, b) => b.remaining - a.remaining).slice(0, 10));
       } catch (e) {
         console.error('Accounts load error', e);
       }
@@ -606,10 +635,10 @@ const Finances: React.FC = () => {
 
 
 
-  const qValid = useMemo(()=>{
+  const qValid = useMemo(() => {
     const amt = Number(qAmount);
-    return qCategory && !Number.isNaN(amt) && amt>0 && qBranch;
-  }, [qCategory,qAmount,qBranch]);
+    return qCategory && !Number.isNaN(amt) && amt > 0 && qBranch;
+  }, [qCategory, qAmount, qBranch]);
 
 
 
@@ -785,7 +814,7 @@ const Finances: React.FC = () => {
   }, [vouchers, branchFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageRows = filtered.slice((page-1)*pageSize, page*pageSize);
+  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   // Quick Cash Out submission
   const handleGenerateCashOut = async (e: React.FormEvent) => {
@@ -887,14 +916,14 @@ const Finances: React.FC = () => {
 
   const methodChartData = useMemo(() => {
     const approved = vouchers.filter(v => v.status === 'Approved');
-    const bank = approved.filter(v => v.type === 'Bank' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
-    const cash = approved.filter(v => v.type === 'Cash In' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
-    const online = approved.filter(v => v.type === 'Online' && v.amount > 0).reduce((s,v)=>s+v.amount,0);
+    const bank = approved.filter(v => v.type === 'Bank' && v.amount > 0).reduce((s, v) => s + v.amount, 0);
+    const cash = approved.filter(v => v.type === 'Cash In' && v.amount > 0).reduce((s, v) => s + v.amount, 0);
+    const online = approved.filter(v => v.type === 'Online' && v.amount > 0).reduce((s, v) => s + v.amount, 0);
     const total = bank + cash + online || 1; // avoid NaN
     return [
-      { name: 'Cash', value: cash, pct: Math.round((cash/total)*100) },
-      { name: 'Online', value: online, pct: Math.round((online/total)*100) },
-      { name: 'Bank', value: bank, pct: Math.round((bank/total)*100) },
+      { name: 'Cash', value: cash, pct: Math.round((cash / total) * 100) },
+      { name: 'Online', value: online, pct: Math.round((online / total) * 100) },
+      { name: 'Bank', value: bank, pct: Math.round((bank / total) * 100) },
     ];
   }, [vouchers]);
 
@@ -1045,489 +1074,489 @@ const Finances: React.FC = () => {
               </div>
             </div>
           </section>
-            {/* Generate Voucher + Shortcuts */}
-            <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left: Form (span 2) */}
-              <form onSubmit={handleGenerate} className="lg:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Generate Voucher</h2>
+          {/* Generate Voucher + Shortcuts */}
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left: Form (span 2) */}
+            <form onSubmit={handleGenerate} className="lg:col-span-2 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Generate Voucher</h2>
 
-                {/* Pending students search */}
-                <div className="mt-4">
-                  <label className="text-sm font-semibold text-text-secondary">Pending Students</label>
-                  <input
-                    type="text"
-                    value={pendingSearch}
-                    onChange={(e) => setPendingSearch(e.target.value)}
-                    placeholder="Search by name, registration no, batch, phone"
-                    className="mt-1 w-full border rounded-lg p-2"
-                  />
-                  {pendingError && (
-                    <p className="mt-1 text-xs text-red-600">{pendingError}</p>
-                  )}
-                  {pendingLoading && !pendingError && (
-                    <p className="mt-1 text-xs text-text-secondary">Loading pending students...</p>
-                  )}
-                  {!pendingLoading && !pendingError && pendingResults.length > 0 && (
-                    <div className="mt-1 max-h-40 overflow-auto border rounded-lg bg-white shadow-sm text-sm">
-                      {pendingResults.map(s => (
-                        <button
-                          key={s.student_id}
-                          type="button"
-                          onClick={() => handleSelectPendingStudent(s)}
-                          className={`w-full text-left px-3 py-2 hover:bg-gray-50 ${pendingSelected?.student_id === s.student_id ? 'bg-orange-50' : ''}`}
-                        >
-                          <div className="font-semibold">{s.full_name}</div>
-                          <div className="text-xs text-text-secondary">
-                            {s.registration_no}  b7 {s.batch_no || 'No batch'}  b7 {s.phone || 'No phone'}
-                          </div>
-                          <div className="text-xs text-green-700">
-                            Remaining: Rs {s.remaining_amount.toLocaleString()}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {pendingSelected && (
-                    <div className="mt-2 text-xs border rounded-lg p-2 bg-gray-50">
-                      <div className="font-semibold">{pendingSelected.full_name}</div>
-                      <div className="text-text-secondary">
-                        Reg: {pendingSelected.registration_no}  b7 Batch: {pendingSelected.batch_no || '-'}
-                      </div>
-                      <div className="text-green-700">
-                        Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
-                      </div>
-                      {pendingSelected.next_due_date && (
-                        <div className="text-text-secondary">
-                          Due Date: {new Date(pendingSelected.next_due_date).toLocaleDateString()}
+              {/* Pending students search */}
+              <div className="mt-4">
+                <label className="text-sm font-semibold text-text-secondary">Pending Students</label>
+                <input
+                  type="text"
+                  value={pendingSearch}
+                  onChange={(e) => setPendingSearch(e.target.value)}
+                  placeholder="Search by name, registration no, batch, phone"
+                  className="mt-1 w-full border rounded-lg p-2"
+                />
+                {pendingError && (
+                  <p className="mt-1 text-xs text-red-600">{pendingError}</p>
+                )}
+                {pendingLoading && !pendingError && (
+                  <p className="mt-1 text-xs text-text-secondary">Loading pending students...</p>
+                )}
+                {!pendingLoading && !pendingError && pendingResults.length > 0 && (
+                  <div className="mt-1 max-h-40 overflow-auto border rounded-lg bg-white shadow-sm text-sm">
+                    {pendingResults.map(s => (
+                      <button
+                        key={s.student_id}
+                        type="button"
+                        onClick={() => handleSelectPendingStudent(s)}
+                        className={`w-full text-left px-3 py-2 hover:bg-gray-50 ${pendingSelected?.student_id === s.student_id ? 'bg-orange-50' : ''}`}
+                      >
+                        <div className="font-semibold">{s.full_name}</div>
+                        <div className="text-xs text-text-secondary">
+                          {s.registration_no}  b7 {s.batch_no || 'No batch'}  b7 {s.phone || 'No phone'}
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Voucher Type</label>
-                    <select value={voucherType as string} onChange={(e)=>setVoucherType(e.target.value as VoucherType)} className="mt-1 w-full border rounded-lg p-2">
-                      <option value="">Select...</option>
-                      <option>Cash Receipt</option>
-                      <option>Cash Payment</option>
-                      <option>Online Payment</option>
-                      <option>Bank Deposit</option>
-                      <option>Transfer</option>
-                    </select>
+                        <div className="text-xs text-green-700">
+                          Remaining: Rs {s.remaining_amount.toLocaleString()}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Voucher Category</label>
-                    <select
-                      value={voucherCategory as string}
-                      onChange={(e) => setVoucherCategory(e.target.value as VoucherCategory | '')}
-                      className="mt-1 w-full border rounded-lg p-2"
-                    >
-                      <option value="">Select...</option>
-                      <option>Admission / Enrollment Voucher</option>
-                      <option>Installment Voucher</option>
-                      <option>Consultancy Payment Voucher</option>
-                      <option>Test Fee Voucher</option>
-                      <option>Miscellaneous Voucher</option>
-                    </select>
-                    {pendingSelected && (
-                      <p className="mt-1 text-xs text-text-secondary">
-                        Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
-                      </p>
+                )}
+                {pendingSelected && (
+                  <div className="mt-2 text-xs border rounded-lg p-2 bg-gray-50">
+                    <div className="font-semibold">{pendingSelected.full_name}</div>
+                    <div className="text-text-secondary">
+                      Reg: {pendingSelected.registration_no}  b7 Batch: {pendingSelected.batch_no || '-'}
+                    </div>
+                    <div className="text-green-700">
+                      Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
+                    </div>
+                    {pendingSelected.next_due_date && (
+                      <div className="text-text-secondary">
+                        Due Date: {new Date(pendingSelected.next_due_date).toLocaleDateString()}
+                      </div>
                     )}
                   </div>
+                )}
+              </div>
 
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
-                    <input type="number" min={0} placeholder="0" value={amount} onChange={(e)=>setAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Branch</label>
-                    <select value={branch} onChange={(e)=>setBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
-                      <option value="">Select Branch...</option>
-                      {branchNames.map(b=> (<option key={b} value={b}>{b}</option>))}
-                    </select>
-                    {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Description</label>
-                    <textarea value={description} onChange={(e)=>setDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder="Short note about this voucher"/>
-                  </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Voucher Type</label>
+                  <select value={voucherType as string} onChange={(e) => setVoucherType(e.target.value as VoucherType)} className="mt-1 w-full border rounded-lg p-2">
+                    <option value="">Select...</option>
+                    <option>Cash Receipt</option>
+                    <option>Cash Payment</option>
+                    <option>Online Payment</option>
+                    <option>Bank Deposit</option>
+                    <option>Transfer</option>
+                  </select>
                 </div>
-                <div className="mt-4">
-                  <button disabled={!isValid || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(isValid && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Voucher Category</label>
+                  <select
+                    value={voucherCategory as string}
+                    onChange={(e) => setVoucherCategory(e.target.value as VoucherCategory | '')}
+                    className="mt-1 w-full border rounded-lg p-2"
+                  >
+                    <option value="">Select...</option>
+                    <option>Admission / Enrollment Voucher</option>
+                    <option>Installment Voucher</option>
+                    <option>Consultancy Payment Voucher</option>
+                    <option>Test Fee Voucher</option>
+                    <option>Miscellaneous Voucher</option>
+                  </select>
+                  {pendingSelected && (
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Remaining Amount: Rs {pendingSelected.remaining_amount.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
+                  <input type="number" min={0} placeholder="0" value={amount} onChange={(e) => setAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Branch</label>
+                  <select value={branch} onChange={(e) => setBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
+                    <option value="">Select Branch...</option>
+                    {branchNames.map(b => (<option key={b} value={b}>{b}</option>))}
+                  </select>
+                  {isSuper && (<button type="button" onClick={() => setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Description</label>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder="Short note about this voucher" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <button disabled={!isValid || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(isValid && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Voucher</button>
+              </div>
+            </form>
+
+            {/* Right: Cash Out Voucher Generator */}
+            <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Cash Out Voucher Generator</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CASH_OUT_CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => { setQCategory(cat); setQDescription(cat); }}
+                    className={`px-3 py-1 rounded-full border text-sm ${qCategory === cat ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <form onSubmit={handleGenerateCashOut} className="mt-4 grid grid-cols-1 gap-3">
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
+                  <input type="number" min={0} placeholder="0" value={qAmount} onChange={(e) => setQAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Branch</label>
+                  <select value={qBranch} onChange={(e) => setQBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
+                    <option value="">Select Branch...</option>
+                    {branchNames.map(b => (<option key={b} value={b}>{b}</option>))}
+                  </select>
+                  {isSuper && (<button type="button" onClick={() => setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Description</label>
+                  <textarea value={qDescription} onChange={(e) => setQDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder={`e.g. ${qCategory} for May`} />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold text-text-secondary">Upload Bill (optional)</label>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      if (!f) { setQBillFile(null); setQBillError(''); return; }
+                      if (!['application/pdf', 'image/jpeg', 'image/png'].includes(f.type)) { setQBillError('Only PDF, JPG, or PNG allowed'); setQBillFile(null); return; }
+                      if (f.size > 5 * 1024 * 1024) { setQBillError('Max file size is 5MB'); setQBillFile(null); return; }
+                      setQBillError('');
+                      setQBillFile(f);
+                    }}
+                    className="mt-1 w-full border rounded-lg p-2"
+                  />
+                  {qBillFile && <div className="text-xs text-text-secondary mt-1">{qBillFile.name}</div>}
+                  {qBillError && <div className="text-xs text-red-600 mt-1">{qBillError}</div>}
+                </div>
+
+                <div className="mt-1">
+                  <button disabled={!qValid || !!qBillError || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(qValid && !qBillError && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
                 </div>
               </form>
-
-              {/* Right: Cash Out Voucher Generator */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Cash Out Voucher Generator</h2>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {CASH_OUT_CATEGORIES.map(cat => (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => { setQCategory(cat); setQDescription(cat); }}
-                      className={`px-3 py-1 rounded-full border text-sm ${qCategory===cat ? 'bg-orange-50 border-[#ffa332] text-[#ffa332]' : 'hover:bg-gray-50'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+            </div>
+          </div>
+          {/* Recent Vouchers */}
+          <div className="mt-10 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Recent Vouchers</h2>
+              <div className="flex flex-col md:flex-row gap-3 md:items-center">
+                <select value={branchFilter} onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }} className="border rounded-lg p-2">
+                  <option>All Branches</option>
+                  {(branchList.length ? branchList : branchNames).map(b => (<option key={b}>{b}</option>))}
+                </select>
+                <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
+                <div className="flex gap-2">
+                  <button onClick={() => downloadCSV('vouchers.csv', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">CSV</button>
+                  <button onClick={() => exportExcel('vouchers.xlsx', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">Excel</button>
+                  <button onClick={() => exportPDF('vouchers.pdf', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">PDF</button>
                 </div>
-                <form onSubmit={handleGenerateCashOut} className="mt-4 grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Amount (Rs)</label>
-                    <input type="number" min={0} placeholder="0" value={qAmount} onChange={(e)=>setQAmount(e.target.value)} className="mt-1 w-full border rounded-lg p-2" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Branch</label>
-                    <select value={qBranch} onChange={(e)=>setQBranch(e.target.value)} className="mt-1 w-full border rounded-lg p-2">
-                      <option value="">Select Branch...</option>
-                      {branchNames.map(b=> (<option key={b} value={b}>{b}</option>))}
-                    </select>
-                    {isSuper && (<button type="button" onClick={()=>setShowAddBranch(true)} className="mt-1 text-xs text-[#ffa332] underline">Add Branch</button>)}
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Description</label>
-                    <textarea value={qDescription} onChange={(e)=>setQDescription(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg p-2" placeholder={`e.g. ${qCategory} for May`} />
-                  </div>
-                  <div>
-                    <label className="text-sm font-semibold text-text-secondary">Upload Bill (optional)</label>
-                    <input
-                      type="file"
-                      accept="application/pdf,image/jpeg,image/png"
-                      onChange={(e)=>{
-                        const f = e.target.files?.[0] || null;
-                        if (!f) { setQBillFile(null); setQBillError(''); return; }
-                        if (!['application/pdf','image/jpeg','image/png'].includes(f.type)) { setQBillError('Only PDF, JPG, or PNG allowed'); setQBillFile(null); return; }
-                        if (f.size > 5 * 1024 * 1024) { setQBillError('Max file size is 5MB'); setQBillFile(null); return; }
-                        setQBillError('');
-                        setQBillFile(f);
-                      }}
-                      className="mt-1 w-full border rounded-lg p-2"
-                    />
-                    {qBillFile && <div className="text-xs text-text-secondary mt-1">{qBillFile.name}</div>}
-                    {qBillError && <div className="text-xs text-red-600 mt-1">{qBillError}</div>}
-                  </div>
+              </div>
+            </div>
 
-                  <div className="mt-1">
-                    <button disabled={!qValid || !!qBillError || !canAdd} className={`px-4 py-2 rounded-lg font-bold ${(qValid && !qBillError && canAdd) ? 'bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43]' : 'bg-gray-200 text-gray-400'}`}>Generate Cash Out</button>
+            <div className="mt-4 overflow-x-auto">
+              <table className="min-w-full text-left">
+                <thead>
+                  <tr className="text-sm text-text-secondary">
+                    <th className="py-2 pr-4">Voucher ID</th>
+                    <th className="py-2 pr-4">Type</th>
+                    <th className="py-2 pr-4">Amount</th>
+                    <th className="py-2 pr-4">Branch</th>
+                    <th className="py-2 pr-4">Date</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+
+                  {pageRows.map((r) => (
+                    <tr key={r.id} className="border-t">
+                      <td className="py-2 pr-4 font-semibold">#{r.id}</td>
+                      <td className="py-2 pr-4">{r.type}</td>
+                      <td className={`py-2 pr-4 font-semibold ${r.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{r.amount >= 0 ? '+' : '-'}{`Rs ${Math.abs(r.amount).toLocaleString()}`}</td>
+                      <td className="py-2 pr-4">{r.branch}</td>
+                      <td className="py-2 pr-4">{new Date(r.date).toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })}</td>
+                      <td className="py-2 pr-4">
+                        <span className={`${r.status === 'Approved' ? 'bg-green-100 text-green-700' : r.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'} px-2 py-1 rounded-full text-xs font-bold`}>
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <div className="flex gap-2 text-sm">
+                          {r.uploaded_bill && (
+                            <button type="button" onClick={() => openBill(r.uploaded_bill!)} className="text-green-700 hover:underline">Bill</button>
+                          )}
+                          <button type="button" onClick={() => onView(r)} className="text-blue-600 hover:underline">View</button>
+                          {canEdit && (<button type="button" onClick={() => onEdit(r)} className="text-orange-600 hover:underline">Edit</button>)}
+                          {canDelete && (<button type="button" onClick={() => onDelete(r)} className="text-red-600 hover:underline">Delete</button>)}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {pageRows.length === 0 && (
+                    <tr><td colSpan={7} className="text-center text-text-secondary py-6">No vouchers to display</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-sm text-text-secondary">Page {page} of {totalPages}</div>
+              <div className="flex gap-2">
+                <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} className={`px-3 py-1 rounded border ${page <= 1 ? 'text-gray-300' : 'hover:bg-gray-50'}`}>Prev</button>
+                <button disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className={`px-3 py-1 rounded border ${page >= totalPages ? 'text-gray-300' : 'hover:bg-gray-50'}`}>Next</button>
+              </div>
+            </div>
+          </div>
+
+          {/* Charts */}
+          {/* Accounts Section */}
+          <div className="mt-10 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+            <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Accounts (Top Outstanding)</h2>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left">
+                <thead>
+                  <tr className="text-sm text-text-secondary">
+                    <th className="py-2 pr-4">Student</th>
+                    <th className="py-2 pr-4">Total</th>
+                    <th className="py-2 pr-4">Paid</th>
+                    <th className="py-2 pr-4">Remaining</th>
+                    <th className="py-2 pr-4">Next Due</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {accounts.map(a => (
+                    <tr key={a.student_id} className="border-t">
+                      <td className="py-2 pr-4 font-semibold">{a.name}</td>
+                      <td className="py-2 pr-4">Rs {a.total.toLocaleString()}</td>
+                      <td className="py-2 pr-4 text-green-700">Rs {a.paid.toLocaleString()}</td>
+                      <td className="py-2 pr-4 text-red-600">Rs {a.remaining.toLocaleString()}</td>
+                      <td className="py-2 pr-4">{a.next_due ? new Date(a.next_due).toLocaleDateString() : '-'}</td>
+                    </tr>
+                  ))}
+                  {accounts.length === 0 && (
+                    <tr><td colSpan={5} className="text-center text-text-secondary py-6">No account data</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Branch Performance (Bar) */}
+            <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Branch Performance</h2>
+              <div className="mt-4 h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={branchChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="branch" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="revenue" name="Revenue" fill="#3f8cff" />
+                  </BarChart>
+
+
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Payment Methods (Pie) */}
+            <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
+              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Payment Methods Distribution</h2>
+              <div className="mt-4 h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Tooltip formatter={(v: any, n: any) => [`Rs ${Number(v).toLocaleString()}`, n as string]} />
+                    <Legend />
+                    <Pie data={methodChartData} dataKey="value" nameKey="name" outerRadius={90} label={(e) => `${e.name} ${e.pct}%`}>
+
+
+                      {methodChartData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={["#22c55e", "#fb923c", "#8b5cf6"][index]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+
+
+          {/* View Modal */}
+          {viewVoucher && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl p-5 w-full max-w-3xl shadow-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Voucher #{viewVoucher.id}</h3>
+                  <button
+                    type="button"
+                    onClick={closeViewModal}
+                    className="text-text-secondary hover:opacity-70"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Basic info */}
+                <div className="mt-3 text-sm space-y-1">
+                  <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
+                  <div>
+                    <span className="text-text-secondary">Amount:</span>{' '}
+                    Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount >= 0 ? '(In)' : '(Out)'}
+                  </div>
+                  <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
+                  <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
+                  <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
+                  {viewVoucher.description && (
+                    <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>
+                  )}
+                  {viewVoucher.uploaded_bill && (
+                    <div>
+                      <span className="text-text-secondary">Bill:</span>{' '}
+                      <button
+                        type="button"
+                        onClick={() => openBill(viewVoucher.uploaded_bill!)}
+                        className="text-green-700 underline"
+                      >
+                        Open
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* PDF viewer */}
+                {viewVoucher.pdf_url ? (
+                  <div className="mt-4">
+                    {viewPdfLoading && (
+                      <p className="text-sm text-text-secondary">Loading voucher PDF...</p>
+                    )}
+                    {viewPdfError && (
+                      <p className="text-sm text-red-600">{viewPdfError}</p>
+                    )}
+                    {viewPdfUrl && !viewPdfLoading && !viewPdfError && (
+                      <>
+                        <div className="mt-2 border rounded-lg overflow-hidden h-96">
+                          <iframe
+                            src={viewPdfUrl}
+                            title={`Voucher ${viewVoucher.id} PDF`}
+                            className="w-full h-full"
+                          />
+                        </div>
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => window.open(viewPdfUrl!, '_blank')}
+                            className="px-3 py-2 border rounded hover:bg-gray-50 text-sm"
+                          >
+                            Open in new tab
+                          </button>
+                          <a
+                            href={viewPdfUrl!}
+                            download={`voucher-${viewVoucher.id}.pdf`}
+                            className="px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
+                          >
+                            Download PDF
+                          </a>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="mt-4 text-sm text-text-secondary">
+                    <p>No stored PDF found for this voucher yet.</p>
+                    <button
+                      type="button"
+                      onClick={() => generateVoucherPDF(viewVoucher!)}
+                      className="mt-2 px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
+                    >
+                      Download PDF
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-4 text-right">
+                  <button
+                    type="button"
+                    onClick={closeViewModal}
+                    className="px-3 py-2 border rounded hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Edit Modal */}
+          {editVoucher && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Edit Voucher #{editVoucher.id}</h3>
+
+
+                  <button type="button" onClick={() => setEditVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
+                </div>
+                <div className="mt-3 space-y-3">
+                  <label className="block text-sm">
+                    <span className="text-text-secondary">Status</span>
+                    <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
+                      <option>Pending</option>
+                      <option>Approved</option>
+                      <option>Rejected</option>
+                    </select>
+                  </label>
+                  <label className="block text-sm">
+                    <span className="text-text-secondary">Description</span>
+                    <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
+                  </label>
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
+                  <button type="button" onClick={onSaveEdit} className="px-3 py-2 rounded bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90">Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Add Branch Modal (Super Admin only) */}
+          {showAddBranch && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+              <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold">Add New Branch</h3>
+                  <button type="button" onClick={() => setShowAddBranch(false)} className="text-text-secondary hover:opacity-70">✕</button>
+                </div>
+                <form onSubmit={handleAddBranch} className="mt-4 space-y-3">
+                  <label className="block text-sm">
+                    <span className="text-text-secondary">Branch Name</span>
+                    <input value={newBranchName} onChange={e => setNewBranchName(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                  </label>
+                  <label className="block text-sm">
+                    <span className="text-text-secondary">Branch Code</span>
+                    <input value={newBranchCode} onChange={e => setNewBranchCode(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                  </label>
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setShowAddBranch(false)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
+                    <button type="submit" className="px-3 py-2 rounded bg-[#ffa332] text-white">Add Branch</button>
                   </div>
                 </form>
               </div>
             </div>
-            {/* Recent Vouchers */}
-            <div className="mt-10 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Recent Vouchers</h2>
-                <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                  <select value={branchFilter} onChange={(e)=>{ setBranchFilter(e.target.value); setPage(1); }} className="border rounded-lg p-2">
-                    <option>All Branches</option>
-                    {(branchList.length ? branchList : branchNames).map(b => (<option key={b}>{b}</option>))}
-                  </select>
-                  <input value={search} onChange={(e)=>{ setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
-                  <div className="flex gap-2">
-                    <button onClick={()=>downloadCSV('vouchers.csv', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">CSV</button>
-                    <button onClick={()=>exportExcel('vouchers.xlsx', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">Excel</button>
-                    <button onClick={()=>exportPDF('vouchers.pdf', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">PDF</button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="text-sm text-text-secondary">
-                      <th className="py-2 pr-4">Voucher ID</th>
-                      <th className="py-2 pr-4">Type</th>
-                      <th className="py-2 pr-4">Amount</th>
-                      <th className="py-2 pr-4">Branch</th>
-                      <th className="py-2 pr-4">Date</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-
-                    {pageRows.map((r)=> (
-                      <tr key={r.id} className="border-t">
-                        <td className="py-2 pr-4 font-semibold">#{r.id}</td>
-                        <td className="py-2 pr-4">{r.type}</td>
-                        <td className={`py-2 pr-4 font-semibold ${r.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>{r.amount >= 0 ? '+' : '-'}{`Rs ${Math.abs(r.amount).toLocaleString()}`}</td>
-                        <td className="py-2 pr-4">{r.branch}</td>
-                        <td className="py-2 pr-4">{new Date(r.date).toLocaleDateString(undefined,{ month:'short', day:'2-digit', year:'numeric' })}</td>
-                        <td className="py-2 pr-4">
-                          <span className={`${r.status==='Approved' ? 'bg-green-100 text-green-700' : r.status==='Pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'} px-2 py-1 rounded-full text-xs font-bold`}>
-                            {r.status}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">
-                          <div className="flex gap-2 text-sm">
-                            {r.uploaded_bill && (
-                              <button type="button" onClick={()=>openBill(r.uploaded_bill!)} className="text-green-700 hover:underline">Bill</button>
-                            )}
-                            <button type="button" onClick={()=>onView(r)} className="text-blue-600 hover:underline">View</button>
-                            {canEdit && (<button type="button" onClick={()=>onEdit(r)} className="text-orange-600 hover:underline">Edit</button>)}
-                            {canDelete && (<button type="button" onClick={()=>onDelete(r)} className="text-red-600 hover:underline">Delete</button>)}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {pageRows.length === 0 && (
-                      <tr><td colSpan={7} className="text-center text-text-secondary py-6">No vouchers to display</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-sm text-text-secondary">Page {page} of {totalPages}</div>
-                <div className="flex gap-2">
-                  <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className={`px-3 py-1 rounded border ${page<=1 ? 'text-gray-300' : 'hover:bg-gray-50'}`}>Prev</button>
-                  <button disabled={page>=totalPages} onClick={()=>setPage(p=>Math.min(totalPages,p+1))} className={`px-3 py-1 rounded border ${page>=totalPages ? 'text-gray-300' : 'hover:bg-gray-50'}`}>Next</button>
-                </div>
-              </div>
-            </div>
-
-            {/* Charts */}
-            {/* Accounts Section */}
-            <div className="mt-10 bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-              <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Accounts (Top Outstanding)</h2>
-              <div className="mt-3 overflow-x-auto">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="text-sm text-text-secondary">
-                      <th className="py-2 pr-4">Student</th>
-                      <th className="py-2 pr-4">Total</th>
-                      <th className="py-2 pr-4">Paid</th>
-                      <th className="py-2 pr-4">Remaining</th>
-                      <th className="py-2 pr-4">Next Due</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accounts.map(a => (
-                      <tr key={a.student_id} className="border-t">
-                        <td className="py-2 pr-4 font-semibold">{a.name}</td>
-                        <td className="py-2 pr-4">Rs {a.total.toLocaleString()}</td>
-                        <td className="py-2 pr-4 text-green-700">Rs {a.paid.toLocaleString()}</td>
-                        <td className="py-2 pr-4 text-red-600">Rs {a.remaining.toLocaleString()}</td>
-                        <td className="py-2 pr-4">{a.next_due ? new Date(a.next_due).toLocaleDateString() : '-'}</td>
-                      </tr>
-                    ))}
-                    {accounts.length === 0 && (
-                      <tr><td colSpan={5} className="text-center text-text-secondary py-6">No account data</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="mt-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
-              {/* Branch Performance (Bar) */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Branch Performance</h2>
-                <div className="mt-4 h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={branchChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="branch" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar dataKey="revenue" name="Revenue" fill="#3f8cff" />
-                    </BarChart>
-
-
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Payment Methods (Pie) */}
-              <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-5">
-                <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Payment Methods Distribution</h2>
-                <div className="mt-4 h-72">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Tooltip formatter={(v:any, n:any)=>[`Rs ${Number(v).toLocaleString()}`, n as string]} />
-                      <Legend />
-                      <Pie data={methodChartData} dataKey="value" nameKey="name" outerRadius={90} label={(e)=>`${e.name} ${e.pct}%`}>
-
-
-                        {methodChartData.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={["#22c55e","#fb923c","#8b5cf6"][index]} />
-                        ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-
-
-      {/* View Modal */}
-      {viewVoucher && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-5 w-full max-w-3xl shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">Voucher #{viewVoucher.id}</h3>
-              <button
-                type="button"
-                onClick={closeViewModal}
-                className="text-text-secondary hover:opacity-70"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Basic info */}
-            <div className="mt-3 text-sm space-y-1">
-              <div><span className="text-text-secondary">Type:</span> {viewVoucher.type}</div>
-              <div>
-                <span className="text-text-secondary">Amount:</span>{' '}
-                Rs {Math.abs(viewVoucher.amount).toLocaleString()} {viewVoucher.amount >= 0 ? '(In)' : '(Out)'}
-              </div>
-              <div><span className="text-text-secondary">Branch:</span> {viewVoucher.branch}</div>
-              <div><span className="text-text-secondary">Date:</span> {new Date(viewVoucher.date).toLocaleString()}</div>
-              <div><span className="text-text-secondary">Status:</span> {viewVoucher.status}</div>
-              {viewVoucher.description && (
-                <div><span className="text-text-secondary">Description:</span> {viewVoucher.description}</div>
-              )}
-              {viewVoucher.uploaded_bill && (
-                <div>
-                  <span className="text-text-secondary">Bill:</span>{' '}
-                  <button
-                    type="button"
-                    onClick={() => openBill(viewVoucher.uploaded_bill!)}
-                    className="text-green-700 underline"
-                  >
-                    Open
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* PDF viewer */}
-            {viewVoucher.pdf_url ? (
-              <div className="mt-4">
-                {viewPdfLoading && (
-                  <p className="text-sm text-text-secondary">Loading voucher PDF...</p>
-                )}
-                {viewPdfError && (
-                  <p className="text-sm text-red-600">{viewPdfError}</p>
-                )}
-                {viewPdfUrl && !viewPdfLoading && !viewPdfError && (
-                  <>
-                    <div className="mt-2 border rounded-lg overflow-hidden h-96">
-                      <iframe
-                        src={viewPdfUrl}
-                        title={`Voucher ${viewVoucher.id} PDF`}
-                        className="w-full h-full"
-                      />
-                    </div>
-                    <div className="mt-3 flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => window.open(viewPdfUrl!, '_blank')}
-                        className="px-3 py-2 border rounded hover:bg-gray-50 text-sm"
-                      >
-                        Open in new tab
-                      </button>
-                      <a
-                        href={viewPdfUrl!}
-                        download={`voucher-${viewVoucher.id}.pdf`}
-                        className="px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
-                      >
-                        Download PDF
-                      </a>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <div className="mt-4 text-sm text-text-secondary">
-                <p>No stored PDF found for this voucher yet.</p>
-                <button
-                  type="button"
-                  onClick={() => generateVoucherPDF(viewVoucher!)}
-                  className="mt-2 px-3 py-2 rounded bg-[#ffa332] text-white text-sm shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90"
-                >
-                  Download PDF
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 text-right">
-              <button
-                type="button"
-                onClick={closeViewModal}
-                className="px-3 py-2 border rounded hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {editVoucher && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">Edit Voucher #{editVoucher.id}</h3>
-
-
-              <button type="button" onClick={()=>setEditVoucher(null)} className="text-text-secondary hover:opacity-70">✕</button>
-            </div>
-            <div className="mt-3 space-y-3">
-              <label className="block text-sm">
-                <span className="text-text-secondary">Status</span>
-                <select value={editStatus} onChange={(e)=>setEditStatus(e.target.value as VoucherStatus)} className="mt-1 w-full border rounded p-2">
-                  <option>Pending</option>
-                  <option>Approved</option>
-                  <option>Rejected</option>
-                </select>
-              </label>
-              <label className="block text-sm">
-                <span className="text-text-secondary">Description</span>
-                <textarea value={editDescription} onChange={(e)=>setEditDescription(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
-              </label>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={()=>setEditVoucher(null)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
-              <button type="button" onClick={onSaveEdit} className="px-3 py-2 rounded bg-[#ffa332] text-white shadow-[0px_6px_12px_#3f8cff43] hover:opacity-90">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Branch Modal (Super Admin only) */}
-      {showAddBranch && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-5 w-full max-w-md shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">Add New Branch</h3>
-              <button type="button" onClick={()=>setShowAddBranch(false)} className="text-text-secondary hover:opacity-70">✕</button>
-            </div>
-            <form onSubmit={handleAddBranch} className="mt-4 space-y-3">
-              <label className="block text-sm">
-                <span className="text-text-secondary">Branch Name</span>
-                <input value={newBranchName} onChange={e=>setNewBranchName(e.target.value)} className="mt-1 w-full border rounded p-2" required/>
-              </label>
-              <label className="block text-sm">
-                <span className="text-text-secondary">Branch Code</span>
-                <input value={newBranchCode} onChange={e=>setNewBranchCode(e.target.value)} className="mt-1 w-full border rounded p-2" required/>
-              </label>
-              <div className="flex justify-end gap-2">
-                <button type="button" onClick={()=>setShowAddBranch(false)} className="px-3 py-2 border rounded hover:bg-gray-50">Cancel</button>
-                <button type="submit" className="px-3 py-2 rounded bg-[#ffa332] text-white">Add Branch</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          )}
 
 
         </div>
