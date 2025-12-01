@@ -365,6 +365,65 @@ const HRMPage: React.FC = () => {
   };
   useEffect(() => { if (tab === 'payroll' && (role === 'super' || myBranch !== null)) loadBatches(); }, [tab, role, myBranch]);
 
+  // Payroll Master Data state
+  interface PayrollMasterData {
+    employee_email: string;
+    std_basic: number;
+    std_allowance: number;
+    medical_10pct: number;
+    house_rent_20pct: number;
+    std_transportation_10pct: number;
+    std_at_work: number;
+    std_others: number;
+    arrears: number;
+    bonus: number;
+    income_tax: number;
+    life_insurance: number;
+    health_insurance: number;
+    employee_loan: number;
+    fin_pn: number;
+    advance_salary: number;
+    esb: number;
+    other_deduction: number;
+  }
+  const [showPayrollMasterModal, setShowPayrollMasterModal] = useState(false);
+  const [editPayrollMaster, setEditPayrollMaster] = useState<PayrollMasterData | null>(null);
+  const [payrollMasterList, setPayrollMasterList] = useState<PayrollMasterData[]>([]);
+
+  const loadPayrollMasterData = async () => {
+    let q = supabase.from('employees_master_payroll').select('*');
+    if (role !== 'super') q = q.eq('branch', myBranch);
+    const { data } = await q as any;
+    setPayrollMasterList(data || []);
+  };
+
+  const openEditPayrollMaster = async (email: string) => {
+    const { data } = await supabase.from('employees_master_payroll').select('*').eq('employee_email', email).maybeSingle();
+    if (data) {
+      setEditPayrollMaster(data as any);
+    } else {
+      // Create default entry
+      setEditPayrollMaster({
+        employee_email: email,
+        std_basic: 0, std_allowance: 0, medical_10pct: 0, house_rent_20pct: 0,
+        std_transportation_10pct: 0, std_at_work: 0, std_others: 0, arrears: 0, bonus: 0,
+        income_tax: 0, life_insurance: 0, health_insurance: 0, employee_loan: 0,
+        fin_pn: 0, advance_salary: 0, esb: 0, other_deduction: 0
+      });
+    }
+    setShowPayrollMasterModal(true);
+  };
+
+  const savePayrollMaster = async () => {
+    if (!isAdmin || !editPayrollMaster) return;
+    const { error } = await supabase.from('employees_master_payroll').upsert(editPayrollMaster, { onConflict: 'employee_email' } as any);
+    if (error) { alert(error.message); return; }
+    setShowPayrollMasterModal(false);
+    setEditPayrollMaster(null);
+    await loadPayrollMasterData();
+    alert('Payroll master data saved successfully');
+  };
+
   const generatePayroll = async () => {
     if (!isAdmin) return;
     // 1) Create batch
@@ -377,44 +436,89 @@ const HRMPage: React.FC = () => {
     const { data: emps, error: eErr } = await eQ as any;
     if (eErr) { alert(eErr.message); return; }
 
-    // 3) Load master payroll fields for employees
-    let mQ = supabase.from('employees_master').select('email, branch, basic_salary, medical_allowance, work_transportation, other_allowances, arrears, bonus, income_tax, life_insurance, health_insurance, employee_loan, lunch_deduction, advance_salary, esb, other_deductions, payment_mode');
+    // 3) Load enhanced payroll master data for employees
+    let mQ = supabase.from('employees_master_payroll').select('*');
     if (role !== 'super') mQ = mQ.eq('branch', myBranch);
     const { data: masters } = await mQ as any;
     const mByEmail: Record<string, any> = {};
-    for (const m of (masters || [])) mByEmail[m.email] = m;
+    for (const m of (masters || [])) mByEmail[m.email || m.employee_email] = m;
 
-    // 4) For each employee, compute payroll using master fields
+    // 4) For each employee, compute payroll using enhanced master fields
     for (const emp of (emps || [])) {
       const m = mByEmail[emp.email] || {};
       const n = (v: any) => Number(v || 0);
-      const gross = n(m.basic_salary) + n(m.medical_allowance) + n(m.work_transportation) + n(m.other_allowances) + n(m.arrears) + n(m.bonus);
-      const deductions = n(m.income_tax) + n(m.life_insurance) + n(m.health_insurance) + n(m.employee_loan) + n(m.lunch_deduction) + n(m.advance_salary) + n(m.esb) + n(m.other_deductions);
-      const net = Math.round(gross - deductions);
+
+      // Allowances
+      const std_basic = n(m.std_basic);
+      const std_allowance = n(m.std_allowance);
+      const medical_10pct = n(m.medical_10pct);
+      const house_rent_20pct = n(m.house_rent_20pct);
+      const std_transportation_10pct = n(m.std_transportation_10pct);
+      const std_at_work = n(m.std_at_work);
+      const std_others = n(m.std_others);
+      const arrears = n(m.arrears);
+      const bonus = n(m.bonus);
+
+      const total_gross = std_basic + std_allowance + medical_10pct + house_rent_20pct +
+        std_transportation_10pct + std_at_work + std_others + arrears + bonus;
+
+      // Deductions
+      const income_tax = n(m.income_tax);
+      const life_insurance = n(m.life_insurance);
+      const health_insurance = n(m.health_insurance);
+      const employee_loan = n(m.employee_loan);
+      const fin_pn = n(m.fin_pn);
+      const advance_salary = n(m.advance_salary);
+      const esb = n(m.esb);
+      const other_deduction = n(m.other_deduction);
+
+      const total_deduction = income_tax + life_insurance + health_insurance + employee_loan +
+        fin_pn + advance_salary + esb + other_deduction;
+
+      const net_salary = Math.round(total_gross - total_deduction);
+
       const details = {
-        month: pyMonth, year: pyYear, payment_mode: m.payment_mode || null,
-        breakdown: {
-          basic_salary: n(m.basic_salary), medical_allowance: n(m.medical_allowance), work_transportation: n(m.work_transportation), other_allowances: n(m.other_allowances), arrears: n(m.arrears), bonus: n(m.bonus),
-          income_tax: n(m.income_tax), life_insurance: n(m.life_insurance), health_insurance: n(m.health_insurance), employee_loan: n(m.employee_loan), lunch_deduction: n(m.lunch_deduction), advance_salary: n(m.advance_salary), esb: n(m.esb), other_deductions: n(m.other_deductions),
-          gross, deductions, net,
-        }
+        month: pyMonth,
+        year: pyYear,
+        employee_name: emp.full_name || emp.email,
+        allowances: {
+          std_basic, std_allowance, medical_10pct, house_rent_20pct,
+          std_transportation_10pct, std_at_work, std_others, arrears, bonus
+        },
+        deductions: {
+          income_tax, life_insurance, health_insurance, employee_loan,
+          fin_pn, advance_salary, esb, other_deduction
+        },
+        total_gross,
+        total_deduction,
+        net_salary
       };
-      await supabase.from('payroll_items').insert({ batch_id: (batch as any).id, employee_email: emp.email, payable_amount: net, details });
+
+      await supabase.from('payroll_items').insert({
+        batch_id: (batch as any).id,
+        employee_email: emp.email,
+        payable_amount: net_salary,
+        details
+      });
     }
+    alert(`Payroll generated for ${(emps || []).length} employees`);
     await loadBatches();
   };
 
   const printPayslip = async (item: PayrollItem) => {
     try {
-      const doc = new jsPDF();
+      const doc = new jsPDF({ orientation: 'landscape' });
       const details = item.details || {};
-      const breakdown = details.breakdown || {};
+      const allowances = details.allowances || {};
+      const deductions = details.deductions || {};
 
       // Company header
-      doc.setFontSize(14);
-      doc.text('Gateway Study Links (SMC-PVT) LTD', 105, 18, { align: 'center' });
-      doc.setFontSize(10);
-      doc.text('Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234', 105, 24, { align: 'center' });
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Gateway Study Links (SMC-PVT) LTD', 148, 15, { align: 'center' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Website: www.thegateway.pk  |  Email: accounts@thegateway.pk  |  Phone: +9251-8731234', 148, 21, { align: 'center' });
 
       // Main title
       const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -422,77 +526,97 @@ const HRMPage: React.FC = () => {
       const monthName = monthNames[monthIndex] || 'Unknown';
       const year = details.year || new Date().getFullYear();
       doc.setFontSize(12);
-      doc.text(`Payslip for the Month of ${monthName} ${year}`, 105, 32, { align: 'center' });
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Payslip for ${monthName} ${year}`, 148, 28, { align: 'center' });
 
-      // Employee summary
-      (autoTable as any)(doc, {
-        head: [['Employee Email', 'Payment Mode']],
-        body: [[item.employee_email, details.payment_mode || '-']],
-        startY: 38,
-        styles: { fontSize: 10 },
-        headStyles: { fillColor: [255, 163, 50] },
-      });
+      // Employee info
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Employee: ${details.employee_name || item.employee_email}`, 14, 36);
+      doc.text(`Email: ${item.employee_email}`, 14, 42);
 
-      const firstTableY = (doc as any).lastAutoTable.finalY + 6;
+      // Payroll table with all components
+      const fmt = (v: number | null | undefined) => (v ?? 0).toFixed(2);
 
-      const fmt = (v: number | null | undefined) => `Rs ${(v ?? 0).toLocaleString()}`;
-
-      const earningsData = [
-        ['Basic Salary', fmt(breakdown.basic_salary)],
-        ['Medical Allowance', fmt(breakdown.medical_allowance)],
-        ['Work Transportation', fmt(breakdown.work_transportation)],
-        ['Other Allowances', fmt(breakdown.other_allowances)],
-        ['Arrears', fmt(breakdown.arrears)],
-        ['Bonus', fmt(breakdown.bonus)],
-        ['Total Earnings', fmt(breakdown.gross)],
+      const tableData = [
+        // Header row
+        [
+          { content: 'STD Gross', styles: { halign: 'center', fillColor: [255, 255, 255] } },
+          { content: 'Allowance', colSpan: 9, styles: { halign: 'center', fillColor: [255, 255, 255] } },
+          { content: 'Deduction', colSpan: 8, styles: { halign: 'center', fillColor: [255, 255, 200] } },
+          { content: '', styles: { fillColor: [255, 255, 255] } },
+          { content: '', styles: { fillColor: [255, 255, 255] } }
+        ],
+        // Column headers
+        [
+          'STD BASIC 60%',
+          'STD Allowance',
+          'Medical 10%',
+          'House Rent 20%',
+          'STD Transportation 10%',
+          'STD At Work',
+          'STD Others',
+          'Arrears',
+          'Bonus',
+          'Total Gross',
+          { content: 'Income Tax', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Life Insurance', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Health Insurance', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Employee Loan', styles: { fillColor: [255, 255, 200] } },
+          { content: 'FIN & PN', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Advance Salary', styles: { fillColor: [255, 255, 200] } },
+          { content: 'ESB', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Other Deduction', styles: { fillColor: [255, 255, 200] } },
+          { content: 'Total Deduction', styles: { fillColor: [255, 255, 200] } },
+          'Net Salary'
+        ],
+        // Data row
+        [
+          fmt(allowances.std_basic),
+          fmt(allowances.std_allowance),
+          fmt(allowances.medical_10pct),
+          fmt(allowances.house_rent_20pct),
+          fmt(allowances.std_transportation_10pct),
+          fmt(allowances.std_at_work),
+          fmt(allowances.std_others),
+          fmt(allowances.arrears),
+          fmt(allowances.bonus),
+          { content: fmt(details.total_gross), styles: { fontStyle: 'bold' } },
+          { content: fmt(deductions.income_tax), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.life_insurance), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.health_insurance), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.employee_loan), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.fin_pn), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.advance_salary), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.esb), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(deductions.other_deduction), styles: { fillColor: [255, 255, 200] } },
+          { content: fmt(details.total_deduction), styles: { fillColor: [255, 255, 200], fontStyle: 'bold' } },
+          { content: fmt(details.net_salary ?? item.payable_amount), styles: { fontStyle: 'bold', fillColor: [200, 255, 200] } }
+        ]
       ];
 
-      const deductionsData = [
-        ['Income Tax', fmt(breakdown.income_tax)],
-        ['Life Insurance', fmt(breakdown.life_insurance)],
-        ['Health Insurance', fmt(breakdown.health_insurance)],
-        ['Employee Loan', fmt(breakdown.employee_loan)],
-        ['Lunch Deduction', fmt(breakdown.lunch_deduction)],
-        ['Advance Salary', fmt(breakdown.advance_salary)],
-        ['ESB', fmt(breakdown.esb)],
-        ['Other Deductions', fmt(breakdown.other_deductions)],
-        ['Total Deductions', fmt(breakdown.deductions)],
-      ];
-
-      // Earnings table (left)
       (autoTable as any)(doc, {
-        head: [['Earnings', 'Amount']],
-        body: earningsData,
-        startY: firstTableY,
-        margin: { left: 14, right: 105 },
-        styles: { fontSize: 9 },
+        head: [],
+        body: tableData,
+        startY: 48,
+        styles: {
+          fontSize: 7,
+          cellPadding: 2,
+          halign: 'center',
+          valign: 'middle'
+        },
         headStyles: { fillColor: [255, 163, 50] },
+        columnStyles: {
+          9: { fontStyle: 'bold' },
+          18: { fontStyle: 'bold', fillColor: [255, 255, 200] },
+          19: { fontStyle: 'bold', fillColor: [200, 255, 200] }
+        },
+        theme: 'grid'
       });
 
-      // Deductions table (right)
-      (autoTable as any)(doc, {
-        head: [['Deductions', 'Amount']],
-        body: deductionsData,
-        startY: firstTableY,
-        margin: { left: 105, right: 14 },
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [255, 163, 50] },
-      });
-
-      const tablesEndY = (doc as any).lastAutoTable?.finalY ?? firstTableY;
-
-      // Net payable
-      (autoTable as any)(doc, {
-        head: [['Net Payable Amount']],
-        body: [[fmt(breakdown.net ?? item.payable_amount)]],
-        startY: tablesEndY + 6,
-        styles: { fontSize: 11, fontStyle: 'bold' },
-        headStyles: { fillColor: [255, 163, 50] },
-      });
-
-      const footerY = (doc as any).lastAutoTable.finalY + 12;
+      const footerY = (doc as any).lastAutoTable.finalY + 10;
       doc.setFontSize(8);
-      doc.text('This is a system-generated document and does not require any signature or company stamp', 105, footerY, { align: 'center' });
+      doc.text('This is a system-generated document and does not require any signature or company stamp', 148, footerY, { align: 'center' });
 
       const pdfBlob = doc.output('blob');
       const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -1141,10 +1265,10 @@ const HRMPage: React.FC = () => {
                             {l.status ? (
                               <span
                                 className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${l.status === 'Approved'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : l.status === 'Rejected'
-                                      ? 'bg-red-100 text-red-700'
-                                      : 'bg-amber-100 text-amber-700'
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : l.status === 'Rejected'
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-amber-100 text-amber-700'
                                   }`}
                               >
                                 {l.status}
@@ -1296,6 +1420,7 @@ const HRMPage: React.FC = () => {
                     {Array.from({ length: 12 }).map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
                   <input type="number" className="border rounded px-2 py-2 w-28" value={pyYear} onChange={e => setPyYear(Number(e.target.value))} />
+                  {isAdmin && <button onClick={() => { loadPayrollMasterData(); setShowPayrollMasterModal(true); }} className="px-3 py-2 rounded bg-blue-600 text-white font-semibold">Manage Salary Components</button>}
                   {isAdmin && <button onClick={generatePayroll} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Payroll</button>}
                 </div>
 
@@ -1514,6 +1639,163 @@ const HRMPage: React.FC = () => {
         </div>
       )}
       {/* Add/Edit Asset Modal */}
+
+      {/* Payroll Master Data Modal */}
+      {showPayrollMasterModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg border shadow-lg p-4 w-[95%] max-w-6xl my-4 max-h-[90vh] overflow-y-auto">
+            <div className="text-lg font-semibold mb-3">Manage Employee Salary Components</div>
+
+            {!editPayrollMaster ? (
+              <>
+                <div className="mb-3 text-sm text-gray-600">Select an employee to edit their salary components:</div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm border">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-text-secondary">
+                        <th className="p-2 border">Employee Email</th>
+                        <th className="p-2 border">Total Gross</th>
+                        <th className="p-2 border">Total Deduction</th>
+                        <th className="p-2 border">Net Salary</th>
+                        <th className="p-2 border text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {employees.map(emp => {
+                        const master = payrollMasterList.find(m => m.employee_email === emp.email);
+                        const n = (v: any) => Number(v || 0);
+                        const gross = master ? n(master.std_basic) + n(master.std_allowance) + n(master.medical_10pct) + n(master.house_rent_20pct) + n(master.std_transportation_10pct) + n(master.std_at_work) + n(master.std_others) + n(master.arrears) + n(master.bonus) : 0;
+                        const deduction = master ? n(master.income_tax) + n(master.life_insurance) + n(master.health_insurance) + n(master.employee_loan) + n(master.fin_pn) + n(master.advance_salary) + n(master.esb) + n(master.other_deduction) : 0;
+                        const net = gross - deduction;
+                        return (
+                          <tr key={emp.email}>
+                            <td className="p-2 border font-semibold">{emp.email}</td>
+                            <td className="p-2 border">{gross.toFixed(2)}</td>
+                            <td className="p-2 border">{deduction.toFixed(2)}</td>
+                            <td className="p-2 border font-semibold">{net.toFixed(2)}</td>
+                            <td className="p-2 border text-right">
+                              <button onClick={() => openEditPayrollMaster(emp.email)} className="text-blue-600 hover:underline">Edit</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex justify-end gap-2 pt-3 mt-3 border-t">
+                  <button type="button" onClick={() => { setShowPayrollMasterModal(false); setEditPayrollMaster(null); }} className="px-3 py-2 rounded border">Close</button>
+                </div>
+              </>
+            ) : (
+              <form onSubmit={(e) => { e.preventDefault(); savePayrollMaster(); }} className="space-y-4">
+                <div className="text-base font-semibold bg-gray-50 p-2 rounded">Employee: {editPayrollMaster.employee_email}</div>
+
+                {/* Allowances Section */}
+                <div className="border rounded p-3">
+                  <div className="font-semibold mb-2 text-green-700">Allowances</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-sm font-semibold">STD BASIC 60%</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.std_basic} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, std_basic: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">STD Allowance</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.std_allowance} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, std_allowance: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Medical 10%</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.medical_10pct} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, medical_10pct: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">House Rent 20%</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.house_rent_20pct} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, house_rent_20pct: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">STD Transportation 10%</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.std_transportation_10pct} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, std_transportation_10pct: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">STD At Work</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.std_at_work} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, std_at_work: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">STD Others</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.std_others} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, std_others: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Arrears</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.arrears} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, arrears: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Bonus</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.bonus} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, bonus: Number(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-right font-semibold text-green-700">
+                    Total Gross: {(Number(editPayrollMaster.std_basic) + Number(editPayrollMaster.std_allowance) + Number(editPayrollMaster.medical_10pct) + Number(editPayrollMaster.house_rent_20pct) + Number(editPayrollMaster.std_transportation_10pct) + Number(editPayrollMaster.std_at_work) + Number(editPayrollMaster.std_others) + Number(editPayrollMaster.arrears) + Number(editPayrollMaster.bonus)).toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Deductions Section */}
+                <div className="border rounded p-3 bg-yellow-50">
+                  <div className="font-semibold mb-2 text-red-700">Deductions</div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-sm font-semibold">Income Tax</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.income_tax} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, income_tax: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Life Insurance</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.life_insurance} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, life_insurance: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Health Insurance</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.health_insurance} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, health_insurance: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Employee Loan</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.employee_loan} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, employee_loan: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">FIN & PN</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.fin_pn} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, fin_pn: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Advance Salary</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.advance_salary} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, advance_salary: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">ESB</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.esb} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, esb: Number(e.target.value) || 0 })} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-semibold">Other Deduction</label>
+                      <input type="number" step="0.01" className="mt-1 w-full border rounded px-2 py-1" value={editPayrollMaster.other_deduction} onChange={e => setEditPayrollMaster({ ...editPayrollMaster, other_deduction: Number(e.target.value) || 0 })} />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-right font-semibold text-red-700">
+                    Total Deduction: {(Number(editPayrollMaster.income_tax) + Number(editPayrollMaster.life_insurance) + Number(editPayrollMaster.health_insurance) + Number(editPayrollMaster.employee_loan) + Number(editPayrollMaster.fin_pn) + Number(editPayrollMaster.advance_salary) + Number(editPayrollMaster.esb) + Number(editPayrollMaster.other_deduction)).toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Net Salary Display */}
+                <div className="bg-green-100 border-2 border-green-600 rounded p-3 text-center">
+                  <div className="text-sm text-gray-600">Net Salary</div>
+                  <div className="text-2xl font-bold text-green-700">
+                    {((Number(editPayrollMaster.std_basic) + Number(editPayrollMaster.std_allowance) + Number(editPayrollMaster.medical_10pct) + Number(editPayrollMaster.house_rent_20pct) + Number(editPayrollMaster.std_transportation_10pct) + Number(editPayrollMaster.std_at_work) + Number(editPayrollMaster.std_others) + Number(editPayrollMaster.arrears) + Number(editPayrollMaster.bonus)) - (Number(editPayrollMaster.income_tax) + Number(editPayrollMaster.life_insurance) + Number(editPayrollMaster.health_insurance) + Number(editPayrollMaster.employee_loan) + Number(editPayrollMaster.fin_pn) + Number(editPayrollMaster.advance_salary) + Number(editPayrollMaster.esb) + Number(editPayrollMaster.other_deduction))).toFixed(2)}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t">
+                  <button type="button" onClick={() => setEditPayrollMaster(null)} className="px-3 py-2 rounded border">Back to List</button>
+                  <button type="submit" className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Save</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {showAssetModal && editAsset && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
           <form onSubmit={(e) => { e.preventDefault(); saveAsset(); }} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl space-y-3">
