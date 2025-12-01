@@ -1690,6 +1690,63 @@ const HRMPage: React.FC = () => {
               <form onSubmit={(e) => { e.preventDefault(); savePayrollMaster(); }} className="space-y-4">
                 <div className="text-base font-semibold bg-gray-50 p-2 rounded">Employee: {editPayrollMaster.employee_email}</div>
 
+                {/* Total Salary Auto-Calculate Section */}
+                <div className="border-2 border-blue-500 rounded p-4 bg-blue-50">
+                  <div className="font-semibold mb-2 text-blue-700">Quick Salary Setup</div>
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1">
+                      <label className="text-sm font-semibold">Total Monthly Salary</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="mt-1 w-full border-2 border-blue-300 rounded px-3 py-2 text-lg font-semibold"
+                        placeholder="Enter total salary to auto-calculate"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const totalSalary = Number((e.target as HTMLInputElement).value) || 0;
+                            if (totalSalary > 0) {
+                              setEditPayrollMaster({
+                                ...editPayrollMaster,
+                                std_basic: Math.round(totalSalary * 0.60 * 100) / 100,
+                                medical_10pct: Math.round(totalSalary * 0.10 * 100) / 100,
+                                house_rent_20pct: Math.round(totalSalary * 0.20 * 100) / 100,
+                                std_transportation_10pct: Math.round(totalSalary * 0.10 * 100) / 100,
+                              });
+                              (e.target as HTMLInputElement).value = '';
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const input = (e.target as HTMLButtonElement).parentElement?.querySelector('input');
+                        const totalSalary = Number(input?.value) || 0;
+                        if (totalSalary > 0) {
+                          setEditPayrollMaster({
+                            ...editPayrollMaster,
+                            std_basic: Math.round(totalSalary * 0.60 * 100) / 100,
+                            medical_10pct: Math.round(totalSalary * 0.10 * 100) / 100,
+                            house_rent_20pct: Math.round(totalSalary * 0.20 * 100) / 100,
+                            std_transportation_10pct: Math.round(totalSalary * 0.10 * 100) / 100,
+                          });
+                          if (input) input.value = '';
+                        } else {
+                          alert('Please enter a valid salary amount');
+                        }
+                      }}
+                      className="px-4 py-2 rounded bg-blue-600 text-white font-semibold hover:bg-blue-700"
+                    >
+                      Auto-Calculate
+                    </button>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-600">
+                    Auto-calculation: Basic 60%, Medical 10%, House Rent 20%, Transportation 10%. You can manually adjust any field after.
+                  </div>
+                </div>
+
                 {/* Allowances Section */}
                 <div className="border rounded p-3">
                   <div className="font-semibold mb-2 text-green-700">Allowances</div>
