@@ -42,6 +42,7 @@ const ProfilePage = React.lazy(() => import('./pages/Profile'));
 const LeavesPage = React.lazy(() => import('./pages/Leaves'));
 const BranchEmployeesPage = React.lazy(() => import('./pages/Employees/BranchEmployees'));
 const PublicOnboarding = React.lazy(() => import('./pages/Public/Onboarding'));
+const PublicLeadForm = React.lazy(() => import('./pages/Public/PublicLeadForm'));
 
 /**
  * Loading Fallback Component
@@ -309,6 +310,7 @@ const AppRoutes = () => {
           <Route path="/leaves" element={<ProtectedRoute><LeavesPage /></ProtectedRoute>} />
 
           <Route path="/onboard" element={<PublicOnboarding />} />
+          <Route path="/public/lead-form" element={<PublicLeadForm />} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<LoginPage />} />
