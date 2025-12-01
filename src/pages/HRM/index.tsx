@@ -1420,7 +1420,7 @@ const HRMPage: React.FC = () => {
                     {Array.from({ length: 12 }).map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
                   </select>
                   <input type="number" className="border rounded px-2 py-2 w-28" value={pyYear} onChange={e => setPyYear(Number(e.target.value))} />
-                  {isAdmin && <button onClick={() => { loadPayrollMasterData(); setShowPayrollMasterModal(true); }} className="px-3 py-2 rounded bg-blue-600 text-white font-semibold">Manage Salary Components</button>}
+                  {isAdmin && <button onClick={() => { loadEmployees(); loadPayrollMasterData(); setShowPayrollMasterModal(true); }} className="px-3 py-2 rounded bg-blue-600 text-white font-semibold">Manage Salary Components</button>}
                   {isAdmin && <button onClick={generatePayroll} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Payroll</button>}
                 </div>
 
@@ -1661,7 +1661,7 @@ const HRMPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {employees.map(emp => {
+                      {rows.map(emp => {
                         const master = payrollMasterList.find(m => m.employee_email === emp.email);
                         const n = (v: any) => Number(v || 0);
                         const gross = master ? n(master.std_basic) + n(master.std_allowance) + n(master.medical_10pct) + n(master.house_rent_20pct) + n(master.std_transportation_10pct) + n(master.std_at_work) + n(master.std_others) + n(master.arrears) + n(master.bonus) : 0;
