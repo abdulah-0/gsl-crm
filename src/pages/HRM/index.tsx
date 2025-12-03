@@ -76,6 +76,9 @@ const HRMPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // Excel upload state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
   // HRM -> Leaves management state
   interface LeaveRow {
     id: number;
@@ -1007,6 +1010,123 @@ const HRMPage: React.FC = () => {
     if (!error) await loadEmployees(); else alert(error.message);
   };
 
+  // Excel upload handler for bulk employee import
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Dynamically import xlsx
+      const XLSX = await import('xlsx');
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const bstr = evt.target?.result;
+          const wb = XLSX.read(bstr, { type: 'binary' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const data = XLSX.utils.sheet_to_json(ws) as any[];
+
+          if (data.length === 0) {
+            alert('Excel file is empty');
+            setUploading(false);
+            return;
+          }
+
+          // Map Excel columns to employee fields
+          const employees = data.map((row: any) => ({
+            email: row['Email'] || row['email'] || '',
+            full_name: row['Full Name'] || row['full_name'] || '',
+            department: row['Department'] || row['department'] || null,
+            designation: row['Designation'] || row['designation'] || null,
+            joining_date: row['Joining Date'] || row['joining_date'] || null,
+            status: row['Status'] || row['status'] || 'Active',
+            role: row['Role'] || row['role'] || 'Employee',
+            branch: row['Branch'] || row['branch'] || (role === 'super' ? null : myBranch),
+          }));
+
+          // Validate required fields
+          const invalid = employees.filter(e => !e.email || !e.full_name);
+          if (invalid.length > 0) {
+            alert(`${invalid.length} rows have missing required fields (Email, Full Name)`);
+            setUploading(false);
+            return;
+          }
+
+          // Get current user for activity log
+          const { data: au } = await supabase.auth.getUser();
+          const me = au?.user?.email || '';
+
+          // Bulk insert into dashboard_users
+          const { error: usersError } = await supabase
+            .from('dashboard_users')
+            .upsert(employees, { onConflict: 'email' });
+
+          if (usersError) throw usersError;
+
+          // Also insert into employees_master for extended profile
+          const masterRecords = employees.map(emp => ({
+            email: emp.email,
+            full_name: emp.full_name,
+            designation: emp.designation,
+            branch: emp.branch,
+            date_of_joining: emp.joining_date || null,
+          }));
+
+          const { error: masterError } = await supabase
+            .from('employees_master')
+            .upsert(masterRecords, { onConflict: 'email' });
+
+          if (masterError) {
+            console.warn('employees_master insert warning:', masterError);
+          }
+
+          // Initialize leave balances with default entitlements
+          const leaveBalances = employees.map(emp => ({
+            employee_email: emp.email,
+            branch: emp.branch,
+            cl_entitlement: 12,
+            sl_entitlement: 12,
+            al_entitlement: 12,
+            cl_availed: 0,
+            sl_availed: 0,
+            al_availed: 0,
+          }));
+
+          const { error: balanceError } = await supabase
+            .from('employee_leave_balances')
+            .upsert(leaveBalances, { onConflict: 'employee_email' });
+
+          if (balanceError) {
+            console.warn('employee_leave_balances insert warning:', balanceError);
+          }
+
+          // Log activity
+          await supabase.from('activity_log').insert([{
+            entity: 'employee',
+            entity_id: 'bulk_upload',
+            action: 'Bulk employee import',
+            detail: { count: employees.length, uploaded_by: me }
+          }]);
+
+          alert(`Successfully imported ${employees.length} employees`);
+          setShowUploadModal(false);
+          await loadEmployees();
+        } catch (err: any) {
+          alert(err?.message || 'Failed to process Excel file');
+        } finally {
+          setUploading(false);
+        }
+      };
+      reader.readAsBinaryString(file);
+    } catch (err: any) {
+      alert(err?.message || 'Failed to upload file');
+      setUploading(false);
+    }
+  };
+
   return (
     <>
       <Helmet>
@@ -1050,6 +1170,12 @@ const HRMPage: React.FC = () => {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                   </select>
+                  {isAdmin && (
+                    <>
+                      <button onClick={openAdd} className="ml-auto px-3 py-2 rounded bg-[#ffa332] text-white font-semibold text-sm">+ Add Employee</button>
+                      <button onClick={() => setShowUploadModal(true)} className="px-3 py-2 rounded bg-green-600 text-white font-semibold text-sm">📊 Upload Excel</button>
+                    </>
+                  )}
                   {!isAdmin && myBranch && (
                     <div className="ml-auto text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
                   )}
@@ -1934,6 +2060,145 @@ const HRMPage: React.FC = () => {
         </div>
       )}
 
+
+      {/* Employee Add/Edit Modal */}
+      {showEmpModal && editRow && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setShowEmpModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 shadow-xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold mb-4">{editRow.id ? 'Edit Employee' : 'Add Employee'}</h2>
+            <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-semibold">Email *</label>
+                  <input
+                    type="email"
+                    required
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.email}
+                    onChange={e => setEditRow({ ...editRow, email: e.target.value })}
+                    disabled={!!editRow.id}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.full_name || ''}
+                    onChange={e => setEditRow({ ...editRow, full_name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Role</label>
+                  <select
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.role || 'Employee'}
+                    onChange={e => setEditRow({ ...editRow, role: e.target.value })}
+                  >
+                    <option value="Employee">Employee</option>
+                    <option value="Teacher">Teacher</option>
+                    <option value="Counselor">Counselor</option>
+                    <option value="Admin">Admin</option>
+                    {isSuper && <option value="Super Admin">Super Admin</option>}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Department</label>
+                  <input
+                    type="text"
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.department || ''}
+                    onChange={e => setEditRow({ ...editRow, department: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Designation</label>
+                  <input
+                    type="text"
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.designation || ''}
+                    onChange={e => setEditRow({ ...editRow, designation: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Joining Date</label>
+                  <input
+                    type="date"
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.joining_date || ''}
+                    onChange={e => setEditRow({ ...editRow, joining_date: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-semibold">Status</label>
+                  <select
+                    className="mt-1 w-full border rounded px-3 py-2"
+                    value={editRow.status || 'Active'}
+                    onChange={e => setEditRow({ ...editRow, status: e.target.value })}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+                {isSuper && (
+                  <div>
+                    <label className="text-sm font-semibold">Branch</label>
+                    <input
+                      type="text"
+                      className="mt-1 w-full border rounded px-3 py-2"
+                      value={editRow.branch || ''}
+                      onChange={e => setEditRow({ ...editRow, branch: e.target.value })}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <button type="button" onClick={() => { setShowEmpModal(false); setEditRow(null); }} className="px-4 py-2 rounded border hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-semibold hover:bg-orange-600">Save Employee</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Excel Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => !uploading && setShowUploadModal(false)}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h2 className="text-xl font-bold mb-4">Upload Excel File</h2>
+            <p className="text-sm text-text-secondary mb-4">
+              Upload an Excel file (.xlsx, .xls) with the following columns:
+            </p>
+            <div className="text-xs bg-gray-50 p-3 rounded mb-4 space-y-1">
+              <div><strong>Required:</strong> Email, Full Name</div>
+              <div><strong>Optional:</strong> Department, Designation, Joining Date, Status, Role, Branch</div>
+              <div className="mt-2 text-text-secondary">
+                <strong>Defaults:</strong> Role=Employee, Status=Active, Branch={myBranch || 'Current Branch'}
+              </div>
+            </div>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              disabled={uploading}
+              className="w-full border rounded p-2 mb-4"
+            />
+            {uploading && (
+              <div className="text-sm text-center text-text-secondary mb-4">
+                Processing file...
+              </div>
+            )}
+            <button
+              onClick={() => setShowUploadModal(false)}
+              disabled={uploading}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
     </>
   );
