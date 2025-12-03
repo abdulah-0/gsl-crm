@@ -38,7 +38,7 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -1258,7 +1258,7 @@ const HRMPage: React.FC = () => {
                     <div className="flex flex-wrap gap-6 items-start">
                       <div className="flex flex-col items-center">
                         <div className="border-2 border-gray-300 rounded-lg p-3 bg-white">
-                          <QRCode
+                          <QRCodeCanvas
                             value={`${window.location.origin}/public-onboarding`}
                             size={180}
                             level="H"
