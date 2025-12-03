@@ -980,14 +980,17 @@ const HRMPage: React.FC = () => {
   const onSave = async () => {
     if (!isAdmin || !editRow) { setShowEmpModal(false); return; }
     const branchVal = role === 'super' ? (editRow.branch || null) : (myBranch || null);
+
+    // Generate UUID for new employees (dashboard_users.id is required)
+    const employeeId = editRow.id || crypto.randomUUID();
+
     const payload = {
+      id: employeeId,
       email: editRow.email,
       full_name: editRow.full_name,
       role: editRow.role,
       department: editRow.department,
       designation: editRow.designation,
-
-
       joining_date: editRow.joining_date,
       status: editRow.status,
       branch: branchVal,
@@ -1037,6 +1040,7 @@ const HRMPage: React.FC = () => {
 
           // Map Excel columns to employee fields
           const employees = data.map((row: any) => ({
+            id: crypto.randomUUID(), // Generate UUID for dashboard_users.id
             email: row['Email'] || row['email'] || '',
             full_name: row['Full Name'] || row['full_name'] || '',
             department: row['Department'] || row['department'] || null,
