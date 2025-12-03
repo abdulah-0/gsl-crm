@@ -1000,9 +1000,20 @@ const HRMPage: React.FC = () => {
     const me = au?.user?.email || '';
     const { error } = await supabase.from('dashboard_users').upsert(payload, { onConflict: 'email' } as any);
     if (error) { alert(error.message); return; }
-    // upsert minimal employees_master profile too
-    const { error: mErr } = await supabase.from('employees_master').upsert({ email: editRow.email, full_name: editRow.full_name, designation: editRow.designation, branch: branchVal } as any, { onConflict: 'email' } as any);
-    if (mErr) { alert(mErr.message); return; }
+
+    // Try to upsert minimal employees_master profile (optional - graceful failure)
+    const { error: mErr } = await supabase.from('employees_master').upsert({
+      email: editRow.email,
+      full_name: editRow.full_name,
+      designation: editRow.designation,
+      branch: branchVal
+    } as any, { onConflict: 'email' } as any);
+
+    if (mErr) {
+      console.warn('employees_master insert failed (non-critical):', mErr.message);
+      // Continue anyway - dashboard_users is the primary record
+    }
+
     await supabase.from('activity_log').insert([{ entity: 'employee', entity_id: editRow.email, action: 'Saved employee profile', detail: { email: editRow.email, full_name: editRow.full_name, updated_by: me } }]);
     setShowEmpModal(false); setEditRow(null); await loadEmployees();
   };
@@ -1070,7 +1081,7 @@ const HRMPage: React.FC = () => {
 
           if (usersError) throw usersError;
 
-          // Also insert into employees_master for extended profile
+          // Try to insert into employees_master for extended profile (optional - graceful failure)
           const masterRecords = employees.map(emp => ({
             email: emp.email,
             full_name: emp.full_name,
@@ -1084,7 +1095,8 @@ const HRMPage: React.FC = () => {
             .upsert(masterRecords, { onConflict: 'email' });
 
           if (masterError) {
-            console.warn('employees_master insert warning:', masterError);
+            console.warn('employees_master bulk insert failed (non-critical):', masterError.message);
+            // Continue anyway - dashboard_users is the primary record
           }
 
           // Initialize leave balances with default entitlements
