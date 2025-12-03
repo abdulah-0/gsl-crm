@@ -38,6 +38,7 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
+import QRCode from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -1247,17 +1248,74 @@ const HRMPage: React.FC = () => {
             {/* Onboarding tab */}
             {tab === 'onboarding' && (
               <div className="mt-6 space-y-3">
-                <div className="bg-white border rounded-lg shadow-sm p-3 flex flex-wrap items-center gap-2">
-                  {isAdmin && (
-                    <>
-                      <input className="border rounded px-3 py-2 w-full md:w-80" placeholder="Candidate Email" value={newOnbEmail} onChange={e => setNewOnbEmail(e.target.value)} />
-                      <button onClick={createOnboarding} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Generate Link</button>
-                    </>
-                  )}
-                  {!isAdmin && myBranch && (
+                {/* QR Code Section */}
+                {isAdmin && (
+                  <div className="bg-white border rounded-lg shadow-sm p-4">
+                    <h3 className="text-lg font-semibold mb-2">Public Onboarding Form</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Share this QR code or link for candidates to fill the onboarding form
+                    </p>
+                    <div className="flex flex-wrap gap-6 items-start">
+                      <div className="flex flex-col items-center">
+                        <div className="border-2 border-gray-300 rounded-lg p-3 bg-white">
+                          <QRCode
+                            value={`${window.location.origin}/public-onboarding`}
+                            size={180}
+                            level="H"
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            const canvas = document.querySelector('canvas');
+                            if (canvas) {
+                              const url = canvas.toDataURL('image/png');
+                              const link = document.createElement('a');
+                              link.download = 'onboarding-qr-code.png';
+                              link.href = url;
+                              link.click();
+                            }
+                          }}
+                          className="mt-3 px-4 py-2 bg-[#ffa332] text-white rounded-lg font-semibold text-sm hover:bg-orange-600"
+                        >
+                          📥 Download QR Code
+                        </button>
+                      </div>
+                      <div className="flex-1 min-w-[250px]">
+                        <div className="text-sm font-semibold mb-2">Public Form URL:</div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={`${window.location.origin}/public-onboarding`}
+                            readOnly
+                            className="flex-1 border rounded px-3 py-2 text-sm bg-gray-50"
+                          />
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/public-onboarding`);
+                              alert('Link copied to clipboard!');
+                            }}
+                            className="px-3 py-2 border rounded hover:bg-gray-50 text-sm"
+                          >
+                            📋 Copy
+                          </button>
+                        </div>
+                        <a
+                          href="/public-onboarding"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-block mt-2 text-sm text-blue-600 hover:underline"
+                        >
+                          Open Form →
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!isAdmin && myBranch && (
+                  <div className="bg-white border rounded-lg shadow-sm p-3">
                     <div className="text-sm text-text-secondary">Branch: <span className="font-semibold text-text-primary">{myBranch}</span></div>
-                  )}
-                </div>
+                  </div>
+                )}
                 <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead className="bg-gray-50">
