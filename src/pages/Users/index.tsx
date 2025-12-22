@@ -93,6 +93,7 @@ const UsersPage: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<string>('');
 
   const [items, setItems] = useState<AppUser[]>([]);
+  const [allUsers, setAllUsers] = useState<AppUser[]>([]); // For reporting hierarchy dropdown
   const [loading, setLoading] = useState(true);
 
   const [q, setQ] = useState('');
@@ -108,6 +109,7 @@ const UsersPage: React.FC = () => {
   const [showPw, setShowPw] = useState(false);
   const [nRole, setNRole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Director' | 'Reporter' | 'Custom'>('Staff');
   const [nBranch, setNBranch] = useState<string>('');
+  const [nReportsTo, setNReportsTo] = useState<string[]>([]); // Array of emails user reports to
   const [eAccess, setEAccess] = useState<Record<string, ModulePermissions>>({});
 
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
@@ -122,6 +124,7 @@ const UsersPage: React.FC = () => {
   const [eRole, setERole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Director' | 'Reporter' | 'Custom'>('Staff');
   const [eStatus, setEStatus] = useState<'Active' | 'Inactive' | 'Dormant'>('Active');
   const [eBranch, setEBranch] = useState<string>('');
+  const [eReportsTo, setEReportsTo] = useState<string[]>([]); // Array of emails user reports to
   const [ePerms, setEPerms] = useState<string[]>([]);
 
   useEffect(() => {
@@ -144,7 +147,9 @@ const UsersPage: React.FC = () => {
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from('dashboard_users').select('*').order('created_at', { ascending: false });
-    setItems((data as any as AppUser[]) || []);
+    const users = (data as any as AppUser[]) || [];
+    setItems(users);
+    setAllUsers(users); // Store for reporting hierarchy dropdown
     setLoading(false);
   };
 
@@ -190,6 +195,16 @@ const UsersPage: React.FC = () => {
       const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
       await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray, branch: nBranch || null }]);
+
+      // Insert reporting hierarchy relationships
+      if (nReportsTo.length > 0) {
+        const reportingRows = nReportsTo.map(supervisorEmail => ({
+          user_email: nEmail,
+          reports_to_email: supervisorEmail,
+          created_by: currentEmail || 'system'
+        }));
+        await supabase.from('user_reporting_hierarchy').insert(reportingRows);
+      }
       // If role is Teacher, ensure a teacher profile exists as well (matched by email)
       if (nRole === 'Teacher') {
         try {
@@ -227,7 +242,7 @@ const UsersPage: React.FC = () => {
         try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch { }
       }
       // Reset
-      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNBranch(''); setNPerms(['dashboard']); setNAccess(() => emptyPermMap());
+      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNBranch(''); setNReportsTo([]); setNPerms(['dashboard']); setNAccess(() => emptyPermMap());
       await load();
       alert(provisioned ? 'User added and Auth account created.' : 'User added. Invitation email sent (if email auth is configured).');
     } catch (err: any) {
@@ -240,6 +255,12 @@ const UsersPage: React.FC = () => {
   const openEdit = (u: AppUser) => {
     setEditing(u);
     setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEBranch(u.branch || ''); setEPerms(u.permissions || []);
+
+    // Load reporting hierarchy
+    (async () => {
+      const { data } = await supabase.from('user_reporting_hierarchy').select('reports_to_email').eq('user_email', u.email);
+      setEReportsTo((data || []).map((r: any) => r.reports_to_email));
+    })();
     // Load granular permissions
     (async () => {
       try {
@@ -278,6 +299,19 @@ const UsersPage: React.FC = () => {
       const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
       await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray, branch: eBranch || null }).eq('id', editing.id);
+
+      // Update reporting hierarchy
+      // Delete existing relationships
+      await supabase.from('user_reporting_hierarchy').delete().eq('user_email', editing.email);
+      // Insert new relationships
+      if (eReportsTo.length > 0) {
+        const reportingRows = eReportsTo.map(supervisorEmail => ({
+          user_email: editing.email,
+          reports_to_email: supervisorEmail,
+          created_by: currentEmail || 'system'
+        }));
+        await supabase.from('user_reporting_hierarchy').insert(reportingRows);
+      }
       // Ensure teacher profile reflects role/status
       try {
         if (eRole === 'Teacher') {
@@ -369,6 +403,29 @@ const UsersPage: React.FC = () => {
                     <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
                   ))}
                 </select>
+              </label>
+              <label><span className="text-text-secondary">Reports To (Supervisors)</span>
+                <div className="mt-1 border rounded p-2 max-h-32 overflow-auto">
+                  {allUsers.filter(u => u.email !== nEmail).map(u => (
+                    <label key={u.email} className="flex items-center gap-2 py-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={nReportsTo.includes(u.email)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNReportsTo([...nReportsTo, u.email]);
+                          } else {
+                            setNReportsTo(nReportsTo.filter(email => email !== u.email));
+                          }
+                        }}
+                      />
+                      <span>{u.full_name} ({u.role})</span>
+                    </label>
+                  ))}
+                  {allUsers.filter(u => u.email !== nEmail).length === 0 && (
+                    <div className="text-text-secondary text-xs">No other users available</div>
+                  )}
+                </div>
               </label>
               <div>
                 <div className="text-text-secondary mb-1">Module Access</div>
@@ -519,6 +576,29 @@ const UsersPage: React.FC = () => {
                     <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
                   ))}
                 </select>
+              </label>
+              <label><span className="text-text-secondary">Reports To (Supervisors)</span>
+                <div className="mt-1 border rounded p-2 max-h-32 overflow-auto">
+                  {allUsers.filter(u => u.email !== editing?.email).map(u => (
+                    <label key={u.email} className="flex items-center gap-2 py-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={eReportsTo.includes(u.email)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setEReportsTo([...eReportsTo, u.email]);
+                          } else {
+                            setEReportsTo(eReportsTo.filter(email => email !== u.email));
+                          }
+                        }}
+                      />
+                      <span>{u.full_name} ({u.role})</span>
+                    </label>
+                  ))}
+                  {allUsers.filter(u => u.email !== editing?.email).length === 0 && (
+                    <div className="text-text-secondary text-xs">No other users available</div>
+                  )}
+                </div>
               </label>
               <label><span className="text-text-secondary">Status</span>
                 <select value={eStatus} onChange={e => setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
