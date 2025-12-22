@@ -31,15 +31,17 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
+import { useBranches } from '../../hooks/useBranches';
 
 // Types
 type AppUser = {
   id: string;
   full_name: string;
   email: string;
-  role: 'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | string;
+  role: 'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Director' | 'Reporter' | string;
   status: 'Active' | 'Inactive' | 'Dormant' | string;
   permissions: string[]; // ['dashboard','students','services',...]
+  branch?: string | null;
   created_at?: string;
 };
 
@@ -86,6 +88,7 @@ const rowsFromPerms = (email: string, map: Record<string, ModulePermissions>) =>
 
 
 const UsersPage: React.FC = () => {
+  const branches = useBranches();
   const [currentEmail, setCurrentEmail] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string>('');
 
@@ -103,7 +106,8 @@ const UsersPage: React.FC = () => {
   const [nEmail, setNEmail] = useState('');
   const [nPassword, setNPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const [nRole, setNRole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Custom'>('Staff');
+  const [nRole, setNRole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Director' | 'Reporter' | 'Custom'>('Staff');
+  const [nBranch, setNBranch] = useState<string>('');
   const [eAccess, setEAccess] = useState<Record<string, ModulePermissions>>({});
 
   const [nPerms, setNPerms] = useState<string[]>(['dashboard']);
@@ -115,8 +119,9 @@ const UsersPage: React.FC = () => {
   const [eEmail, setEEmail] = useState('');
   const [ePassword, setEPassword] = useState('');
   const [eShowPw, setEShowPw] = useState(false);
-  const [eRole, setERole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Custom'>('Staff');
+  const [eRole, setERole] = useState<'Super Admin' | 'Admin' | 'Counsellor' | 'Staff' | 'Teacher' | 'Director' | 'Reporter' | 'Custom'>('Staff');
   const [eStatus, setEStatus] = useState<'Active' | 'Inactive' | 'Dormant'>('Active');
+  const [eBranch, setEBranch] = useState<string>('');
   const [ePerms, setEPerms] = useState<string[]>([]);
 
   useEffect(() => {
@@ -184,7 +189,7 @@ const UsersPage: React.FC = () => {
       const baseModules = nRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : nPerms;
       const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
-      await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray }]);
+      await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray, branch: nBranch || null }]);
       // If role is Teacher, ensure a teacher profile exists as well (matched by email)
       if (nRole === 'Teacher') {
         try {
@@ -222,7 +227,7 @@ const UsersPage: React.FC = () => {
         try { await supabase.auth.signInWithOtp({ email: nEmail }); } catch { }
       }
       // Reset
-      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNPerms(['dashboard']); setNAccess(() => emptyPermMap());
+      setNFull(''); setNEmail(''); setNPassword(''); setNRole('Staff'); setNBranch(''); setNPerms(['dashboard']); setNAccess(() => emptyPermMap());
       await load();
       alert(provisioned ? 'User added and Auth account created.' : 'User added. Invitation email sent (if email auth is configured).');
     } catch (err: any) {
@@ -234,7 +239,7 @@ const UsersPage: React.FC = () => {
 
   const openEdit = (u: AppUser) => {
     setEditing(u);
-    setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEPerms(u.permissions || []);
+    setEFull(u.full_name); setEEmail(u.email); setEPassword(''); setERole(u.role as any); setEStatus(u.status as any); setEBranch(u.branch || ''); setEPerms(u.permissions || []);
     // Load granular permissions
     (async () => {
       try {
@@ -272,7 +277,7 @@ const UsersPage: React.FC = () => {
       const baseModules = eRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : ePerms;
       const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
       const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
-      await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray }).eq('id', editing.id);
+      await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray, branch: eBranch || null }).eq('id', editing.id);
       // Ensure teacher profile reflects role/status
       try {
         if (eRole === 'Teacher') {
@@ -352,7 +357,17 @@ const UsersPage: React.FC = () => {
                   <option>Counsellor</option>
                   <option>Staff</option>
                   <option>Teacher</option>
+                  <option>Director</option>
+                  <option>Reporter</option>
                   <option>Custom</option>
+                </select>
+              </label>
+              <label><span className="text-text-secondary">Branch</span>
+                <select value={nBranch} onChange={e => setNBranch(e.target.value)} className="mt-1 w-full border rounded p-2" required>
+                  <option value="">Select Branch</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
+                  ))}
                 </select>
               </label>
               <div>
@@ -427,7 +442,7 @@ const UsersPage: React.FC = () => {
                 <h2 className="text-lg font-bold">Users</h2>
                 <div className="flex items-center gap-2 text-sm">
                   <input placeholder="Search" value={q} onChange={e => setQ(e.target.value)} className="border rounded p-2" />
-                  <select value={roleF} onChange={e => setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option></select>
+                  <select value={roleF} onChange={e => setRoleF(e.target.value)} className="border rounded p-2"><option>All</option><option>Super Admin</option><option>Admin</option><option>Counsellor</option><option>Staff</option><option>Teacher</option><option>Director</option><option>Reporter</option></select>
                   <select value={statusF} onChange={e => setStatusF(e.target.value)} className="border rounded p-2"><option>All</option><option>Active</option><option>Inactive</option><option>Dormant</option></select>
                 </div>
               </div>
@@ -438,19 +453,21 @@ const UsersPage: React.FC = () => {
                       <th className="py-2 pr-4">Full Name</th>
                       <th className="py-2 pr-4">Email</th>
                       <th className="py-2 pr-4">Role</th>
+                      <th className="py-2 pr-4">Branch</th>
                       <th className="py-2 pr-4">Status</th>
                       <th className="py-2 pr-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {loading && (
-                      <tr><td colSpan={5} className="py-4 text-center text-text-secondary">Loading...</td></tr>
+                      <tr><td colSpan={6} className="py-4 text-center text-text-secondary">Loading...</td></tr>
                     )}
                     {!loading && filtered.map(u => (
                       <tr key={u.id} className="border-b">
                         <td className="py-2 pr-4 font-semibold">{u.full_name}</td>
                         <td className="py-2 pr-4">{u.email}</td>
                         <td className="py-2 pr-4">{u.role}</td>
+                        <td className="py-2 pr-4">{u.branch || 'N/A'}</td>
                         <td className="py-2 pr-4">{u.status}</td>
                         <td className="py-2 pr-4">
                           <button onClick={() => openEdit(u)} className="text-blue-600 hover:underline mr-3">Edit</button>
@@ -459,7 +476,7 @@ const UsersPage: React.FC = () => {
                       </tr>
                     ))}
                     {!loading && filtered.length === 0 && (
-                      <tr><td colSpan={5} className="py-4 text-center text-text-secondary">No users found</td></tr>
+                      <tr><td colSpan={6} className="py-4 text-center text-text-secondary">No users found</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -490,7 +507,17 @@ const UsersPage: React.FC = () => {
                   <option>Counsellor</option>
                   <option>Staff</option>
                   <option>Teacher</option>
+                  <option>Director</option>
+                  <option>Reporter</option>
                   <option>Custom</option>
+                </select>
+              </label>
+              <label><span className="text-text-secondary">Branch</span>
+                <select value={eBranch} onChange={e => setEBranch(e.target.value)} className="mt-1 w-full border rounded p-2" required>
+                  <option value="">Select Branch</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
+                  ))}
                 </select>
               </label>
               <label><span className="text-text-secondary">Status</span>
