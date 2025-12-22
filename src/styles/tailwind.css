@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Primary Colors */
+    --primary-background: #ffa332;
+    --primary-foreground: #ffffff;
+    --primary-light: #ffbd21;
+    --primary-dark: #e89429;
+
+    /* Secondary Colors */
+    --secondary-background: #ffffff;
+    --secondary-foreground: #0a1629;
+    --secondary-light: #f4f9fd;
+    --secondary-dark: #e6ecf4;
+
+    /* Accent Colors */
+    --accent-color: #0ac846;
+    --accent-foreground: #ffffff;
+    --accent-light: #2dd55b;
+    --accent-dark: #089639;
+
+    /* Border Colors */
+    --border-primary: #d8e0ef;
+    --border-secondary: #ffffff;
+    --border-light: #e4e6e8;
+    --border-dark: #91929e;
+
+    /* Text Colors */
+    --text-primary: #0a1629;
+    --text-secondary: #7d8592;
+    --text-muted: #91929e;
+    --text-accent: #ffa332;
+    --text-success: #0ac846;
+    --text-warning: #ffbd21;
+    --text-white: #ffffff;
+
+    /* Background Colors */
+    --bg-main: #f4f9fd;
+    --bg-card: #ffffff;
+    --bg-sidebar: #ffffff;
+    --bg-overlay: #e6ecf4;
+    --bg-accent: #de92eb;
+    --bg-muted: #e4e6e8;
+
+    /* Typography Variables */
+    --font-size-xs: 12px;
+    --font-size-sm: 14px;
+    --font-size-base: 16px;
+    --font-size-lg: 18px;
+    --font-size-xl: 22px;
+    --font-size-2xl: 30px;
+    --font-size-3xl: 36px;
+    --font-size-4xl: 40px;
+
+    /* Font Weight Variables */
+    --font-weight-normal: 400;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* Line Height Variables */
+    --line-height-xs: 17px;
+    --line-height-sm: 20px;
+    --line-height-base: 22px;
+    --line-height-lg: 24px;
+    --line-height-xl: 25px;
+    --line-height-2xl: 31px;
+    --line-height-3xl: 41px;
+    --line-height-4xl: 50px;
+    --line-height-5xl: 56px;
+
+    /* Spacing Variables */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+    --spacing-3xl: 32px;
+    --spacing-4xl: 40px;
+    --spacing-5xl: 48px;
+    --spacing-6xl: 56px;
+
+    /* Border Radius Variables */
+    --radius-xs: 2px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 14px;
+    --radius-xl: 24px;
+
+    /* Component-specific Variables */
+    --sidebar-bg: #ffffff;
+    --sidebar-width: 14%;
+    --menu-item-bg: #ffa332;
+    --menu-item-radius: 14px;
+    --search-bg: #ffffff;
+    --search-radius: 14px;
+    --button-primary-bg: #ffa332;
+    --button-secondary-bg: #f4f9fd;
+    --input-bg: #ffffff;
+    --input-border: #d8e0ef;
+    --input-radius: 24px;
+  }
+}

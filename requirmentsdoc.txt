@@ -1,0 +1,215 @@
+
+
+# Software Requirements Specification (SRS)
+
+**Project Title:** GSL Pakistan CRM
+**Tech Stack:** React, TypeScript, Supabase
+
+---
+
+## 1. Introduction
+
+### 1.1 Purpose
+
+The purpose of this document is to define the detailed requirements for the GSL Pakistan CRM system. The CRM will centralize student recruitment, coaching, employee management, HR, accounts, B2B SaaS, marketing, task management, and support into a single web-based platform.
+
+### 1.2 Scope
+
+The CRM will serve:
+
+* **Admin users** (full access)
+* **Counselors, HR staff, Teachers, Accountants, IT staff** (role-based limited access)
+* **B2B partners** (controlled SaaS access)
+* **Students & Candidates** (limited portal access)
+
+The system will be built as a **web application** using React (frontend), TypeScript (type safety, maintainability), and Supabase (authentication, database, storage, real-time subscriptions).
+
+### 1.3 Goals
+
+* Streamline **student recruitment & visa process**
+* Manage **coaching classes, timetables, and performance**
+* Automate **employee attendance, payroll, HR onboarding**
+* Provide **accounts & financial tracking**
+* Enable **B2B agencies and branches** to onboard students securely
+* Integrate **marketing & lead capture APIs**
+* Improve **task assignment, support ticketing, and collaboration**
+
+---
+
+## 2. System Overview
+
+* **Frontend:** React + TypeScript + Tailwind CSS (UI)
+* **Backend/Database:** Supabase (PostgreSQL, Auth, Storage, Functions)
+* **Hosting/Deployment:** Vercel (Frontend), Supabase Cloud (Backend)
+* **Integrations:**
+
+  * Facebook & Instagram Lead API
+  * Google Forms API
+  * Email Notifications (via Supabase Functions + SendGrid/Mailgun)
+  * Optional: Biometric devices for attendance
+
+---
+
+## 3. User Roles & Privileges
+
+* **Admin**: Full system access, manage users, configure settings
+* **Counselor**: Manage student leads, applications, visa tracking
+* **HR**: Employee recruitment, onboarding, leave requests
+* **Teacher**: Class schedules, attendance, student progress
+* **Accountant**: Payroll, financial records, expense tracking
+* **Employee**: Task management, attendance logging
+* **IT/Support Staff**: Manage tickets and resolve technical issues
+* **B2B Partners (Agencies/Branches)**: Limited access to student leads, quotas, and reports
+
+---
+
+## 4. Functional Requirements
+
+### 4.1 User Control & Privileges
+
+* User creation with role assignment
+* Module-based access control
+* Permissions: View/Add/Edit/Delete per role
+* User activity logs with timestamps
+* Password reset, suspension/reactivation
+
+### 4.2 Dashboard (Central Console)
+
+* Real-time overview of leads, enrollments, payroll, visa statuses
+* Notifications (tasks, tickets, leads, payments)
+* Calendar of activities
+* Alerts for pending actions
+
+### 4.3 Study Abroad Module
+
+* Lead management workflow (entry → documentation → university → visa)
+* Lead assignment to counselors/agents
+* University database with search/filter
+* Document uploads (passport, academic, etc.)
+* Email communication log
+* Custom lead tags & filtering
+* Timeline view per lead
+
+### 4.4 Coaching Module
+
+* Student enrollment & fee tracking
+* Installment scheduler
+* Batch creation & timetable management (PDF export)
+* Teacher timetable
+* Attendance & performance tracking
+* Analytics (class reports, success ratios)
+
+### 4.5 Employee Management
+
+* Attendance (biometric/manual)
+* Login/Logout reporting
+* Leave request/approval
+* Performance metrics (lead conversions, teaching results, task completion)
+* Payroll management (salary slips, allowances, deductions)
+
+### 4.6 HR Module
+
+* Applicant record with resume upload
+* Job application forms
+* Interview status updates
+* Final hiring decisions
+* Onboarding checklist
+
+### 4.7 Accounts Management
+
+* Chart of accounts setup
+* Cash in/out register
+* Course sales & consultancy revenue logs
+* Expense tracking
+* Profit/Loss reports
+* Monthly financial statement (downloadable)
+* Multi-currency support
+
+### 4.8 SaaS B2B Management
+
+* Account creation for partner branches/agencies
+* Controlled module access
+* Quotas (e.g., max students/month)
+* Lead upload & status tracking
+* Admin control to activate/suspend
+
+### 4.9 Marketing Integration
+
+* Lead capture from Facebook, Instagram, Google Forms, or walk-ins
+* Source tagging (digital, referral, walk-in, organic)
+* Campaign reports (CPL, ROI calculator)
+
+### 4.10 Task Management
+
+* Task creation for employees/counselors
+* File attachments, deadlines, priority setting
+* Task progress tracking (Pending, In Progress, Completed)
+* Feedback/comments per task
+* Daily task summary reports
+
+### 4.11 Support & Ticketing
+
+* Ticket creation (student, staff, B2B)
+* Category-based ticketing (technical, visa delay, fee issue)
+* Status workflow (Open → Review → Resolved)
+* Ticket comments & update history
+* Auto email on updates
+* Staff assignment to tickets
+
+---
+
+## 5. Non-Functional Requirements
+
+* **Performance:** System must handle 10,000+ records with real-time updates.
+* **Security:** Role-based access, Supabase Auth, JWT sessions, row-level security.
+* **Usability:** Mobile-responsive UI with simple navigation.
+* **Scalability:** Support future multi-branch SaaS usage.
+* **Reliability:** 99.9% uptime with cloud hosting.
+* **Maintainability:** Modular React components, TypeScript typing, Supabase migrations.
+
+---
+
+## 6. Data Models (Supabase)
+
+* **Users**: id, name, email, role, status
+* **Leads**: id, personal info, documents, assigned counselor, status, timeline
+* **Students**: id, enrollment data, fees, batch, attendance, performance
+* **Employees**: id, role, attendance, payroll, performance metrics
+* **Accounts**: id, transaction type, amount, category, currency, date
+* **Tasks**: id, assigned user, priority, status, comments, deadline
+* **Tickets**: id, category, status, comments, assigned staff
+* **Universities**: id, name, country, ranking, notes
+* **B2B Accounts**: id, agency name, quota, status
+
+(ERD can be added in diagrams)
+
+---
+
+## 7. App Structure & Navigation
+
+* **Login & Authentication**
+* **Admin Dashboard**
+* **Modules (Sidebar navigation)**
+
+  * Study Abroad
+  * Coaching
+  * Employee Management
+  * HR
+  * Accounts
+  * SaaS B2B
+  * Marketing
+  * Tasks
+  * Support/Ticketing
+* **Reports & Analytics**
+* **Settings (Roles, Permissions, Configurations)**
+
+---
+
+## 8. Deployment Strategy
+
+* **Frontend:** Deployed on Vercel with CI/CD pipeline
+* **Backend (Supabase):** Managed cloud PostgreSQL, authentication, file storage
+* **Integrations:** Serverless functions in Supabase for API calls & automation
+* **Monitoring:** Supabase logs + Vercel analytics + third-party (Sentry)
+
+

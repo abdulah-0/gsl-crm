@@ -1,0 +1,19 @@
+{
+  "name": "GSL Pakistan CRM",
+  "short_name": "GSL CRM",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#646cff",
+  "description": "GSL Pakistan CRM dashboard and modules.",
+  "icons": [
+    {
+      "src": "/images/img_illustration.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
+
