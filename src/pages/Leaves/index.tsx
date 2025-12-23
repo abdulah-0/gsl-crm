@@ -1,539 +1,479 @@
 /**
- * @fileoverview Leaves Management Page
+ * @fileoverview Leaves Self-Service Portal
  * 
- * Employee leave request and approval system for the GSL CRM.
- * Provides calendar view and summary of employee leaves.
+ * Employee leave application portal for the GSL CRM.
+ * Allows users to view their leave balance, apply for leave, and track request status.
  * 
  * **Key Features:**
- * - Leave request submission (employees and admins)
- * - Leave types: Sick, Remote (Work from Home), Vacation
- * - Calendar view with color-coded leave visualization
- * - Summary view with employee leave totals
- * - Admin approval/rejection workflow
- * - Month navigation
+ * - Leave balance display (CL, SL, AL)
+ * - Leave request submission
+ * - Personal leave history with status tracking
  * - Real-time updates via Supabase
+ * 
+ * **Leave Types:**
+ * - CL: Casual Leave
+ * - SL: Sick Leave
+ * - AL: Annual Leave
  * 
  * **Leave Status:**
  * - Pending: Awaiting approval
- * - Approved: Filled circle in calendar
- * - Rejected: Not shown in calendar
+ * - Approved: Approved by HR/Admin
+ * - Rejected: Rejected by HR/Admin
  * 
  * **Access Control:**
- * - Super Admin/Admin: Can approve/reject, add leaves for any employee
- * - Employees: Can request leaves for themselves
- * 
- * **Schema Support:**
- * - Supports both legacy (employee_id) and modern (employee_email) schemas
+ * - All authenticated users can access this page
+ * - Users can only view and manage their own leaves
+ * - Approval/rejection handled in HRM module
  * 
  * @module pages/Leaves
  */
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 
 // Types
-type Role = 'super' | 'admin' | 'other';
-type LeaveType = 'Sick' | 'Remote' | 'Vacation';
+type LeaveType = 'CL' | 'SL' | 'AL';
 type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
-interface LeaveRec {
-  id: string;
+
+interface LeaveRequest {
+  id: number;
   employee_email: string;
-  type: LeaveType;
-  start_date: string; // ISO date
-  end_date: string;   // ISO date
+  leave_type?: string | null;
+  type?: string | null; // legacy field
+  start_date: string;
+  end_date: string;
   status: LeaveStatus;
   reason?: string | null;
   created_at?: string;
-  created_by?: string | null;
-}
-interface Employee {
-  email: string;
-  full_name?: string;
+  manager_approved_by?: string | null;
+  hr_approved_by?: string | null;
+  ceo_approved_by?: string | null;
 }
 
-const COLORS: Record<LeaveType, { fill: string; outline: string }> = {
-  Sick: { fill: 'bg-red-500', outline: 'border-red-500' },
-  Remote: { fill: 'bg-blue-500', outline: 'border-blue-500' },
-  Vacation: { fill: 'bg-emerald-500', outline: 'border-emerald-500' },
-};
+interface LeaveBalance {
+  employee_email: string;
+  cl_entitlement?: number | null;
+  sl_entitlement?: number | null;
+  al_entitlement?: number | null;
+  cl_availed?: number | null;
+  sl_availed?: number | null;
+  al_availed?: number | null;
+}
 
 const LeavesPage: React.FC = () => {
-  const [role, setRole] = useState<Role>('other');
-  const isAdmin = role === 'super' || role === 'admin';
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+  const [myLeaves, setMyLeaves] = useState<LeaveRequest[]>([]);
+  const [leaveBalance, setLeaveBalance] = useState<LeaveBalance | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Month navigation
-  const today = new Date();
-  const [year, setYear] = useState<number>(today.getFullYear());
-  const [month, setMonth] = useState<number>(today.getMonth()); // 0-based
-  const daysInMonth = useMemo(() => new Date(year, month + 1, 0).getDate(), [year, month]);
-  const monthStartISO = useMemo(() => new Date(year, month, 1).toISOString().slice(0, 10), [year, month]);
-  const monthEndISO = useMemo(() => new Date(year, month, daysInMonth).toISOString().slice(0, 10), [year, month, daysInMonth]);
-
-  const [tab, setTab] = useState<'summary' | 'calendar'>('summary');
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [leaves, setLeaves] = useState<LeaveRec[]>([]);
-  const [search, setSearch] = useState('');
-
-  // Request modal
-  const [requestOpen, setRequestOpen] = useState(false);
-  const [reqType, setReqType] = useState<LeaveType>('Sick');
-  const [reqStart, setReqStart] = useState<string>('');
-  const [reqEnd, setReqEnd] = useState<string>('');
-  const [reqReason, setReqReason] = useState<string>('');
-  const [reqForEmail, setReqForEmail] = useState<string>(''); // admin only
+  // Leave application form state
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [applyType, setApplyType] = useState<LeaveType>('CL');
+  const [applyStart, setApplyStart] = useState('');
+  const [applyEnd, setApplyEnd] = useState('');
+  const [applyReason, setApplyReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  // Autocomplete for admin selecting employee (by name or email)
-  const [showEmpSuggest, setShowEmpSuggest] = useState(false);
-  const suggestBoxRef = useRef<HTMLDivElement | null>(null);
-  const empSuggestions = useMemo(() => {
-    const q = reqForEmail.trim().toLowerCase();
-    if (!q) return [] as Employee[];
-    return employees
-      .filter(e => ((e.full_name || e.email) || '').toLowerCase().includes(q) || e.email.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [employees, reqForEmail]);
-  useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      if (!suggestBoxRef.current) return;
-      if (!suggestBoxRef.current.contains(e.target as Node)) setShowEmpSuggest(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, []);
 
-
-  // Manage modal (approve/reject)
-  const [manageEmail, setManageEmail] = useState<string | null>(null);
-
-  // Role detection
+  // Get current user
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
         const { data } = await supabase.auth.getUser();
         const email = data.user?.email || '';
-        const { data: u } = await supabase.from('dashboard_users').select('role,email,full_name').eq('email', email).maybeSingle();
-        const r = (u?.role || (data.user as any)?.app_metadata?.role || (data.user as any)?.user_metadata?.role || '').toString().toLowerCase();
-        if (r.includes('super')) mounted && setRole('super');
-        else if (r.includes('admin')) mounted && setRole('admin');
-        else mounted && setRole('other');
-      } catch {
-        mounted && setRole('other');
+        if (mounted) setCurrentUserEmail(email);
+      } catch (err) {
+        console.error('Error getting user:', err);
       }
     })();
     return () => { mounted = false; };
   }, []);
 
-  // Load employees
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const { data: auth } = await supabase.auth.getUser();
-        const me = auth.user?.email || '';
-        if (isAdmin) {
-          const { data } = await supabase.from('dashboard_users').select('email,full_name').order('full_name', { ascending: true });
-          mounted && setEmployees((data || []).map((d: any) => ({ email: d.email, full_name: d.full_name })));
-        } else {
-          const { data } = await supabase.from('dashboard_users').select('email,full_name').eq('email', me).maybeSingle();
-          mounted && setEmployees(data ? [{ email: data.email, full_name: data.full_name }] : [{ email: me }]);
-        }
-      } catch { }
-    })();
-  }, [isAdmin]);
+  // Load user's leaves
+  const loadMyLeaves = async () => {
+    if (!currentUserEmail) return;
+    try {
+      const { data, error } = await supabase
+        .from('leaves')
+        .select('id, employee_email, leave_type, type, start_date, end_date, status, reason, created_at, manager_approved_by, hr_approved_by, ceo_approved_by')
+        .eq('employee_email', currentUserEmail)
+        .order('created_at', { ascending: false });
 
-  // Load leaves for month
-  const loadLeaves = async () => {
-    const { data, error } = await supabase
-      .from('leaves')
-      .select('*')
-      .lte('start_date', monthEndISO)
-      .gte('end_date', monthStartISO);
-    if (!error) setLeaves((data as any) || []);
+      if (!error) {
+        setMyLeaves((data as LeaveRequest[]) || []);
+      }
+    } catch (err) {
+      console.error('Error loading leaves:', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Load leave balance
+  const loadLeaveBalance = async () => {
+    if (!currentUserEmail) return;
+    try {
+      const { data, error } = await supabase
+        .from('employee_leave_balances')
+        .select('employee_email, cl_entitlement, sl_entitlement, al_entitlement, cl_availed, sl_availed, al_availed')
+        .eq('employee_email', currentUserEmail)
+        .maybeSingle();
+
+      if (!error && data) {
+        setLeaveBalance(data as LeaveBalance);
+      }
+    } catch (err) {
+      console.error('Error loading leave balance:', err);
+    }
+  };
+
   useEffect(() => {
-    loadLeaves();
-    const ch = supabase
-      .channel('realtime:leaves')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, loadLeaves)
+    if (currentUserEmail) {
+      loadMyLeaves();
+      loadLeaveBalance();
+    }
+  }, [currentUserEmail]);
+
+  // Real-time subscription
+  useEffect(() => {
+    if (!currentUserEmail) return;
+
+    const channel = supabase
+      .channel('realtime:my-leaves')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'leaves',
+        filter: `employee_email=eq.${currentUserEmail}`
+      }, () => {
+        loadMyLeaves();
+        loadLeaveBalance();
+      })
       .subscribe();
-    return () => { try { supabase.removeChannel(ch); } catch { } };
-  }, [monthStartISO, monthEndISO]);
 
-  const filteredEmployees = useMemo(() => {
-    const s = search.toLowerCase();
-    return employees.filter(e => (e.full_name || e.email).toLowerCase().includes(s));
-  }, [employees, search]);
+    return () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch (err) {
+        console.error('Error removing channel:', err);
+      }
+    };
+  }, [currentUserEmail]);
 
-  // Index leaves by employee and by day
-  const leavesByEmployee = useMemo(() => {
-    const map: Record<string, LeaveRec[]> = {};
-    for (const lv of leaves) {
-      if (!map[lv.employee_email]) map[lv.employee_email] = [];
-      map[lv.employee_email].push(lv);
-    }
-    return map;
-  }, [leaves]);
-
-  // Aggregations per employee for current month
-  const totalsByEmployee = useMemo(() => {
-    const res: Record<string, { Sick: number; Remote: number; Vacation: number }> = {} as any;
-    const monthStart = new Date(monthStartISO);
-    const monthEnd = new Date(monthEndISO);
-    for (const lv of leaves) {
-      const s = new Date(lv.start_date);
-      const e = new Date(lv.end_date);
-      const from = s > monthStart ? s : monthStart;
-      const to = e < monthEnd ? e : monthEnd;
-      if (to < from) continue;
-      const days = Math.floor((to.getTime() - from.getTime()) / 86400000) + 1;
-      if (!res[lv.employee_email]) res[lv.employee_email] = { Sick: 0, Remote: 0, Vacation: 0 } as any;
-      (res[lv.employee_email] as any)[lv.type] += days;
-    }
-    return res;
-  }, [leaves, monthStartISO, monthEndISO]);
-
-  const prevMonth = () => {
-    const d = new Date(year, month, 1);
-    d.setMonth(d.getMonth() - 1);
-    setYear(d.getFullYear());
-    setMonth(d.getMonth());
-  };
-  const nextMonth = () => {
-    const d = new Date(year, month, 1);
-    d.setMonth(d.getMonth() + 1);
-    setYear(d.getFullYear());
-    setMonth(d.getMonth());
-  };
-
-  const onSubmitRequest = async (e: React.FormEvent) => {
+  // Submit leave application
+  const handleApplyLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reqStart || !reqEnd) { alert('Please select start and end dates'); return; }
+    if (!applyStart || !applyEnd) {
+      alert('Please select start and end dates');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const me = auth.user?.email || '';
-      const target = (isAdmin && reqForEmail ? reqForEmail : me).trim();
-      if (!target) {
-        alert('Could not determine employee email. Please sign out and sign in again.');
-        return;
-      }
-
-      // 1) Best-effort: ensure we have employees.id for this request (legacy schema support)
-      let employeeId: number | null = null;
-      try {
-        const { data: eIns, error: eErr } = await supabase
-          .from('employees')
-          .insert({ joined_on: new Date().toISOString().slice(0, 10) })
-          .select('id')
-          .single();
-        if (!eErr && (eIns as any)?.id) employeeId = Number((eIns as any).id);
-      } catch {
-        // ignore – we'll still try email-based schema
-      }
-
-      const statusInit: LeaveStatus | string = 'Pending';
-      const reasonVal = reqReason || null;
-      const typeLegacy: LeaveType | string = reqType;
-
-      const tryInsert = async (base: any) => {
-        // include meta fields where schema supports them
-        const withMeta = { ...base, created_by: me, type: typeLegacy };
-        let res = await supabase.from('leaves').insert(withMeta as any, { returning: 'minimal' } as any);
-        let error = res.error as any;
-        const msg = String(error?.message || '').toLowerCase();
-
-        if (error && (error.code === '42703' || msg.includes('does not exist'))) {
-          // Drop unknown meta columns and retry for legacy schemas
-          const minimal = { ...base };
-          const res2 = await supabase.from('leaves').insert(minimal as any, { returning: 'minimal' } as any);
-          error = res2.error as any;
-          const msg2 = String(error?.message || '').toLowerCase();
-          if (error && msg2.includes('status') && msg2.includes('check')) {
-            // Some schemas require lowercase status
-            const lower = { ...minimal, status: String((minimal as any).status || '').toLowerCase() };
-            const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
-            error = res3.error as any;
-          }
-        } else if (error && msg.includes('status') && msg.includes('check')) {
-          // Retry with lowercase status but keep meta fields when possible
-          const lower = { ...base, status: String((base as any).status || '').toLowerCase(), created_by: me, type: typeLegacy };
-          const res3 = await supabase.from('leaves').insert(lower as any, { returning: 'minimal' } as any);
-          error = res3.error as any;
-        }
-
-        return error;
+      const payload: any = {
+        employee_email: currentUserEmail,
+        leave_type: applyType,
+        start_date: applyStart,
+        end_date: applyEnd,
+        status: 'Pending',
+        reason: applyReason || null,
+        created_by: currentUserEmail,
       };
 
-      // 2) Prefer employee_id variant when we have an employees.id
-      let err1: any = null;
-      if (employeeId) {
-        const payloadId = {
-          employee_id: employeeId,
-          start_date: reqStart,
-          end_date: reqEnd,
-          status: statusInit,
-          reason: reasonVal,
-        };
-        err1 = await tryInsert(payloadId);
-      }
+      const { error } = await supabase.from('leaves').insert(payload);
 
-      // 3) Fallback to employee_email variant (Supabase-native schema)
-      let err2: any = null;
-      if (!employeeId || err1) {
-        const payloadEmail = {
-          employee_email: target,
-          start_date: reqStart,
-          end_date: reqEnd,
-          status: statusInit,
-          reason: reasonVal,
-        };
-        err2 = await tryInsert(payloadEmail);
-      }
+      if (error) throw error;
 
-      const finalErr = employeeId ? err1 && err2 : err2;
-      if (finalErr) throw finalErr;
+      // Reset form
+      setShowApplyModal(false);
+      setApplyStart('');
+      setApplyEnd('');
+      setApplyReason('');
+      setApplyType('CL');
 
-      setRequestOpen(false);
-      setReqStart(''); setReqEnd(''); setReqReason(''); setReqForEmail(''); setReqType('Sick');
-      await loadLeaves();
+      // Reload data
+      await loadMyLeaves();
+      await loadLeaveBalance();
+
+      alert('Leave request submitted successfully!');
     } catch (err: any) {
-      // eslint-disable-next-line no-console
-      console.error('Leave request insert failed', { message: err?.message, code: (err as any)?.code, details: (err as any)?.details, hint: (err as any)?.hint });
-      const msg = String(err?.message || '').toLowerCase();
-      if (msg.includes('employee_id') && (msg.includes('not-null') || msg.includes('not null'))) {
-        alert('This database requires employee_id. Please ensure you are added as an employee in the Employees/HRM section, then try again.');
-      } else {
-        alert(err?.message || 'Failed to submit request');
-      }
+      console.error('Error submitting leave:', err);
+      alert(err?.message || 'Failed to submit leave request');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const approveReject = async (leaveId: string, action: 'Approved' | 'Rejected') => {
-    if (!isAdmin) return;
-    const { error } = await supabase.from('leaves').update({ status: action }).eq('id', leaveId);
-    if (!error) await loadLeaves();
+  // Calculate leave balance
+  const getBalance = (type: 'CL' | 'SL' | 'AL') => {
+    if (!leaveBalance) return { entitled: 0, availed: 0, remaining: 0 };
+
+    const entitled = type === 'CL' ? (leaveBalance.cl_entitlement || 0) :
+      type === 'SL' ? (leaveBalance.sl_entitlement || 0) :
+        (leaveBalance.al_entitlement || 0);
+
+    const availed = type === 'CL' ? (leaveBalance.cl_availed || 0) :
+      type === 'SL' ? (leaveBalance.sl_availed || 0) :
+        (leaveBalance.al_availed || 0);
+
+    return {
+      entitled,
+      availed,
+      remaining: entitled - availed
+    };
   };
+
+  // Format date
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Get leave type display name
+  const getLeaveTypeName = (leave: LeaveRequest) => {
+    return leave.leave_type || leave.type || 'N/A';
+  };
+
+  // Get status badge color
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'approved':
+        return 'bg-green-100 text-green-800';
+      case 'rejected':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-yellow-100 text-yellow-800';
+    }
+  };
+
+  const clBalance = getBalance('CL');
+  const slBalance = getBalance('SL');
+  const alBalance = getBalance('AL');
 
   return (
     <>
       <Helmet>
-        <title>Leaves - GSL Pakistan CRM</title>
+        <title>My Leaves - GSL Pakistan CRM</title>
       </Helmet>
       <main className="w-full min-h-screen bg-background-main flex">
         <div className="w-[14%] min-w-[200px] hidden lg:block"><Sidebar /></div>
         <div className="flex-1 flex flex-col px-4 sm:px-6 lg:px-8">
           <Header />
 
-          {/* Header */}
+          {/* Page Header */}
           <section className="mt-8 lg:mt-12">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Leaves</h1>
-              <div className="flex items-center gap-2">
-                <button onClick={prevMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">◀</button>
-                <div className="font-semibold min-w-[8rem] sm:w-40 text-center px-2">{new Date(year, month, 1).toLocaleString(undefined, { month: 'long', year: 'numeric' })}</div>
-                <button onClick={nextMonth} className="px-2 py-1 bg-white border rounded hover:bg-gray-50 text-text-secondary">▶</button>
-                <button onClick={() => setRequestOpen(true)} className="ml-2 px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">+ Add Request</button>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold leading-4xl text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>
+                My Leaves
+              </h1>
+              <button
+                onClick={() => setShowApplyModal(true)}
+                className="px-4 py-2 rounded bg-[#ffa332] text-white font-semibold hover:bg-[#ff9520] transition-colors"
+              >
+                + Apply for Leave
+              </button>
+            </div>
+
+            {/* Leave Balance Cards */}
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Casual Leave */}
+              <div className="bg-white border rounded-lg shadow-sm p-4">
+                <div className="text-sm text-text-secondary font-semibold">Casual Leave (CL)</div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-[#ffa332]">{clBalance.remaining}</span>
+                  <span className="text-sm text-text-secondary">/ {clBalance.entitled} days</span>
+                </div>
+                <div className="mt-1 text-xs text-text-secondary">
+                  {clBalance.availed} days used
+                </div>
+              </div>
+
+              {/* Sick Leave */}
+              <div className="bg-white border rounded-lg shadow-sm p-4">
+                <div className="text-sm text-text-secondary font-semibold">Sick Leave (SL)</div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-blue-600">{slBalance.remaining}</span>
+                  <span className="text-sm text-text-secondary">/ {slBalance.entitled} days</span>
+                </div>
+                <div className="mt-1 text-xs text-text-secondary">
+                  {slBalance.availed} days used
+                </div>
+              </div>
+
+              {/* Annual Leave */}
+              <div className="bg-white border rounded-lg shadow-sm p-4">
+                <div className="text-sm text-text-secondary font-semibold">Annual Leave (AL)</div>
+                <div className="mt-2 flex items-baseline gap-2">
+                  <span className="text-3xl font-bold text-emerald-600">{alBalance.remaining}</span>
+                  <span className="text-sm text-text-secondary">/ {alBalance.entitled} days</span>
+                </div>
+                <div className="mt-1 text-xs text-text-secondary">
+                  {alBalance.availed} days used
+                </div>
               </div>
             </div>
 
-            {/* Tabs */}
-            <div className="mt-4 inline-flex bg-white border rounded-lg p-1">
-              <button onClick={() => setTab('summary')} className={`px-3 py-1 rounded-md text-sm font-semibold ${tab === 'summary' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Employees’ Leaves</button>
-              <button onClick={() => setTab('calendar')} className={`ml-1 px-3 py-1 rounded-md text-sm font-semibold ${tab === 'calendar' ? 'bg-[#ffa332] text-white' : 'text-text-secondary'}`}>Calendar</button>
-            </div>
-
-            {/* Search */}
-            <div className="mt-4">
-              <div className="bg-white border rounded-lg shadow-sm p-3">
-                <input className="border rounded px-3 py-2 w-full md:w-96" placeholder="Search employees" value={search} onChange={e => setSearch(e.target.value)} />
+            {/* My Leave Requests */}
+            <div className="mt-8 bg-white border rounded-lg shadow-sm">
+              <div className="p-4 border-b">
+                <h2 className="text-lg font-semibold text-text-primary">My Leave Requests</h2>
               </div>
-            </div>
-
-            {/* Summary view */}
-            {tab === 'summary' && (
-              <div className="mt-6 bg-white border rounded-lg shadow-sm">
-                <div className="p-4">
-                  <div className="text-sm text-text-secondary">{filteredEmployees.length} employees</div>
-                  <div className="mt-2 overflow-x-auto">
+              <div className="p-4">
+                {loading ? (
+                  <div className="text-center py-8 text-text-secondary">Loading...</div>
+                ) : myLeaves.length === 0 ? (
+                  <div className="text-center py-8 text-text-secondary">
+                    No leave requests yet. Click "Apply for Leave" to submit your first request.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr className="text-left text-text-secondary">
-                          <th className="p-2">Employee</th>
-                          <th className="p-2">Sick Leaves</th>
-                          <th className="p-2">Work Remotely</th>
-                          <th className="p-2">Vacation</th>
-                          <th className="p-2 text-right">Actions</th>
+                          <th className="p-3">Type</th>
+                          <th className="p-3">Start Date</th>
+                          <th className="p-3">End Date</th>
+                          <th className="p-3">Reason</th>
+                          <th className="p-3">Status</th>
+                          <th className="p-3">Applied On</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {filteredEmployees.map(emp => {
-                          const t = totalsByEmployee[emp.email] || { Sick: 0, Remote: 0, Vacation: 0 };
-                          return (
-                            <tr key={emp.email}>
-                              <td className="p-2 font-semibold text-text-primary">{emp.full_name || emp.email}</td>
-                              <td className="p-2">{t.Sick}</td>
-                              <td className="p-2">{t.Remote}</td>
-                              <td className="p-2">{t.Vacation}</td>
-                              <td className="p-2 text-right">
-                                <button onClick={() => setManageEmail(emp.email)} className="text-blue-600 hover:underline">Manage</button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {filteredEmployees.length === 0 && (
-                          <tr><td colSpan={5} className="p-4 text-center text-text-secondary">No employees</td></tr>
-                        )}
+                        {myLeaves.map(leave => (
+                          <tr key={leave.id} className="hover:bg-gray-50">
+                            <td className="p-3">
+                              <span className="font-semibold text-text-primary">
+                                {getLeaveTypeName(leave)}
+                              </span>
+                            </td>
+                            <td className="p-3">{formatDate(leave.start_date)}</td>
+                            <td className="p-3">{formatDate(leave.end_date)}</td>
+                            <td className="p-3 max-w-xs truncate">
+                              {leave.reason || '-'}
+                            </td>
+                            <td className="p-3">
+                              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(leave.status)}`}>
+                                {leave.status}
+                              </span>
+                            </td>
+                            <td className="p-3 text-text-secondary">
+                              {leave.created_at ? formatDate(leave.created_at) : '-'}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
+                )}
               </div>
-            )}
-
-            {/* Calendar view */}
-            {tab === 'calendar' && (
-              <div className="mt-4 border rounded-lg bg-white shadow-sm overflow-x-auto">
-                <div className="min-w-[900px]">
-                  <div className="grid" style={{ gridTemplateColumns: `240px repeat(${daysInMonth}, minmax(28px,1fr))` }}>
-                    {/* Header row */}
-                    <div className="sticky left-0 z-10 bg-white border-b p-2 font-semibold">Employee</div>
-                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
-                      <div key={`h${d}`} className="border-b text-center text-[10px] sm:text-xs p-1 text-text-secondary">{d}</div>
-                    ))}
-                    {/* Rows */}
-                    {filteredEmployees.map(emp => {
-                      const empLeaves = leavesByEmployee[emp.email] || [];
-                      return (
-                        <React.Fragment key={emp.email}>
-                          <div className="sticky left-0 z-10 bg-white border-r p-2 text-sm font-semibold">{emp.full_name || emp.email}</div>
-                          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                            const date = new Date(year, month, day).toISOString().slice(0, 10);
-                            const lv = empLeaves.find(l => l.start_date <= date && l.end_date >= date);
-                            if (!lv) return <div key={day} className="border h-7 sm:h-8" />;
-                            const typ = COLORS[lv.type];
-                            const cls = lv.status === 'Approved' ? `${typ.fill}` : `border ${typ.outline}`;
-                            return <div key={day} className={`border h-7 sm:h-8 flex items-center justify-center`}>
-                              <div title={`${lv.type} (${lv.status})`} className={`h-3 w-3 sm:h-4 sm:w-4 rounded ${cls}`} />
-                            </div>;
-                          })}
-                        </React.Fragment>
-                      );
-                    })}
-                    {filteredEmployees.length === 0 && (
-                      <div className="col-span-full p-4 text-center text-text-secondary">No employees</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
+            </div>
           </section>
         </div>
       </main>
 
-      {/* Request Modal */}
-      {requestOpen && (
+      {/* Apply Leave Modal */}
+      {showApplyModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <form onSubmit={onSubmitRequest} className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-lg space-y-3">
-            <div className="text-lg font-semibold">New Leave Request</div>
-            {isAdmin && (
-              <div className="relative" ref={suggestBoxRef as any}>
-                <label className="text-sm font-semibold">For (name or email)</label>
-                <input
-                  className="mt-1 w-full border rounded px-2 py-1"
-                  placeholder="Search name or email"
-                  value={reqForEmail}
-                  onChange={e => { setReqForEmail(e.target.value); setShowEmpSuggest(true); }}
-                  onFocus={() => setShowEmpSuggest(true)}
-                />
-                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length > 0 && (
-                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow max-h-60 overflow-auto">
-                    {empSuggestions.map(emp => (
-                      <div key={emp.email}
-                        className="px-2 py-1 hover:bg-gray-50 cursor-pointer text-sm"
-                        onClick={() => { setReqForEmail(emp.email); setShowEmpSuggest(false); }}>
-                        <span className="font-medium">{emp.full_name || emp.email}</span>
-                        {emp.full_name && <span className="text-text-secondary"> — {emp.email}</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {showEmpSuggest && reqForEmail.trim() && empSuggestions.length === 0 && (
-                  <div className="absolute z-50 left-0 right-0 mt-1 bg-white border rounded shadow px-2 py-2 text-sm text-text-secondary">
-                    No matches
-                  </div>
-                )}
-              </div>
-            )}
+          <form onSubmit={handleApplyLeave} className="bg-white rounded-lg border shadow-lg p-6 w-[92%] max-w-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-text-primary">Apply for Leave</h3>
+              <button
+                type="button"
+                onClick={() => setShowApplyModal(false)}
+                className="text-text-secondary hover:text-text-primary"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Leave Type */}
             <div>
-              <label className="text-sm font-semibold">Type</label>
-              <select className="mt-1 w-full border rounded px-2 py-1" value={reqType} onChange={e => setReqType(e.target.value as LeaveType)}>
-                <option value="Sick">Sick Leave</option>
-                <option value="Remote">Work Remotely</option>
-                <option value="Vacation">Vacation</option>
+              <label className="block text-sm font-semibold text-text-primary mb-1">
+                Leave Type
+              </label>
+              <select
+                className="w-full border rounded px-3 py-2"
+                value={applyType}
+                onChange={e => setApplyType(e.target.value as LeaveType)}
+                required
+              >
+                <option value="CL">Casual Leave (CL)</option>
+                <option value="SL">Sick Leave (SL)</option>
+                <option value="AL">Annual Leave (AL)</option>
               </select>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+            {/* Date Range */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-semibold">Start date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqStart} onChange={e => setReqStart(e.target.value)} />
+                <label className="block text-sm font-semibold text-text-primary mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={applyStart}
+                  onChange={e => setApplyStart(e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="text-sm font-semibold">End date</label>
-                <input type="date" className="mt-1 w-full border rounded px-2 py-1" value={reqEnd} onChange={e => setReqEnd(e.target.value)} />
+                <label className="block text-sm font-semibold text-text-primary mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={applyEnd}
+                  onChange={e => setApplyEnd(e.target.value)}
+                  min={applyStart}
+                  required
+                />
               </div>
             </div>
+
+            {/* Reason */}
             <div>
-              <label className="text-sm font-semibold">Reason (optional)</label>
-              <textarea className="mt-1 w-full border rounded px-2 py-1" rows={3} value={reqReason} onChange={e => setReqReason(e.target.value)} />
+              <label className="block text-sm font-semibold text-text-primary mb-1">
+                Reason (Optional)
+              </label>
+              <textarea
+                className="w-full border rounded px-3 py-2"
+                rows={3}
+                value={applyReason}
+                onChange={e => setApplyReason(e.target.value)}
+                placeholder="Provide a reason for your leave request..."
+              />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setRequestOpen(false)} className="px-3 py-2 rounded border">Cancel</button>
-              <button disabled={submitting} className="px-3 py-2 rounded bg-[#ffa332] text-white font-semibold">Submit</button>
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowApplyModal(false)}
+                className="px-4 py-2 rounded border hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 rounded bg-[#ffa332] text-white font-semibold hover:bg-[#ff9520] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Submitting...' : 'Submit Request'}
+              </button>
             </div>
           </form>
-        </div>
-      )}
-
-      {/* Manage Modal */}
-      {manageEmail && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setManageEmail(null)}>
-          <div className="bg-white rounded-lg border shadow-lg p-4 w-[92%] max-w-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-semibold">Manage Leaves — {manageEmail}</div>
-              <button onClick={() => setManageEmail(null)} className="text-sm">✕</button>
-            </div>
-            {!isAdmin && <div className="text-sm text-red-600 mt-1">Only Admin/Super Admin can approve or reject.</div>}
-            <div className="mt-3 max-h-[60vh] overflow-auto divide-y">
-              {leaves.filter(l => l.employee_email === manageEmail).map(lv => (
-                <div key={lv.id} className="py-2 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="font-semibold text-sm">{lv.type} — {lv.status}</div>
-                    <div className="text-xs text-text-secondary">{lv.start_date} → {lv.end_date}</div>
-                    {lv.reason && <div className="text-xs text-text-secondary">{lv.reason}</div>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`h-3 w-3 rounded ${COLORS[lv.type].fill}`} />
-                    {isAdmin && (
-                      <>
-                        <button onClick={() => approveReject(lv.id, 'Approved')} className="px-2 py-1 text-xs rounded border border-emerald-500 text-emerald-700">Approve</button>
-                        <button onClick={() => approveReject(lv.id, 'Rejected')} className="px-2 py-1 text-xs rounded border border-red-500 text-red-700">Reject</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {leaves.filter(l => l.employee_email === manageEmail).length === 0 && (
-                <div className="py-6 text-center text-text-secondary">No requests</div>
-              )}
-            </div>
-          </div>
         </div>
       )}
     </>
@@ -541,4 +481,3 @@ const LeavesPage: React.FC = () => {
 };
 
 export default LeavesPage;
-
