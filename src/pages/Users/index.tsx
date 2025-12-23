@@ -55,6 +55,7 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'universities', label: 'Universities' },
   { id: 'employees', label: 'Employees' },
   { id: 'teachers', label: 'Teachers' },
+  { id: 'leaves', label: 'Leaves' },
   { id: 'messenger', label: 'Messenger' },
   { id: 'info-portal', label: 'Info Portal' },
   { id: 'reports', label: 'Reports' },
