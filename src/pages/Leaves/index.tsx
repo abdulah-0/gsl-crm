@@ -178,7 +178,7 @@ const LeavesPage: React.FC = () => {
         leave_type: applyType,
         start_date: applyStart,
         end_date: applyEnd,
-        status: 'Pending',
+        status: 'pending',
         reason: applyReason || null,
         created_by: currentUserEmail,
       };
