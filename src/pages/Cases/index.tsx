@@ -273,7 +273,7 @@ const Cases: React.FC = () => {
   const [formPriority, setFormPriority] = useState<Priority>('Medium');
   // Student Information Form (flattened)
   const [sf, setSf] = useState<any>({
-    basic_name: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '', basic_student_sign: '',
+    basic_name: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '', basic_passport_number: '',
     ug_olevels: false, ug_olevels_year: '', ug_olevels_grades: '', ug_alevels: false, ug_alevels_year: '', ug_alevels_grades: '', ug_matric: false, ug_matric_year: '', ug_matric_grades: '', ug_hssc: false, ug_hssc_year: '', ug_hssc_grades: '', ug_other: '',
     pg_bachelors: false, pg_bachelors_university: '', pg_bachelors_course: '', pg_bachelors_year: '', pg_bachelors_grades: '', pg_masters: false, pg_masters_university: '', pg_masters_course: '', pg_masters_year: '', pg_masters_grades: '',
     eng_ielts: false, eng_toefl: false, eng_pte: false, eng_duolingo: false, eng_other: '', eng_score: '',
@@ -516,7 +516,7 @@ const Cases: React.FC = () => {
       setShowAddCase(false);
       setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium'); setSelectedStudentId('');
       setSf({
-        basic_name: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '', basic_student_sign: '',
+        basic_name: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '', basic_passport_number: '',
         ug_olevels: false, ug_olevels_year: '', ug_olevels_grades: '', ug_alevels: false, ug_alevels_year: '', ug_alevels_grades: '', ug_matric: false, ug_matric_year: '', ug_matric_grades: '', ug_hssc: false, ug_hssc_year: '', ug_hssc_grades: '', ug_other: '',
         pg_bachelors: false, pg_bachelors_university: '', pg_bachelors_course: '', pg_bachelors_year: '', pg_bachelors_grades: '', pg_masters: false, pg_masters_university: '', pg_masters_course: '', pg_masters_year: '', pg_masters_grades: '',
         eng_ielts: false, eng_toefl: false, eng_pte: false, eng_duolingo: false, eng_other: '', eng_score: '',
@@ -1028,7 +1028,7 @@ const Cases: React.FC = () => {
                 <label><span className="text-text-secondary">Email</span><input type="email" value={sf.basic_email} onChange={e => setSf({ ...sf, basic_email: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                 <label><span className="text-text-secondary">Nationality</span><input value={sf.basic_nationality} onChange={e => setSf({ ...sf, basic_nationality: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                 <label><span className="text-text-secondary">Phone No</span><input value={sf.basic_phone} onChange={e => setSf({ ...sf, basic_phone: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-                <label className="sm:col-span-2 lg:col-span-1"><span className="text-text-secondary">Student Sign</span><input value={sf.basic_student_sign} onChange={e => setSf({ ...sf, basic_student_sign: e.target.value })} className="mt-1 w-full border rounded p-2" placeholder="Signature text" /></label>
+                <label className="sm:col-span-2 lg:col-span-1"><span className="text-text-secondary">Passport Number</span><input value={sf.basic_passport_number} onChange={e => setSf({ ...sf, basic_passport_number: e.target.value })} className="mt-1 w-full border rounded p-2" placeholder="Passport number" /></label>
               </div>
             </div>
 
