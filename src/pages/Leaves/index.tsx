@@ -14,6 +14,7 @@
  * - CL: Casual Leave
  * - SL: Sick Leave
  * - AL: Annual Leave
+ * - SHL: Short Leave
  * 
  * **Leave Status:**
  * - Pending: Awaiting approval
@@ -35,7 +36,7 @@ import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 
 // Types
-type LeaveType = 'CL' | 'SL' | 'AL';
+type LeaveType = 'CL' | 'SL' | 'AL' | 'SHL';
 type LeaveStatus = 'Pending' | 'Approved' | 'Rejected';
 
 interface LeaveRequest {
@@ -410,6 +411,7 @@ const LeavesPage: React.FC = () => {
                 <option value="CL">Casual Leave (CL)</option>
                 <option value="SL">Sick Leave (SL)</option>
                 <option value="AL">Annual Leave (AL)</option>
+                <option value="SHL">Short Leave (SHL)</option>
               </select>
             </div>
 
