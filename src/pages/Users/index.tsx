@@ -196,7 +196,11 @@ const UsersPage: React.FC = () => {
       // Build permissions array (for sidebar gating) and granular rows
       const baseModules = nRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : nPerms;
       const modulesWithCRUD = Object.entries(nAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
-      const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
+      let permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
+      // If user has teacher_assignments permission, ensure they also have teachers module access
+      if (permsArray.includes('teacher_assignments') && !permsArray.includes('teachers')) {
+        permsArray.push('teachers');
+      }
       await supabase.from('dashboard_users').insert([{ id, full_name: nFull, email: nEmail, role: nRole, status: 'Active', permissions: permsArray, branch: nBranch || null }]);
 
       // Insert reporting hierarchy relationships
@@ -300,7 +304,11 @@ const UsersPage: React.FC = () => {
     try {
       const baseModules = eRole === 'Super Admin' ? ALL_TABS.map(t => normalizeModule(t.id)) : ePerms;
       const modulesWithCRUD = Object.entries(eAccess).filter(([_, p]) => !!(p?.add || p?.edit || p?.del)).map(([id]) => normalizeModule(id));
-      const permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
+      let permsArray = Array.from(new Set([...baseModules, ...modulesWithCRUD, 'dashboard']));
+      // If user has teacher_assignments permission, ensure they also have teachers module access
+      if (permsArray.includes('teacher_assignments') && !permsArray.includes('teachers')) {
+        permsArray.push('teachers');
+      }
       await supabase.from('dashboard_users').update({ full_name: eFull, email: eEmail, role: eRole, status: eStatus, permissions: permsArray, branch: eBranch || null }).eq('id', editing.id);
 
       // Update reporting hierarchy
