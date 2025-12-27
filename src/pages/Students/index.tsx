@@ -910,6 +910,7 @@ const StudentsPage: React.FC = () => {
                         'Attendance must be 90%.',
                         'Course fee payable before classes commence.',
                         'Tuition fee is non-refundable.',
+                        'Institute reserves the right to terminate me if I violate the discipline of the institute/class or involved in any illegal activity in the premises.',
                       ].map((t, i) => (
                         <label key={i} className="flex items-start gap-2"><input type="checkbox" checked={agreeAll} onChange={(e) => setAgreeAll(e.target.checked)} className="mt-1" /><span>{t}</span></label>
                       ))}
