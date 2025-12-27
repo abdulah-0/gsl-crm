@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Sidebar from '../../components/common/Sidebar';
 import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
-import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
+import StaffSearchDropdown from '../../components/StaffSearchDropdown';
 import MultiSelectUser from '../../components/MultiSelectUser';
 import MultiSelectUniversity from '../../components/MultiSelectUniversity';
 import UniversityApplicationForm from '../../components/UniversityApplicationForm';
@@ -651,6 +651,33 @@ const CaseTaskDetailPage: React.FC = () => {
       is_backlog: false,
       description: tfDesc.trim() || undefined,
     }]);
+
+    // Send notification to assigned staff member
+    if (assignee_id) {
+      const { data: assigneeData } = await supabase
+        .from('dashboard_users')
+        .select('email')
+        .eq('id', assignee_id)
+        .single();
+
+      if (assigneeData?.email) {
+        await supabase.from('notifications').insert([{
+          recipient_email: assigneeData.email,
+          title: 'New Task Assigned',
+          body: `You have been assigned to task "${tfName.trim() || 'Untitled Task'}" for case ${caseNumber}`,
+          meta: {
+            task_id: id,
+            task_name: tfName.trim() || 'Untitled Task',
+            case_number: caseNumber,
+            priority: tfPriority,
+            status: tfStatus,
+            event: 'task_assigned',
+            assigned_at: new Date().toISOString(),
+          },
+        }]);
+      }
+    }
+
     setShowAddTask(false);
     setTfName('');
     setTfEstimate(60);
@@ -1247,12 +1274,12 @@ const CaseTaskDetailPage: React.FC = () => {
               <label className="text-sm"><span className="text-text-secondary">Estimate (minutes)</span><input type="number" min={0} value={tfEstimate} onChange={e => setTfEstimate(Number(e.target.value))} className="mt-1 w-full border rounded p-2" /></label>
               <label className="text-sm"><span className="text-text-secondary">Priority</span><select value={tfPriority} onChange={e => setTfPriority(e.target.value as Priority)} className="mt-1 w-full border rounded p-2"><option>Low</option><option>Medium</option><option>High</option></select></label>
               <div className="text-sm">
-                <span className="text-text-secondary">Assignee (teacher)</span>
+                <span className="text-text-secondary">Assignee (staff)</span>
                 <div className="mt-1">
-                  <TeacherSearchDropdown
+                  <StaffSearchDropdown
                     value={tfAssigneeId}
                     onChange={(id, name, avatar) => { setTfAssigneeId(id); setTfAssignee(name); setTfAvatar(avatar || ''); }}
-                    placeholder="Search teacher by name or email"
+                    placeholder="Search staff by name or email"
                   />
                 </div>
               </div>

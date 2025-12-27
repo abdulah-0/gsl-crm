@@ -2,7 +2,7 @@
 -- Run this after applying the main migration to verify everything works
 
 -- ============================================================================
--- VERIFICATION QUERIES
+-- VERIFICATION QUERIESa
 -- ============================================================================
 
 -- 1. Verify i8 branch exists and is marked as main
