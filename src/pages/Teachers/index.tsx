@@ -44,6 +44,7 @@ const TeachersPage: React.FC = () => {
   const [role, setRole] = useState<string>('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
+  const [canAssignStudents, setCanAssignStudents] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
 
@@ -95,8 +96,13 @@ const TeachersPage: React.FC = () => {
         setIsAdmin(admin);
         setIsTeacher(teacher);
 
+        // Check for teacher-assignments permission
+        const { data: perms } = await supabase.from('user_permissions').select('module, access, can_add, can_edit, can_delete').eq('user_email', email);
+        const hasAssignPerm = (perms || []).some((p: any) => p.module === 'teacher_assignments' && (p.access === 'CRUD' || p.can_add || p.can_edit));
+        setCanAssignStudents(hasAssignPerm);
+
         // Set default tab based on role
-        if (teacher && !admin) {
+        if (teacher && !admin && !hasAssignPerm) {
           setActiveTab('attendance');
         }
       }
@@ -349,7 +355,7 @@ const TeachersPage: React.FC = () => {
           {/* Tab Navigation */}
           <div className="bg-white rounded-xl shadow-[0px_6px_58px_#c3cbd61a] mb-6">
             <div className="flex border-b">
-              {isAdmin && (
+              {(isAdmin || canAssignStudents) && (
                 <button
                   onClick={() => setActiveTab('assign')}
                   className={`px-6 py-3 font-semibold ${activeTab === 'assign'
@@ -390,8 +396,8 @@ const TeachersPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Section A: Assign Students (Admin Only) */}
-          {activeTab === 'assign' && isAdmin && (
+          {/* Section A: Assign Students (Admin or Authorized Users) */}
+          {activeTab === 'assign' && (isAdmin || canAssignStudents) && (
             <div className="space-y-6">
               {/* Teacher Selection */}
               <div className="bg-white rounded-xl p-6 shadow-[0px_6px_58px_#c3cbd61a]">

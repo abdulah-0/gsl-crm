@@ -55,6 +55,7 @@ const ALL_TABS: { id: string; label: string }[] = [
   { id: 'universities', label: 'Universities' },
   { id: 'employees', label: 'Employees' },
   { id: 'teachers', label: 'Teachers' },
+  { id: 'teacher-assignments', label: 'Assign Students (Teachers)' },
   { id: 'leaves', label: 'Leaves' },
   { id: 'messenger', label: 'Messenger' },
   { id: 'info-portal', label: 'Info Portal' },
@@ -66,6 +67,7 @@ type ModulePermissions = { add: boolean; edit: boolean; del: boolean };
 const normalizeModule = (id: string) => {
   if (id === 'info-portal') return 'info';
   if (id === 'finances') return 'accounts';
+  if (id === 'teacher-assignments') return 'teacher_assignments';
   return id;
 };
 const MODULE_IDS = ALL_TABS.map(t => t.id);
