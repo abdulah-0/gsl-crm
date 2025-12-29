@@ -82,6 +82,10 @@ const Sidebar = ({
         const adminRole = role.includes('admin');
         setIsSuper(superRole);
         const ALL = ['dashboard', 'students', 'services', 'cases', 'leads', 'calendar', 'accounts', 'universities', 'teachers', 'employees', 'leaves', 'hrm', 'dailytask', 'messenger', 'info', 'reports', 'users'];
+
+        // Base modules that ALL users should have access to
+        const BASE_MODULES = ['dashboard', 'dailytask', 'leaves', 'calendar'];
+
         const perms = Array.isArray(u?.permissions) ? (u?.permissions as any as string[]) : [];
         const normalizedPerms = (perms || []).map(p => p === 'info-portal' ? 'info' : p);
         // Prefer granular permissions when present
@@ -92,16 +96,19 @@ const Sidebar = ({
         const granularAllowed = (up || [])
           .filter((r: any) => (r.can_add || r.can_edit || r.can_delete || (r.access && ['VIEW', 'CRUD'].includes(r.access))))
           .map((r: any) => (r.module === 'info-portal' ? 'info' : (r.module as string)));
+
         if (superRole || adminRole) {
           // Super Admin and Admin can access all tabs (Users tab still restricted below to super only)
           setAllowed(ALL);
         } else if ((granularAllowed && granularAllowed.length > 0)) {
-          setAllowed(Array.from(new Set(granularAllowed)));
+          // Ensure base modules are always included
+          setAllowed(Array.from(new Set([...BASE_MODULES, ...granularAllowed])));
         } else if (role.includes('teacher')) {
-          // Teachers by default only see Teachers unless explicitly granted more (fallback)
-          setAllowed((normalizedPerms && normalizedPerms.length > 0) ? normalizedPerms : ['teachers']);
+          // Teachers by default see base modules + teachers tab unless explicitly granted more
+          setAllowed(Array.from(new Set([...BASE_MODULES, 'teachers', ...(normalizedPerms && normalizedPerms.length > 0 ? normalizedPerms : [])])));
         } else {
-          setAllowed(normalizedPerms.length ? normalizedPerms : null);
+          // All other users get base modules + any additional permissions
+          setAllowed(Array.from(new Set([...BASE_MODULES, ...(normalizedPerms.length ? normalizedPerms : [])])));
         }
       } catch {
         setAllowed(null);
