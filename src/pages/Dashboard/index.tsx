@@ -162,32 +162,44 @@ const Dashboard = () => {
       })));
 
       // Load my leaves
-      const { data: leaves } = await supabase
+      const { data: leaves, error: leavesError } = await supabase
         .from('leaves')
         .select('id, leave_type, from_date, to_date, status, days')
         .eq('user_email', currentUserEmail)
         .order('created_at', { ascending: false })
         .limit(5);
-      setMyLeaves((leaves || []).map((l: any) => ({
-        id: String(l.id),
-        leave_type: l.leave_type,
-        from_date: l.from_date,
-        to_date: l.to_date,
-        status: l.status || 'Pending',
-        days: l.days || 0,
-      })));
+
+      if (!leavesError && leaves) {
+        setMyLeaves(leaves.map((l: any) => ({
+          id: String(l.id),
+          leave_type: l.leave_type,
+          from_date: l.from_date,
+          to_date: l.to_date,
+          status: l.status || 'Pending',
+          days: l.days || 0,
+        })));
+      } else {
+        console.log('Leaves error:', leavesError);
+        setMyLeaves([]);
+      }
 
       // Load activities
-      const { data: acts } = await supabase
+      const { data: acts, error: actsError } = await supabase
         .from('activity_log')
         .select('id, action, created_at')
         .order('created_at', { ascending: false })
         .limit(5);
-      setActivityItems((acts || []).map((a: any) => ({
-        id: String(a.id),
-        action: a.action,
-        created_at: a.created_at,
-      })));
+
+      if (!actsError && acts) {
+        setActivityItems(acts.map((a: any) => ({
+          id: String(a.id),
+          action: a.action,
+          created_at: a.created_at,
+        })));
+      } else {
+        console.log('Activity log error:', actsError);
+        setActivityItems([]);
+      }
     };
 
     loadUserData();
