@@ -102,64 +102,94 @@ const Dashboard = () => {
 
       const userId = userData?.id;
 
-      // Load my tasks (filter by assignee_id, fallback to assignee_email if no ID)
-      let tasks: any[] = [];
+      // Load my daily tasks (from daily_tasks table)
+      const { data: dailyTasksData, error: dailyTasksError } = await supabase
+        .from('daily_tasks')
+        .select('id, title, description, due_date, priority, status')
+        .eq('assigned_to', currentUserEmail)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      if (userId) {
-        // Try querying by assignee_id first
-        const { data: tasksByIdData, error: idError } = await supabase
-          .from('dashboard_tasks')
-          .select('id, name, case_number, priority, status, deadline_date, deadline_time')
-          .eq('assignee_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (!idError && tasksByIdData) {
-          tasks = tasksByIdData;
-        }
+      if (!dailyTasksError && dailyTasksData) {
+        setMyTasks(dailyTasksData.map((t: any) => ({
+          id: String(t.id),
+          title: t.title,
+          case_number: t.description || '',
+          priority: (t.priority?.toLowerCase() as any) ?? 'medium',
+          status: t.status || 'Pending',
+          deadline_date: t.due_date,
+          deadline_time: undefined,
+        })));
+      } else {
+        console.log('Daily tasks error:', dailyTasksError);
+        setMyTasks([]);
       }
 
-      // If no tasks found by ID, try by email as fallback
-      if (tasks.length === 0) {
-        const { data: tasksByEmailData, error: emailError } = await supabase
-          .from('dashboard_tasks')
-          .select('id, name, case_number, priority, status, deadline_date, deadline_time')
-          .eq('assignee_email', currentUserEmail)
-          .order('created_at', { ascending: false })
-          .limit(10);
-
-        if (!emailError && tasksByEmailData) {
-          tasks = tasksByEmailData;
-        }
-      }
-
-      setMyTasks((tasks || []).map((t: any) => ({
-        id: String(t.id),
-        title: t.name || 'Untitled Task',
-        case_number: t.case_number,
-        priority: (t.priority as any) ?? 'medium',
-        status: t.status || 'Todo',
-        deadline_date: t.deadline_date,
-        deadline_time: t.deadline_time,
-      })));
-
-      // Load my calendar events
+      // Load my calendar events (combine calendar_events, case tasks, and daily tasks)
       const today = new Date().toISOString().split('T')[0];
-      const { data: events } = await supabase
+
+      // Get calendar events
+      const { data: calendarEvents } = await supabase
         .from('calendar_events')
         .select('id, title, date, time, category')
         .eq('user_email', currentUserEmail)
         .gte('date', today)
         .order('date', { ascending: true })
-        .order('time', { ascending: true })
-        .limit(5);
-      setMyCalendarEvents((events || []).map((e: any) => ({
-        id: String(e.id),
-        title: e.title,
-        date: e.date,
-        time: e.time,
-        category: e.category,
-      })));
+        .limit(10);
+
+      // Get case tasks with deadlines
+      const { data: caseTasks } = await supabase
+        .from('dashboard_tasks')
+        .select('id, name, deadline_date, deadline_time, case_number')
+        .eq('assignee_id', userId)
+        .not('deadline_date', 'is', null)
+        .gte('deadline_date', today)
+        .order('deadline_date', { ascending: true })
+        .limit(10);
+
+      // Get daily tasks with due dates
+      const { data: dailyTasksDue } = await supabase
+        .from('daily_tasks')
+        .select('id, title, due_date')
+        .eq('assigned_to', currentUserEmail)
+        .not('due_date', 'is', null)
+        .gte('due_date', today)
+        .order('due_date', { ascending: true })
+        .limit(10);
+
+      // Combine all calendar items
+      const allCalendarItems = [
+        ...(calendarEvents || []).map((e: any) => ({
+          id: `cal-${e.id}`,
+          title: e.title,
+          date: e.date,
+          time: e.time,
+          category: e.category || 'Event',
+        })),
+        ...(caseTasks || []).map((t: any) => ({
+          id: `task-${t.id}`,
+          title: `${t.name}`,
+          date: t.deadline_date,
+          time: t.deadline_time,
+          category: `Case ${t.case_number}`,
+        })),
+        ...(dailyTasksDue || []).map((t: any) => ({
+          id: `daily-${t.id}`,
+          title: t.title,
+          date: t.due_date,
+          time: null,
+          category: 'Daily Task',
+        }))
+      ];
+
+      // Sort by date and time, take top 5
+      allCalendarItems.sort((a, b) => {
+        const dateCompare = a.date.localeCompare(b.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.time || '').localeCompare(b.time || '');
+      });
+
+      setMyCalendarEvents(allCalendarItems.slice(0, 5));
 
       // Load my leaves
       const { data: leaves, error: leavesError } = await supabase
@@ -299,9 +329,9 @@ const Dashboard = () => {
               <div className="bg-background-card rounded-xl shadow-[0px_6px_58px_#c3cbd61a] p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>
-                    My Tasks
+                    My Daily Tasks
                   </h2>
-                  <button onClick={() => navigate('/cases')} className="text-sm font-semibold text-text-accent hover:opacity-80">
+                  <button onClick={() => navigate('/dailytask')} className="text-sm font-semibold text-text-accent hover:opacity-80">
                     View all →
                   </button>
                 </div>
