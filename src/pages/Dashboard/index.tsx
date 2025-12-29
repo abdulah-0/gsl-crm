@@ -93,11 +93,20 @@ const Dashboard = () => {
     if (!currentUserEmail) return;
 
     const loadUserData = async () => {
-      // Load my tasks
+      // Get current user ID from dashboard_users
+      const { data: userData } = await supabase
+        .from('dashboard_users')
+        .select('id')
+        .eq('email', currentUserEmail)
+        .single();
+
+      const userId = userData?.id;
+
+      // Load my tasks (filter by assignee_id)
       const { data: tasks } = await supabase
         .from('dashboard_tasks')
-        .select('id, title, case_number, priority, status, deadline_date, deadline_time')
-        .eq('assignee_email', currentUserEmail)
+        .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
+        .eq('assignee_id', userId)
         .order('created_at', { ascending: false })
         .limit(10);
       setMyTasks((tasks || []).map((t: any) => ({
@@ -162,7 +171,7 @@ const Dashboard = () => {
     // Real-time subscriptions
     const tasksChannel = supabase
       .channel('my_tasks')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks', filter: `assignee_email=eq.${currentUserEmail}` }, () => loadUserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_tasks' }, () => loadUserData())
       .subscribe();
 
     const eventsChannel = supabase
