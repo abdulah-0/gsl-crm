@@ -1114,19 +1114,6 @@ const Cases: React.FC = () => {
               </div>
             </div>
 
-            {/* For Office Use Only */}
-            <div className="mt-6">
-              <h4 className="font-semibold">For Office Use Only</h4>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                <label><span className="text-text-secondary">Date</span><input type="date" value={sf.office_date} onChange={e => setSf({ ...sf, office_date: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Application Started</span><input value={sf.office_application_started} onChange={e => setSf({ ...sf, office_application_started: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">University Applied</span><input value={sf.office_university_applied} onChange={e => setSf({ ...sf, office_university_applied: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Counsellor Name</span><input value={sf.office_counsellor_name} onChange={e => setSf({ ...sf, office_counsellor_name: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-                <label><span className="text-text-secondary">Counsellor Sign</span><input value={sf.office_counsellor_sign} onChange={e => setSf({ ...sf, office_counsellor_sign: e.target.value })} className="mt-1 w-full border rounded p-2" placeholder="Signature text" /></label>
-                <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" value={sf.office_next_follow_up_date} onChange={e => setSf({ ...sf, office_next_follow_up_date: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
-              </div>
-            </div>
-
             {/* Assignees & Controls */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <label className="sm:col-span-2"><span className="text-text-secondary">Assignee(s)</span><input value={formAssignees} onChange={e => setFormAssignees(e.target.value)} className="mt-1 w-full border rounded p-2" placeholder="Comma separated" /></label>
