@@ -50,6 +50,7 @@ type Student = {
   phone: string;
   email: string;
   cnic: string;
+  id_type?: 'cnic' | 'passport';
   dob: string;
   city: string;
   reference?: string;
@@ -68,6 +69,7 @@ type TestEnrollmentForm = {
   last_name: string;
   father_name: string;
   cnic: string;
+  id_type: 'cnic' | 'passport';
   email: string;
   mobile: string;
   address: string;
@@ -97,17 +99,17 @@ const defaultStudent: Omit<Student, 'id'> = {
   photo_url: '',
   archived: false,
   enrollment_type: 'course',
+  id_type: 'cnic',
 };
 
 const defaultConsultancyForm: any = {
-  basic_name: '', basic_father_name: '', basic_cnic: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '',
+  basic_name: '', basic_father_name: '', basic_cnic: '', basic_dob: '', basic_address: '', basic_date: '', basic_email: '', basic_nationality: '', basic_phone: '', id_type: 'cnic',
   ug_olevels: false, ug_olevels_year: '', ug_olevels_grades: '', ug_alevels: false, ug_alevels_year: '', ug_alevels_grades: '', ug_matric: false, ug_matric_year: '', ug_matric_grades: '', ug_hssc: false, ug_hssc_year: '', ug_hssc_grades: '', ug_other: '',
   pg_bachelors: false, pg_bachelors_university: '', pg_bachelors_course: '', pg_bachelors_year: '', pg_bachelors_grades: '', pg_masters: false, pg_masters_university: '', pg_masters_course: '', pg_masters_year: '', pg_masters_grades: '',
   eng_ielts: false, eng_toefl: false, eng_pte: false, eng_duolingo: false, eng_other: '', eng_score: '',
   work_exp: '',
   coi_uk: false, coi_usa: false, coi_canada: false, coi_malaysia: false, coi_germany: false, coi_australia: false, coi_others: '',
   add_course_or_uni: '', add_travel_history: '', add_visa_refusal: '', add_asylum_family: '',
-  office_date: '', office_application_started: '', office_university_applied: '', office_counsellor_name: '', office_next_follow_up_date: '',
 };
 
 const defaultTestForm: TestEnrollmentForm = {
@@ -120,6 +122,7 @@ const defaultTestForm: TestEnrollmentForm = {
   address: '',
   date_of_birth: '',
   test_type: '',
+  id_type: 'cnic',
 };
 
 const StudentsPage: React.FC = () => {
@@ -315,7 +318,12 @@ const StudentsPage: React.FC = () => {
     if (!s.father_name) return 'Father/Guardian Name is required';
     if (!/^\+?[0-9]{10,15}$/.test(s.phone)) return 'Invalid phone number format';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email)) return 'Invalid email format';
-    if (!/^[0-9]{13}$/.test(s.cnic)) return 'CNIC must be 13 digits';
+    if (!s.cnic) return `${s.id_type === 'passport' ? 'Passport' : 'CNIC'} is required`;
+    if (s.id_type === 'passport') {
+      if (s.cnic.length < 6) return 'Passport number must be at least 6 characters';
+    } else {
+      if (!/^[0-9]{13}$/.test(s.cnic)) return 'CNIC must be 13 digits';
+    }
     // Date of Birth and City are optional for course enrollment
     if (!agreeAll) return 'You must agree to Terms & Conditions';
     if (!declTextAgree) return 'You must accept the Declaration';
@@ -332,8 +340,12 @@ const StudentsPage: React.FC = () => {
 
     if (!name) return 'Student Name is required for Consultancy enrollment';
     if (!father) return 'Father Name is required for Consultancy enrollment';
-    if (!cnic) return 'CNIC is required for Consultancy enrollment';
-    if (!/^\d{13}$/.test(cnic)) return 'CNIC must be 13 digits for Consultancy enrollment';
+    if (!cnic) return `${consultSf.id_type === 'passport' ? 'Passport' : 'CNIC'} is required for Consultancy enrollment`;
+    if (consultSf.id_type === 'passport') {
+      if (cnic.length < 6) return 'Passport number must be at least 6 characters';
+    } else {
+      if (!/^\d{13}$/.test(cnic)) return 'CNIC must be 13 digits for Consultancy enrollment';
+    }
     if (!phone) return 'Phone is required for Consultancy enrollment';
     if (!/^\+?[0-9]{10,15}$/.test(phone)) return 'Invalid phone number format for Consultancy enrollment';
     if (!email) return 'Email is required for Consultancy enrollment';
@@ -353,8 +365,12 @@ const StudentsPage: React.FC = () => {
     if (!testForm.first_name) return 'First Name is required for Test enrollment';
     if (!testForm.last_name) return 'Last Name is required for Test enrollment';
     if (!testForm.father_name) return 'Father Name is required for Test enrollment';
-    if (!testForm.cnic) return 'CNIC is required for Test enrollment';
-    if (!/^\d{13}$/.test(testForm.cnic)) return 'CNIC must be 13 digits for Test enrollment';
+    if (!testForm.cnic) return `${testForm.id_type === 'passport' ? 'Passport' : 'CNIC'} is required for Test enrollment`;
+    if (testForm.id_type === 'passport') {
+      if (testForm.cnic.length < 6) return 'Passport number must be at least 6 characters';
+    } else {
+      if (!/^\d{13}$/.test(testForm.cnic)) return 'CNIC must be 13 digits for Test enrollment';
+    }
     if (!testForm.mobile) return 'Mobile is required for Test enrollment';
     if (!testForm.email) return 'Email is required for Test enrollment';
     if (!testForm.test_type) return 'Test Type is required';
@@ -411,6 +427,7 @@ const StudentsPage: React.FC = () => {
           phone: s.phone,
           email: s.email,
           cnic: s.cnic,
+          id_type: s.id_type || 'cnic',
           dob: s.dob,
           city: s.city,
           reference: s.reference || null,
@@ -853,7 +870,8 @@ const StudentsPage: React.FC = () => {
                       <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={s.father_name} onChange={e => setS({ ...s, father_name: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
                       <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={s.phone} onChange={e => setS({ ...s, phone: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
                       <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={s.email} onChange={e => setS({ ...s, email: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
-                      <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={s.cnic} onChange={e => setS({ ...s, cnic: e.target.value.replace(/[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                      <label className="text-sm"><span className="text-text-secondary">ID Type</span><select value={s.id_type || 'cnic'} onChange={e => setS({ ...s, id_type: e.target.value as 'cnic' | 'passport' })} className="mt-1 w-full border rounded p-2"><option value="cnic">CNIC</option><option value="passport">Passport</option></select></label>
+                      <label className="text-sm"><span className="text-text-secondary">{s.id_type === 'passport' ? 'Passport Number' : 'CNIC No.'}</span><input value={s.cnic} onChange={e => setS({ ...s, cnic: e.target.value.replace(s.id_type === 'passport' ? /[^0-9A-Za-z]/g : /[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder={s.id_type === 'passport' ? 'Passport number' : '13 digits'} required /></label>
                       <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={s.dob} onChange={e => setS({ ...s, dob: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                       <label className="text-sm"><span className="text-text-secondary">City</span><input value={s.city} onChange={e => setS({ ...s, city: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                       <label className="text-sm"><span className="text-text-secondary">Reference (optional)</span><input value={s.reference} onChange={e => setS({ ...s, reference: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
@@ -936,7 +954,8 @@ const StudentsPage: React.FC = () => {
                       <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                         <label><span className="text-text-secondary">Full Name</span><input value={consultSf.basic_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                         <label><span className="text-text-secondary">Father Name</span><input value={consultSf.basic_father_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
-                        <label><span className="text-text-secondary">CNIC</span><input value={consultSf.basic_cnic} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                        <label><span className="text-text-secondary">ID Type</span><select value={consultSf.id_type || 'cnic'} onChange={e => setConsultSf((prev: any) => ({ ...prev, id_type: e.target.value }))} className="mt-1 w-full border rounded p-2"><option value="cnic">CNIC</option><option value="passport">Passport</option></select></label>
+                        <label><span className="text-text-secondary">{consultSf.id_type === 'passport' ? 'Passport Number' : 'CNIC'}</span><input value={consultSf.basic_cnic} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_cnic: e.target.value.replace(consultSf.id_type === 'passport' ? /[^0-9A-Za-z]/g : /[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder={consultSf.id_type === 'passport' ? 'Passport number' : '13 digits'} required /></label>
                         <label><span className="text-text-secondary">Date of Birth</span><input type="date" value={consultSf.basic_dob} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_dob: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                         <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.basic_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
                         <label className="sm:col-span-2 lg:col-span-3"><span className="text-text-secondary">Address</span><input value={consultSf.basic_address} onChange={e => setConsultSf((prev: any) => ({ ...prev, basic_address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
@@ -1028,18 +1047,6 @@ const StudentsPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* For Office Use Only */}
-                    <div className="mt-6">
-                      <h4 className="font-semibold">For Office Use Only</h4>
-                      <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <label><span className="text-text-secondary">Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Application Started</span><input value={consultSf.office_application_started} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_application_started: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">University Applied</span><input value={consultSf.office_university_applied} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_university_applied: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Counsellor Name</span><input value={consultSf.office_counsellor_name} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_counsellor_name: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                        <label><span className="text-text-secondary">Next Follow Up Date</span><input type="date" min={new Date().toISOString().slice(0, 10)} value={consultSf.office_next_follow_up_date} onChange={e => setConsultSf((prev: any) => ({ ...prev, office_next_follow_up_date: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>
-                      </div>
-                    </div>
-
                     <div className="mt-6 text-right">
                       <button type="submit" disabled={saving || !canCrud} className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold disabled:opacity-60">{saving ? 'Saving...' : 'Submit Consultancy'}</button>
                     </div>
@@ -1054,7 +1061,8 @@ const StudentsPage: React.FC = () => {
                       <label><span className="text-text-secondary">First Name</span><input value={testForm.first_name} onChange={e => setTestForm(prev => ({ ...prev, first_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       <label><span className="text-text-secondary">Last Name</span><input value={testForm.last_name} onChange={e => setTestForm(prev => ({ ...prev, last_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       <label><span className="text-text-secondary">Father Name</span><input value={testForm.father_name} onChange={e => setTestForm(prev => ({ ...prev, father_name: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
-                      <label><span className="text-text-secondary">CNIC</span><input value={testForm.cnic} onChange={e => setTestForm(prev => ({ ...prev, cnic: e.target.value.replace(/[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                      <label><span className="text-text-secondary">ID Type</span><select value={testForm.id_type || 'cnic'} onChange={e => setTestForm(prev => ({ ...prev, id_type: e.target.value as 'cnic' | 'passport' }))} className="mt-1 w-full border rounded p-2"><option value="cnic">CNIC</option><option value="passport">Passport</option></select></label>
+                      <label><span className="text-text-secondary">{testForm.id_type === 'passport' ? 'Passport Number' : 'CNIC'}</span><input value={testForm.cnic} onChange={e => setTestForm(prev => ({ ...prev, cnic: e.target.value.replace(testForm.id_type === 'passport' ? /[^0-9A-Za-z]/g : /[^0-9]/g, '') }))} className="mt-1 w-full border rounded p-2" placeholder={testForm.id_type === 'passport' ? 'Passport number' : '13 digits'} required /></label>
                       <label><span className="text-text-secondary">Email</span><input type="email" value={testForm.email} onChange={e => setTestForm(prev => ({ ...prev, email: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       <label><span className="text-text-secondary">Mobile</span><input value={testForm.mobile} onChange={e => setTestForm(prev => ({ ...prev, mobile: e.target.value }))} className="mt-1 w-full border rounded p-2" required /></label>
                       <label className="sm:col-span-2"><span className="text-text-secondary">Address</span><input value={testForm.address} onChange={e => setTestForm(prev => ({ ...prev, address: e.target.value }))} className="mt-1 w-full border rounded p-2" /></label>

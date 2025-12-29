@@ -99,6 +99,7 @@ type LeadFormState = {
   full_name: string;
   father_name: string;
   cnic: string;
+  id_type: 'cnic' | 'passport';
   phone: string;
   email: string;
   country: string;
@@ -124,6 +125,7 @@ const makeDefaultLeadForm = (): LeadFormState => ({
   full_name: '',
   father_name: '',
   cnic: '',
+  id_type: 'cnic',
   phone: '',
   email: '',
   country: '',
@@ -293,8 +295,12 @@ const LeadsPage: React.FC = () => {
 
     if (!name) { alert('Full Name is required'); return; }
     if (!father) { alert('Father Name is required'); return; }
-    if (!cnic) { alert('CNIC is required'); return; }
-    if (!/^\d{13}$/.test(cnic)) { alert('CNIC must be 13 digits'); return; }
+    if (!cnic) { alert(`${form.id_type === 'passport' ? 'Passport' : 'CNIC'} is required`); return; }
+    if (form.id_type === 'passport') {
+      if (cnic.length < 6) { alert('Passport number must be at least 6 characters'); return; }
+    } else {
+      if (!/^\d{13}$/.test(cnic)) { alert('CNIC must be 13 digits'); return; }
+    }
     if (!phone) { alert('Phone is required'); return; }
     if (!/^\+?[0-9]{10,15}$/.test(phone)) { alert('Invalid phone number format'); return; }
     if (!email) { alert('Email is required'); return; }
@@ -315,6 +321,7 @@ const LeadsPage: React.FC = () => {
         full_name: name,
         father_name: father,
         cnic,
+        id_type: form.id_type,
         phone,
         email,
         country: form.country || null,
@@ -526,7 +533,8 @@ const LeadsPage: React.FC = () => {
                   <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Father/Guardian Name</span><input value={form.father_name} onChange={e => setForm({ ...form, father_name: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
                   <label className="text-sm"><span className="text-text-secondary">Phone</span><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
                   <label className="text-sm"><span className="text-text-secondary">Email</span><input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="mt-1 w-full border rounded p-2" required /></label>
-                  <label className="text-sm"><span className="text-text-secondary">CNIC No.</span><input value={form.cnic} onChange={e => setForm({ ...form, cnic: e.target.value.replace(/[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder="13 digits" required /></label>
+                  <label className="text-sm"><span className="text-text-secondary">ID Type</span><select value={form.id_type || 'cnic'} onChange={e => setForm({ ...form, id_type: e.target.value as 'cnic' | 'passport' })} className="mt-1 w-full border rounded p-2"><option value="cnic">CNIC</option><option value="passport">Passport</option></select></label>
+                  <label className="text-sm"><span className="text-text-secondary">{form.id_type === 'passport' ? 'Passport Number' : 'CNIC No.'}</span><input value={form.cnic} onChange={e => setForm({ ...form, cnic: e.target.value.replace(form.id_type === 'passport' ? /[^0-9A-Za-z]/g : /[^0-9]/g, '') })} className="mt-1 w-full border rounded p-2" placeholder={form.id_type === 'passport' ? 'Passport number' : '13 digits'} required /></label>
                   <label className="text-sm"><span className="text-text-secondary">Date of Birth</span><input type="date" value={form.dob} onChange={e => setForm({ ...form, dob: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                   <label className="text-sm"><span className="text-text-secondary">City</span><input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>
                   <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Address (optional)</span><input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="mt-1 w-full border rounded p-2" /></label>

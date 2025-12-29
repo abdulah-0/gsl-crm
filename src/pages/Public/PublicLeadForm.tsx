@@ -31,6 +31,7 @@ const PublicLeadForm: React.FC = () => {
         full_name: '',
         father_name: '',
         cnic: '',
+        id_type: 'cnic' as 'cnic' | 'passport',
         phone: '',
         email: '',
         country: '',
@@ -60,12 +61,19 @@ const PublicLeadForm: React.FC = () => {
             return false;
         }
         if (!formData.cnic.trim()) {
-            setErrorMessage('CNIC is required');
+            setErrorMessage(`${formData.id_type === 'passport' ? 'Passport' : 'CNIC'} is required`);
             return false;
         }
-        if (!/^\d{13}$/.test(formData.cnic.replace(/-/g, ''))) {
-            setErrorMessage('CNIC must be 13 digits');
-            return false;
+        if (formData.id_type === 'passport') {
+            if (formData.cnic.length < 6) {
+                setErrorMessage('Passport number must be at least 6 characters');
+                return false;
+            }
+        } else {
+            if (!/^\d{13}$/.test(formData.cnic.replace(/-/g, ''))) {
+                setErrorMessage('CNIC must be 13 digits');
+                return false;
+            }
         }
         if (!formData.phone.trim()) {
             setErrorMessage('Phone number is required');
@@ -104,6 +112,7 @@ const PublicLeadForm: React.FC = () => {
                 full_name: formData.full_name.trim(),
                 father_name: formData.father_name.trim(),
                 cnic: formData.cnic.trim(),
+                id_type: formData.id_type,
                 phone: formData.phone.trim(),
                 email: formData.email.trim().toLowerCase(),
                 country: formData.country.trim() || null,
@@ -129,6 +138,7 @@ const PublicLeadForm: React.FC = () => {
                     full_name: '',
                     father_name: '',
                     cnic: '',
+                    id_type: 'cnic',
                     phone: '',
                     email: '',
                     country: '',
@@ -223,10 +233,28 @@ const PublicLeadForm: React.FC = () => {
                                 />
                             </div>
 
-                            {/* CNIC */}
+                            {/* ID Type */}
+                            <div>
+                                <label htmlFor="id_type" className="block text-sm font-medium text-gray-700 mb-1">
+                                    ID Type <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    id="id_type"
+                                    name="id_type"
+                                    value={formData.id_type}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, id_type: e.target.value as 'cnic' | 'passport' }))}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    required
+                                >
+                                    <option value="cnic">CNIC</option>
+                                    <option value="passport">Passport</option>
+                                </select>
+                            </div>
+
+                            {/* CNIC/Passport */}
                             <div>
                                 <label htmlFor="cnic" className="block text-sm font-medium text-gray-700 mb-1">
-                                    CNIC <span className="text-red-500">*</span>
+                                    {formData.id_type === 'passport' ? 'Passport Number' : 'CNIC'} <span className="text-red-500">*</span>
                                 </label>
                                 <input
                                     type="text"
@@ -235,7 +263,7 @@ const PublicLeadForm: React.FC = () => {
                                     value={formData.cnic}
                                     onChange={handleChange}
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    placeholder="XXXXXXXXXXXXX (13 digits)"
+                                    placeholder={formData.id_type === 'passport' ? 'Passport number' : 'XXXXXXXXXXXXX (13 digits)'}
                                     required
                                 />
                             </div>
@@ -359,8 +387,8 @@ const PublicLeadForm: React.FC = () => {
                                     type="submit"
                                     disabled={isSubmitting}
                                     className={`w-full py-3 px-4 rounded-lg font-medium text-white transition-colors ${isSubmitting
-                                            ? 'bg-gray-400 cursor-not-allowed'
-                                            : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+                                        ? 'bg-gray-400 cursor-not-allowed'
+                                        : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
                                         }`}
                                 >
                                     {isSubmitting ? 'Submitting...' : 'Submit'}
