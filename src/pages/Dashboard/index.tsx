@@ -102,13 +102,31 @@ const Dashboard = () => {
 
       const userId = userData?.id;
 
-      // Load my tasks (filter by assignee_id)
-      const { data: tasks } = await supabase
-        .from('dashboard_tasks')
-        .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
-        .eq('assignee_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      // Load my tasks (filter by assignee_id, fallback to assignee_email if no ID)
+      let tasks: any[] = [];
+
+      if (userId) {
+        // Try querying by assignee_id first
+        const { data: tasksByIdData } = await supabase
+          .from('dashboard_tasks')
+          .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
+          .eq('assignee_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        tasks = tasksByIdData || [];
+      }
+
+      // If no tasks found by ID, try by email as fallback
+      if (tasks.length === 0) {
+        const { data: tasksByEmailData } = await supabase
+          .from('dashboard_tasks')
+          .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
+          .or(`assignee_email.eq.${currentUserEmail},assignee_name.ilike.%${currentUserEmail}%`)
+          .order('created_at', { ascending: false })
+          .limit(10);
+        tasks = tasksByEmailData || [];
+      }
+
       setMyTasks((tasks || []).map((t: any) => ({
         id: String(t.id),
         title: t.title,
