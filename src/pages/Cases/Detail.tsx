@@ -143,6 +143,8 @@ const CaseTaskDetailPage: React.FC = () => {
   const [tfAssignee, setTfAssignee] = useState('');
   const [tfAvatar, setTfAvatar] = useState('');
   const [tfDesc, setTfDesc] = useState('');
+  const [tfDeadlineDate, setTfDeadlineDate] = useState('');
+  const [tfDeadlineTime, setTfDeadlineTime] = useState('');
   const [logMins, setLogMins] = useState(0);
 
   const [isSuper, setIsSuper] = useState(false);
@@ -650,6 +652,8 @@ const CaseTaskDetailPage: React.FC = () => {
       status: tfStatus,
       is_backlog: false,
       description: tfDesc.trim() || undefined,
+      deadline_date: tfDeadlineDate || null,
+      deadline_time: tfDeadlineTime || null,
     }]);
 
     // Send notification to assigned staff member
@@ -664,17 +668,38 @@ const CaseTaskDetailPage: React.FC = () => {
         await supabase.from('notifications').insert([{
           recipient_email: assigneeData.email,
           title: 'New Task Assigned',
-          body: `You have been assigned to task "${tfName.trim() || 'Untitled Task'}" for case ${caseNumber}`,
+          body: `You have been assigned to task "${tfName.trim() || 'Untitled Task'}" for case ${caseNumber}${tfDeadlineDate ? ` (Deadline: ${tfDeadlineDate}${tfDeadlineTime ? ' ' + tfDeadlineTime : ''})` : ''}`,
           meta: {
             task_id: id,
             task_name: tfName.trim() || 'Untitled Task',
             case_number: caseNumber,
             priority: tfPriority,
             status: tfStatus,
+            deadline_date: tfDeadlineDate || null,
+            deadline_time: tfDeadlineTime || null,
             event: 'task_assigned',
             assigned_at: new Date().toISOString(),
           },
         }]);
+
+        // Create calendar event if deadline is set
+        if (tfDeadlineDate && tfDeadlineTime) {
+          const calendarEventId = `task-${id}`;
+          const taskNotes = `Case: ${caseNumber}\nPriority: ${tfPriority}\nStatus: ${tfStatus}${tfDesc ? '\n\n' + tfDesc : ''}`;
+          
+          await supabase.from('calendar_events').insert([{
+            id: calendarEventId,
+            user_email: assigneeData.email,
+            title: `Task: ${tfName.trim() || 'Untitled Task'}`,
+            date: tfDeadlineDate,
+            time: tfDeadlineTime,
+            duration_mins: Math.max(0, Number(tfEstimate) || 60),
+            category: 'Work',
+            notes: taskNotes,
+            task_id: id,
+            case_number: caseNumber,
+          }]);
+        }
       }
     }
 
@@ -687,6 +712,8 @@ const CaseTaskDetailPage: React.FC = () => {
     setTfAssignee('');
     setTfAvatar('');
     setTfDesc('');
+    setTfDeadlineDate('');
+    setTfDeadlineTime('');
   };
 
   const logTime = async () => {
@@ -1284,6 +1311,8 @@ const CaseTaskDetailPage: React.FC = () => {
                 </div>
               </div>
               <label className="text-sm sm:col-span-2"><span className="text-text-secondary">Description</span><textarea value={tfDesc} onChange={e => setTfDesc(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} /></label>
+              <label className="text-sm"><span className="text-text-secondary">Deadline Date</span><input type="date" value={tfDeadlineDate} onChange={e => setTfDeadlineDate(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
+              <label className="text-sm"><span className="text-text-secondary">Deadline Time</span><input type="time" value={tfDeadlineTime} onChange={e => setTfDeadlineTime(e.target.value)} className="mt-1 w-full border rounded p-2" /></label>
             </div>
             <div className="mt-5 text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save Task</button></div>
           </form>

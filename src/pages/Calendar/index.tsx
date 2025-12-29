@@ -20,6 +20,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
+import { supabase } from '../../lib/supabaseClient';
 
 // Types
 type Category = 'Birthday' | 'Meeting' | 'Work' | 'Personal' | 'Other';
@@ -73,18 +74,62 @@ const Calendar: React.FC = () => {
   const today = new Date();
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
 
-  // Events (local state + localStorage persistence)
-  const [events, setEvents] = useState<CalEvent[]>(() => {
-    try {
-      const raw = localStorage.getItem('crm_calendar_events');
-      if (raw) return JSON.parse(raw);
-    } catch { }
-    return [
-      { id: 'demo-1', title: "Anna's Birthday", date: fmtYmd(today), time: '10:00', durationMins: 180, category: 'Birthday' },
-      { id: 'demo-2', title: 'Team Standup', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), Math.max(1, today.getDate() - 1))), time: '09:30', durationMins: 30, category: 'Work' },
-      { id: 'demo-3', title: 'Client Presentation', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2)), time: '14:00', durationMins: 60, category: 'Meeting' },
-    ];
-  });
+  // Events (database + localStorage fallback)
+  const [events, setEvents] = useState<CalEvent[]>([]);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
+
+  // Load events from database on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const email = auth.user?.email;
+        if (!email) return;
+
+        setCurrentUserEmail(email);
+
+        // Fetch events from database
+        const { data: dbEvents } = await supabase
+          .from('calendar_events')
+          .select('*')
+          .eq('user_email', email)
+          .order('date', { ascending: true });
+
+        if (dbEvents && dbEvents.length > 0) {
+          // Map database events to CalEvent format
+          const mappedEvents: CalEvent[] = dbEvents.map((ev: any) => ({
+            id: ev.id,
+            title: ev.title,
+            date: ev.date,
+            time: ev.time,
+            durationMins: ev.duration_mins || 60,
+            category: (ev.category || 'Work') as Category,
+            notes: ev.notes,
+          }));
+          setEvents(mappedEvents);
+        } else {
+          // Fallback to localStorage if no database events
+          try {
+            const raw = localStorage.getItem('crm_calendar_events');
+            if (raw) {
+              setEvents(JSON.parse(raw));
+            } else {
+              // Default demo events
+              setEvents([
+                { id: 'demo-1', title: "Anna's Birthday", date: fmtYmd(today), time: '10:00', durationMins: 180, category: 'Birthday' },
+                { id: 'demo-2', title: 'Team Standup', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), Math.max(1, today.getDate() - 1))), time: '09:30', durationMins: 30, category: 'Work' },
+                { id: 'demo-3', title: 'Client Presentation', date: fmtYmd(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 2)), time: '14:00', durationMins: 60, category: 'Meeting' },
+              ]);
+            }
+          } catch { }
+        }
+      } catch (error) {
+        console.error('Error loading calendar events:', error);
+      }
+    })();
+  }, []);
+
+  // Save to localStorage for backward compatibility
   useEffect(() => {
     try { localStorage.setItem('crm_calendar_events', JSON.stringify(events)); } catch { }
   }, [events]);
@@ -114,19 +159,52 @@ const Calendar: React.FC = () => {
     setShowModal(true);
   };
 
-  const saveEvent = (e: React.FormEvent) => {
+  const saveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
     const id = isEditing ? editing!.id : `ev-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const next: CalEvent = { id, title: title.trim(), date, time, durationMins: Math.max(0, Number(duration) || 0), category, notes: notes.trim() || undefined };
+
+    // Save to database if user is logged in
+    if (currentUserEmail) {
+      try {
+        await supabase.from('calendar_events').upsert([{
+          id,
+          user_email: currentUserEmail,
+          title: title.trim(),
+          date,
+          time,
+          duration_mins: Math.max(0, Number(duration) || 0),
+          category,
+          notes: notes.trim() || undefined,
+          task_id: null,
+          case_number: null,
+        }], { onConflict: 'id' });
+      } catch (error) {
+        console.error('Error saving event to database:', error);
+      }
+    }
+
+    // Update local state
     setEvents(prev => {
       const rest = prev.filter(x => x.id !== id);
       return [next, ...rest].sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
     });
     setShowModal(false);
   };
-  const deleteEvent = () => {
+  const deleteEvent = async () => {
     if (!editing) return;
+
+    // Delete from database if user is logged in
+    if (currentUserEmail) {
+      try {
+        await supabase.from('calendar_events').delete().eq('id', editing.id).eq('user_email', currentUserEmail);
+      } catch (error) {
+        console.error('Error deleting event from database:', error);
+      }
+    }
+
+    // Update local state
     setEvents(prev => prev.filter(x => x.id !== editing.id));
     setShowModal(false);
   };
