@@ -4,7 +4,7 @@
  * This module defines all application routes, authentication protection, and role-based access control.
  * It implements a comprehensive routing system with:
  * - Protected routes requiring authentication
- * - Role-based dashboard rendering (Super Admin, Consultant, Default)
+ * - Role-based dashboard rendering (Super Admin, Default)
  * - Automatic idle logout after 5 minutes of inactivity
  * - User status validation (Active, Dormant, Inactive)
  * - Session management with Supabase authentication
@@ -29,7 +29,6 @@ const MessengerPage = React.lazy(() => import('./pages/Messenger'));
 const InfoPage = React.lazy(() => import('./pages/Info'));
 const ReportsPage = React.lazy(() => import('./pages/Reports'));
 const SuperAdminPage = React.lazy(() => import('./pages/SuperAdmin'));
-const ConsultantPage = React.lazy(() => import('./pages/Consultant'));
 const DailyTasksPage = React.lazy(() => import('./pages/DailyTasks'));
 const StudentsPage = React.lazy(() => import('./pages/Students'));
 const ServicesPage = React.lazy(() => import('./pages/Services'));
@@ -173,15 +172,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
  * RoleBasedDashboard Component
  * 
  * Dynamically renders the appropriate dashboard based on the user's role.
- * Supports three role types:
+ * Supports two role types:
  * - 'super': Renders SuperAdminPage for super administrators
- * - 'consultant': Renders ConsultantPage for consultant users
- * - 'default': Renders standard DashboardPage for regular users
+ * - 'default': Renders standard DashboardPage for all other users
  * 
  * Role determination logic:
  * - Checks app_metadata.role, app_metadata.roles, user_metadata.role, and user_metadata.roles
  * - Searches for 'super' keyword for super admin role
- * - Searches for 'consult' keyword for consultant role
  * - Defaults to 'default' role if no matches found
  * 
  * @component
@@ -197,7 +194,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
  * ```
  */
 const RoleBasedDashboard: React.FC = () => {
-  const [role, setRole] = useState<'super' | 'consultant' | 'default' | null>(null);
+  const [role, setRole] = useState<'super' | 'default' | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -224,15 +221,14 @@ const RoleBasedDashboard: React.FC = () => {
 
     /**
      * Determine user's primary role from extracted roles
-     * Priority: super > consultant > default
+     * Priority: super > default
      * 
      * @param user - Supabase user object
      * @returns Resolved role type
      */
-    const resolveRole = (user: any): 'super' | 'consultant' | 'default' => {
+    const resolveRole = (user: any): 'super' | 'default' => {
       const roles = extractRoles(user);
       if (roles.some(r => r.includes('super'))) return 'super';
-      if (roles.some(r => r.includes('consult'))) return 'consultant';
       return 'default';
     };
 
@@ -259,7 +255,7 @@ const RoleBasedDashboard: React.FC = () => {
   if (role === null) return null;
 
   // Render appropriate dashboard based on resolved role
-  return role === 'super' ? <SuperAdminPage /> : role === 'consultant' ? <ConsultantPage /> : <DashboardPage />;
+  return role === 'super' ? <SuperAdminPage /> : <DashboardPage />;
 };
 
 
