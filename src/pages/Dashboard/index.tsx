@@ -164,20 +164,27 @@ const Dashboard = () => {
       // Load my leaves
       const { data: leaves, error: leavesError } = await supabase
         .from('leaves')
-        .select('id, leave_type, from_date, to_date, status, days')
-        .eq('user_email', currentUserEmail)
+        .select('id, leave_type, start_date as from_date, end_date as to_date, status, created_at')
+        .eq('employee_email', currentUserEmail)
         .order('created_at', { ascending: false })
         .limit(5);
 
       if (!leavesError && leaves) {
-        setMyLeaves(leaves.map((l: any) => ({
-          id: String(l.id),
-          leave_type: l.leave_type,
-          from_date: l.from_date,
-          to_date: l.to_date,
-          status: l.status || 'Pending',
-          days: l.days || 0,
-        })));
+        setMyLeaves(leaves.map((l: any) => {
+          // Calculate days between start and end date
+          const start = new Date(l.from_date);
+          const end = new Date(l.to_date);
+          const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+          return {
+            id: String(l.id),
+            leave_type: l.leave_type || 'CL',
+            from_date: l.from_date,
+            to_date: l.to_date,
+            status: l.status || 'Pending',
+            days: days || 1,
+          };
+        }));
       } else {
         console.log('Leaves error:', leavesError);
         setMyLeaves([]);
