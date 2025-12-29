@@ -107,24 +107,30 @@ const Dashboard = () => {
 
       if (userId) {
         // Try querying by assignee_id first
-        const { data: tasksByIdData } = await supabase
+        const { data: tasksByIdData, error: idError } = await supabase
           .from('dashboard_tasks')
           .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
           .eq('assignee_id', userId)
           .order('created_at', { ascending: false })
           .limit(10);
-        tasks = tasksByIdData || [];
+
+        if (!idError && tasksByIdData) {
+          tasks = tasksByIdData;
+        }
       }
 
       // If no tasks found by ID, try by email as fallback
       if (tasks.length === 0) {
-        const { data: tasksByEmailData } = await supabase
+        const { data: tasksByEmailData, error: emailError } = await supabase
           .from('dashboard_tasks')
           .select('id, name as title, case_number, priority, status, deadline_date, deadline_time')
-          .or(`assignee_email.eq.${currentUserEmail},assignee_name.ilike.%${currentUserEmail}%`)
+          .eq('assignee_email', currentUserEmail)
           .order('created_at', { ascending: false })
           .limit(10);
-        tasks = tasksByEmailData || [];
+
+        if (!emailError && tasksByEmailData) {
+          tasks = tasksByEmailData;
+        }
       }
 
       setMyTasks((tasks || []).map((t: any) => ({
