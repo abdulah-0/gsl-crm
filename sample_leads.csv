@@ -1,0 +1,6 @@
+Full Name,Father Name,CNIC,ID Type,Phone,Email,Country,City,Address,Date of Birth,Service Name,Branch,Date,Source,Status,Assigned To Email,Tags
+John Doe,Robert Doe,1234567890123,cnic,+92-300-1234567,john.doe@example.com,Pakistan,Lahore,123 Main Street,1995-05-15,Study Abroad Consultancy,Lahore,2025-01-15,Website,new,counsellor@thegateway.pk,"student, uk"
+Sarah Smith,Michael Smith,AB123456,passport,+92-321-7654321,sarah.smith@example.com,Pakistan,Karachi,456 Park Avenue,1998-03-22,IELTS Preparation,Karachi,2025-01-16,Referral,contacted,admin@thegateway.pk,"ielts, canada"
+Ahmed Khan,Ali Khan,9876543210987,cnic,+92-333-9876543,ahmed.khan@example.com,Pakistan,Islamabad,789 Garden Road,1997-08-10,University Application,Islamabad,2025-01-17,Social Media,qualified,counsellor2@thegateway.pk,"masters, australia"
+Emily Johnson,David Johnson,CD987654,passport,+92-345-1112233,emily.johnson@example.com,Pakistan,Lahore,321 Oak Street,1996-11-30,Visa Assistance,Lahore,2025-01-18,Walk-in,new,counsellor@thegateway.pk,"visa, usa"
+Hassan Ali,Tariq Ali,5432167890123,cnic,+92-300-5556677,hassan.ali@example.com,Pakistan,Faisalabad,654 Elm Avenue,1999-01-25,Language Course,Faisalabad,2025-01-19,Phone Call,contacted,admin@thegateway.pk,"language, germany"

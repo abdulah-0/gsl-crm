@@ -83,6 +83,13 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   const navigate = useNavigate();
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
+  // Enable 5-minute inactivity timeout
+  useIdleLogout({
+    enabled: allowed === true,
+    timeoutMs: 5 * 60 * 1000, // 5 minutes
+    onTimeout: () => navigate('/login', { replace: true })
+  });
+
   useEffect(() => {
     // Track component mount status to prevent state updates after unmount
     let mounted = true;
