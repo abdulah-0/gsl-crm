@@ -258,8 +258,8 @@ const RoleBasedDashboard: React.FC = () => {
     return () => { mounted = false; try { authSub?.data?.subscription?.unsubscribe?.(); } catch { } };
   }, []);
 
-  // Show nothing while determining role
-  if (role === null) return null;
+  // Show loading state while determining role (prevents white screen)
+  if (role === null) return <PageLoader />;
 
   // Render appropriate dashboard based on resolved role
   return role === 'super' ? <SuperAdminPage /> : <DashboardPage />;
