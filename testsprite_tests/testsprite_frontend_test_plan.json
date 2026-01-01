@@ -1,0 +1,573 @@
+[
+  {
+    "id": "TC001",
+    "title": "Successful user login with valid credentials",
+    "description": "Verify that a user can log in successfully using valid email and password, role-based access is established, and session timeout is set to 5 minutes.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to login page"
+      },
+      {
+        "type": "action",
+        "description": "Enter valid email and password"
+      },
+      {
+        "type": "action",
+        "description": "Click on login button"
+      },
+      {
+        "type": "assertion",
+        "description": "User is authenticated successfully"
+      },
+      {
+        "type": "assertion",
+        "description": "User is redirected to dashboard with access tailored to their role"
+      },
+      {
+        "type": "assertion",
+        "description": "Session timeout is set to 5 minutes of inactivity"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Login failure with invalid credentials",
+    "description": "Verify that login fails when user enters incorrect email or password with appropriate error message.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to login page"
+      },
+      {
+        "type": "action",
+        "description": "Enter invalid email and/or password"
+      },
+      {
+        "type": "action",
+        "description": "Click on login button"
+      },
+      {
+        "type": "assertion",
+        "description": "Login is denied"
+      },
+      {
+        "type": "assertion",
+        "description": "Appropriate error message is displayed indicating invalid credentials"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Session logout after 5 minutes inactivity",
+    "description": "Verify that the user session automatically ends and user is logged out after 5 minutes of no activity.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login successfully"
+      },
+      {
+        "type": "action",
+        "description": "Remain inactive on any page for 5 minutes"
+      },
+      {
+        "type": "assertion",
+        "description": "User is automatically logged out after timeout period"
+      },
+      {
+        "type": "assertion",
+        "description": "User is redirected to login page"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Dashboard displays real-time metrics and notifications based on user role",
+    "description": "Verify that after login, the dashboard loads real-time data and notifications tailored to the logged-in user's role.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as different user roles (e.g., counselor, accountant, HR staff)"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to dashboard page"
+      },
+      {
+        "type": "assertion",
+        "description": "Dashboard displays metrics relevant to user role"
+      },
+      {
+        "type": "assertion",
+        "description": "Notifications are displayed and updated in real-time with latency under 100ms"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Lead capture from multiple channels",
+    "description": "Verify the system captures leads correctly from all integrated marketing channels including Facebook, Instagram, and Google Forms, and supports manual lead input.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Submit lead through Facebook marketing integration"
+      },
+      {
+        "type": "action",
+        "description": "Submit lead through Instagram marketing integration"
+      },
+      {
+        "type": "action",
+        "description": "Submit lead through Google Forms integration"
+      },
+      {
+        "type": "action",
+        "description": "Manually add lead via CRM interface"
+      },
+      {
+        "type": "assertion",
+        "description": "Each lead appears correctly in the Lead Management module"
+      },
+      {
+        "type": "assertion",
+        "description": "Leads are assigned to counselors as per configuration"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Multi-stage lead and visa case workflow",
+    "description": "Verify that leads and visa cases move accurately through their multi-stage workflows, including status updates, document uploads, and communication logging.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new lead"
+      },
+      {
+        "type": "action",
+        "description": "Advance lead through initial screening, document submission, and approval stages"
+      },
+      {
+        "type": "action",
+        "description": "Upload required visa documents during workflow"
+      },
+      {
+        "type": "action",
+        "description": "Add communication entries to the lead/case"
+      },
+      {
+        "type": "assertion",
+        "description": "Workflow stages update correctly in the system"
+      },
+      {
+        "type": "assertion",
+        "description": "Documents are securely stored and accessible only to authorized roles"
+      },
+      {
+        "type": "assertion",
+        "description": "Communication logs are correctly recorded and visible to permitted users"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Coaching module enrollment and schedule management",
+    "description": "Verify that students can be enrolled in coaching classes, schedules are created/managed properly, and attendance is tracked along with performance recording.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Enroll student into a coaching class batch"
+      },
+      {
+        "type": "action",
+        "description": "Create and assign teacher schedules"
+      },
+      {
+        "type": "action",
+        "description": "Record student attendance for scheduled classes"
+      },
+      {
+        "type": "action",
+        "description": "Record student performance metrics"
+      },
+      {
+        "type": "assertion",
+        "description": "Enrollment is reflected in the coaching module correctly"
+      },
+      {
+        "type": "assertion",
+        "description": "Schedules show correct timings and participants"
+      },
+      {
+        "type": "assertion",
+        "description": "Attendance records are stored and visible to teachers and counselors"
+      },
+      {
+        "type": "assertion",
+        "description": "Performance data is stored and accessible for reporting"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Employee attendance, leave request, and payroll integration",
+    "description": "Verify that employee attendance is recorded, leave requests are submitted and approved via workflows, and integrated payroll reflects attendance and leave data.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Record daily attendance for an employee"
+      },
+      {
+        "type": "action",
+        "description": "Submit leave request for approval"
+      },
+      {
+        "type": "action",
+        "description": "Approve or reject leave request via manager workflow"
+      },
+      {
+        "type": "action",
+        "description": "Generate payroll and verify attendance and leave impact on salary"
+      },
+      {
+        "type": "assertion",
+        "description": "Attendance data is correctly saved"
+      },
+      {
+        "type": "assertion",
+        "description": "Leave requests change statuses accurately and notifications are sent"
+      },
+      {
+        "type": "assertion",
+        "description": "Payroll reflects attendance and approved leave accurately"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Financial transactions and multi-currency handling",
+    "description": "Verify that all financial transactions are accurately processed including invoicing, multi-currency support, and that reports generate correctly.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create financial transactions in different currencies"
+      },
+      {
+        "type": "action",
+        "description": "Generate invoices for transactions"
+      },
+      {
+        "type": "action",
+        "description": "Generate financial reports in various formats"
+      },
+      {
+        "type": "assertion",
+        "description": "Transactions are logged correctly with currency conversions applied"
+      },
+      {
+        "type": "assertion",
+        "description": "Invoices display correct amounts and currencies"
+      },
+      {
+        "type": "assertion",
+        "description": "Reports export accurately with correct data"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "B2B SaaS partner lead submission and quota enforcement",
+    "description": "Verify that partner agencies can submit leads, track quota usage, have restricted visibility, and permissions enforced.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Login as a B2B partner agency user"
+      },
+      {
+        "type": "action",
+        "description": "Submit leads through partner interface"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access restricted modules outside of permission"
+      },
+      {
+        "type": "assertion",
+        "description": "Lead quota limits are enforced and tracked"
+      },
+      {
+        "type": "assertion",
+        "description": "Restricted modules are inaccessible"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Task creation, assignment, status update with notifications",
+    "description": "Verify tasks can be created, assigned to users, updated with status changes, and notifications are sent accordingly with audit trails.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new task with priority and status"
+      },
+      {
+        "type": "action",
+        "description": "Assign task to a user"
+      },
+      {
+        "type": "action",
+        "description": "Update task status through workflow"
+      },
+      {
+        "type": "assertion",
+        "description": "Task details and status updates are saved accurately"
+      },
+      {
+        "type": "assertion",
+        "description": "Assigned user receives notifications on creation and updates"
+      },
+      {
+        "type": "assertion",
+        "description": "Audit log accurately records task changes with timestamps"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Support ticket lifecycle with SLA management",
+    "description": "Verify support tickets can be raised, categorized, progressed through resolution stages, and SLA timings tracked with escalation if breached.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Raise a new support ticket with category and priority"
+      },
+      {
+        "type": "action",
+        "description": "Assign ticket to support agent"
+      },
+      {
+        "type": "action",
+        "description": "Advance ticket through resolution stages"
+      },
+      {
+        "type": "assertion",
+        "description": "Ticket status and category updates are logged"
+      },
+      {
+        "type": "assertion",
+        "description": "SLA timers track response times correctly"
+      },
+      {
+        "type": "assertion",
+        "description": "Escalations occur if SLA deadlines are missed"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Internal messenger real-time communication",
+    "description": "Verify users can send and receive instant messages via internal messenger with message delivery within 100ms and message history logged.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send a message from user A to user B"
+      },
+      {
+        "type": "assertion",
+        "description": "User B receives the message within 100ms"
+      },
+      {
+        "type": "action",
+        "description": "Reply from user B to user A"
+      },
+      {
+        "type": "assertion",
+        "description": "User A receives reply in real-time"
+      },
+      {
+        "type": "assertion",
+        "description": "Message history is logged and displayed correctly"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "User profile update and role management by admin",
+    "description": "Verify users can update their profiles and administrators can manage user roles, statuses, and permissions correctly across the system.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "User updates personal profile information"
+      },
+      {
+        "type": "assertion",
+        "description": "Profile changes are saved and reflected in UI"
+      },
+      {
+        "type": "action",
+        "description": "Admin updates roles and permissions of a user"
+      },
+      {
+        "type": "assertion",
+        "description": "Role-based access is updated and enforced immediately"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Security: Data encryption and row-level security enforcement",
+    "description": "Verify that sensitive data is encrypted at rest and in transit; row-level security restricts data access to authorized users only.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Attempt to access confidential data with authorized user"
+      },
+      {
+        "type": "assertion",
+        "description": "Data is accessible and decrypted properly"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access same data with unauthorized user role"
+      },
+      {
+        "type": "assertion",
+        "description": "Access is denied based on row-level security policy"
+      },
+      {
+        "type": "action",
+        "description": "Verify data encryption in database storage"
+      },
+      {
+        "type": "assertion",
+        "description": "Data is stored encrypted at rest"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "UI responsiveness and accessibility compliance",
+    "description": "Verify the CRM UI is responsive on desktop and mobile devices and meets WCAG 2.1 accessibility standards.",
+    "category": "ui",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Open CRM UI on multiple browsers and mobile devices"
+      },
+      {
+        "type": "assertion",
+        "description": "UI adapts fluidly to different screen sizes"
+      },
+      {
+        "type": "action",
+        "description": "Perform accessibility audit using WCAG 2.1 tools"
+      },
+      {
+        "type": "assertion",
+        "description": "All pages and components comply with WCAG 2.1 guidelines"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "System scalability and performance under load",
+    "description": "Verify system supports 500+ concurrent users and handles 100,000+ records with no performance degradation.",
+    "category": "performance",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate 500+ concurrent users performing typical CRM activities"
+      },
+      {
+        "type": "action",
+        "description": "Load database with 100,000+ student and transaction records"
+      },
+      {
+        "type": "assertion",
+        "description": "System responds with acceptable latency and no errors"
+      },
+      {
+        "type": "assertion",
+        "description": "UI remains responsive under load"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Backup and recovery process validation",
+    "description": "Verify backup processes maintain data integrity and system uptime of 99.9%, and that data can be restored correctly from backups.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Trigger or review scheduled backup process"
+      },
+      {
+        "type": "assertion",
+        "description": "Backup completes without errors and data integrity is validated"
+      },
+      {
+        "type": "action",
+        "description": "Simulate data restore from backup"
+      },
+      {
+        "type": "assertion",
+        "description": "System data is restored to correct state"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Audit logging of user actions",
+    "description": "Verify that all user actions involving data changes, logins, and critical operations are logged with timestamps and details.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform user activities such as create, update, delete records"
+      },
+      {
+        "type": "action",
+        "description": "Login and logout the user"
+      },
+      {
+        "type": "assertion",
+        "description": "Audit logs contain detailed entries with user ID, timestamp, action type, and affected records"
+      }
+    ]
+  }
+]

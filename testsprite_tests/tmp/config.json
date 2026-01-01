@@ -1,0 +1,12 @@
+{
+  "status": "init",
+  "executionArgs": {
+    "projectName": "gsl-crm-main",
+    "projectPath": "C:\\Users\\snake\\OneDrive\\Desktop\\gsl-crm-main",
+    "testIds": [],
+    "additionalInstruction": "",
+    "envs": {
+      "API_KEY": "sk-user-3DIgxRsDE_x3DoFB_o7reirPmmeS3kF-LTVPfZtzl3JPPx-Cnl7GPuBxVRWQ-j4O6Z9CVGDlDqmuA-RWF0BPrFfxJAE0i_RqbdN1Sf8XK96BZ-Y_dgMPI7IlJudJHGONo7s"
+    }
+  }
+}

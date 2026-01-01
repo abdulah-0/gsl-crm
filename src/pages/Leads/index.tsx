@@ -92,6 +92,18 @@ export type Lead = {
 };
 
 /**
+ * Lead remark structure
+ * Represents a single remark entry in the remarks history
+ */
+export type LeadRemark = {
+  id: number;
+  lead_id: number;
+  remark: string;
+  created_by_email: string;
+  created_at: string;
+};
+
+/**
  * Lead form state structure
  * Represents the form data for adding a new lead
  */
@@ -191,6 +203,14 @@ const LeadsPage: React.FC = () => {
   // Excel upload state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // Remarks modal state
+  const [showRemarksModal, setShowRemarksModal] = useState(false);
+  const [selectedLeadForRemarks, setSelectedLeadForRemarks] = useState<Lead | null>(null);
+  const [remarks, setRemarks] = useState<LeadRemark[]>([]);
+  const [newRemark, setNewRemark] = useState('');
+  const [loadingRemarks, setLoadingRemarks] = useState(false);
+  const [savingRemark, setSavingRemark] = useState(false);
 
   const navigate = useNavigate();
 
@@ -368,11 +388,54 @@ const LeadsPage: React.FC = () => {
     await loadLeads();
   };
 
-  const updateRemarks = async (lead: Lead, remarks: string) => {
-    const { error } = await supabase.from('leads').update({ remarks }).eq('id', lead.id);
-    if (error) { alert(error.message); return; }
-    // Update local state without reloading to avoid losing focus
-    setItems(prev => prev.map(item => item.id === lead.id ? { ...item, remarks } : item));
+  /**
+   * Fetch remarks history for a lead
+   */
+  const fetchRemarks = async (leadId: number) => {
+    setLoadingRemarks(true);
+    const { data, error } = await supabase
+      .from('lead_remarks')
+      .select('*')
+      .eq('lead_id', leadId)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setRemarks(data as LeadRemark[]);
+    }
+    setLoadingRemarks(false);
+  };
+
+  /**
+   * Add a new remark to a lead
+   */
+  const addRemark = async () => {
+    if (!selectedLeadForRemarks || !newRemark.trim()) return;
+
+    setSavingRemark(true);
+    const { error } = await supabase
+      .from('lead_remarks')
+      .insert([{
+        lead_id: selectedLeadForRemarks.id,
+        remark: newRemark.trim(),
+        created_by_email: currentUserEmail
+      }]);
+
+    if (error) {
+      alert(error.message);
+    } else {
+      setNewRemark('');
+      await fetchRemarks(selectedLeadForRemarks.id);
+    }
+    setSavingRemark(false);
+  };
+
+  /**
+   * Open remarks modal for a lead
+   */
+  const openRemarksModal = (lead: Lead) => {
+    setSelectedLeadForRemarks(lead);
+    setShowRemarksModal(true);
+    fetchRemarks(lead.id);
   };
 
   const handleConvert = (lead: Lead) => {
@@ -643,6 +706,7 @@ const LeadsPage: React.FC = () => {
                       <th className="text-left p-2">Source</th>
                       <th className="text-left p-2">Status</th>
                       <th className="text-left p-2">Stage</th>
+                      <th className="text-left p-2">Date Added</th>
                       <th className="text-left p-2">Remarks</th>
                       <th className="text-right p-2">Actions</th>
                     </tr>
@@ -670,13 +734,15 @@ const LeadsPage: React.FC = () => {
                           </select>
                         </td>
                         <td className="p-2">
-                          <input
-                            type="text"
-                            value={l.remarks || ''}
-                            onChange={(e) => updateRemarks(l, e.target.value)}
-                            placeholder="Add remarks..."
-                            className="border rounded p-1 text-sm w-full"
-                          />
+                          {l.lead_date ? new Date(l.lead_date).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="p-2">
+                          <button
+                            onClick={() => openRemarksModal(l)}
+                            className="px-3 py-1 text-xs border rounded hover:bg-gray-50 flex items-center gap-1"
+                          >
+                            💬 View/Add
+                          </button>
                         </td>
                         <td className="p-2 text-right space-x-2">
                           {l.status !== 'confirmed' && (
@@ -687,7 +753,7 @@ const LeadsPage: React.FC = () => {
                       </tr>
                     ))}
                     {filtered.length === 0 && (
-                      <tr><td className="p-3 text-text-secondary" colSpan={8}>No leads found.</td></tr>
+                      <tr><td className="p-3 text-text-secondary" colSpan={9}>No leads found.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -771,6 +837,81 @@ const LeadsPage: React.FC = () => {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        )}
+        {/* Remarks History Modal */}
+        {showRemarksModal && selectedLeadForRemarks && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-2xl w-full mx-4 shadow-xl max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Remarks for {selectedLeadForRemarks.full_name}</h2>
+                <button
+                  onClick={() => {
+                    setShowRemarksModal(false);
+                    setSelectedLeadForRemarks(null);
+                    setRemarks([]);
+                    setNewRemark('');
+                  }}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Remarks History */}
+              <div className="flex-1 overflow-y-auto mb-4 border rounded p-3 bg-gray-50">
+                {loadingRemarks ? (
+                  <div className="text-center text-text-secondary py-4">Loading remarks...</div>
+                ) : remarks.length === 0 ? (
+                  <div className="text-center text-text-secondary py-4">No remarks yet. Add one below!</div>
+                ) : (
+                  <div className="space-y-3">
+                    {remarks.map((remark) => (
+                      <div key={remark.id} className="bg-white rounded p-3 shadow-sm">
+                        <div className="text-sm text-gray-900">{remark.remark}</div>
+                        <div className="mt-2 flex items-center gap-3 text-xs text-text-secondary">
+                          <span>👤 {remark.created_by_email}</span>
+                          <span>•</span>
+                          <span>🕒 {new Date(remark.created_at).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Remark */}
+              <div className="border-t pt-4">
+                <label className="block text-sm font-semibold mb-2">Add New Remark</label>
+                <textarea
+                  value={newRemark}
+                  onChange={(e) => setNewRemark(e.target.value)}
+                  placeholder="Type your remark here..."
+                  className="w-full border rounded p-2 text-sm resize-none"
+                  rows={3}
+                />
+                <div className="mt-3 flex justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setShowRemarksModal(false);
+                      setSelectedLeadForRemarks(null);
+                      setRemarks([]);
+                      setNewRemark('');
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={addRemark}
+                    disabled={savingRemark || !newRemark.trim()}
+                    className="px-4 py-2 bg-[#ffa332] text-white rounded-lg hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingRemark ? 'Saving...' : 'Add Remark'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
