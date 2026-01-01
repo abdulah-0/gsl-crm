@@ -266,7 +266,7 @@ const Cases: React.FC = () => {
   // Drag-over visual state (drop a case onto Tasks section)
   const [isCaseDragOver, setIsCaseDragOver] = useState(false);
 
-  // Filters
+  // Filters - MOVED BEFORE useEffect
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<CaseStage | 'All'>('All');
   const [filterType, setFilterType] = useState<string>('All');
