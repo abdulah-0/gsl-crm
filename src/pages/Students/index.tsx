@@ -36,6 +36,8 @@ import { Helmet } from 'react-helmet';
 import { supabase } from '../../lib/supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { generateVoucherPDFToStorage, type VoucherRow, type PendingStudent, type VoucherCategory } from '../Finances';
+import { getUserBranch, getBranchFilter } from '../../utils/branchAccess';
+import BranchFilter from '../../components/BranchFilter';
 
 
 // Types
@@ -183,6 +185,19 @@ const StudentsPage: React.FC = () => {
   }, []);
   useEffect(() => { if (tab === 'add' && !canAdd) setTab('list'); }, [tab, canAdd]);
 
+  // Load user branch information
+  useEffect(() => {
+    (async () => {
+      try {
+        const { branch, isSuperAdmin, isMainBranch } = await getUserBranch(supabase);
+        setUserBranch(branch);
+        setCanAccessAllBranches(isSuperAdmin || isMainBranch);
+      } catch (error) {
+        console.error('Error loading branch info:', error);
+      }
+    })();
+  }, []);
+
   // Auto-fill Consultancy Date field with today's date when applicable
   useEffect(() => {
     if (enrollmentType === 'consultancy') {
@@ -219,6 +234,11 @@ const StudentsPage: React.FC = () => {
   const [mockTests, setMockTests] = useState<any[]>([]);
   const [mockTestsModalOpen, setMockTestsModalOpen] = useState(false);
   const [selectedStudentForTests, setSelectedStudentForTests] = useState<Student | null>(null);
+
+  // Branch filter state
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [userBranch, setUserBranch] = useState<string | null>(null);
+  const [canAccessAllBranches, setCanAccessAllBranches] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -743,7 +763,16 @@ const StudentsPage: React.FC = () => {
 
   // List loading (no pagination; fetch all filtered students)
   const loadList = useCallback(async () => {
+    // Get branch filter
+    const branchFilter = await getBranchFilter(supabase, selectedBranch);
+
     let query = supabase.from('dashboard_students').select('*').eq('archived', false);
+
+    // Apply branch filter if specified
+    if (branchFilter) {
+      query = query.eq('branch', branchFilter);
+    }
+
     if (search) {
       // search by name, cnic, program, batch
       query = query.or(`full_name.ilike.%${search}%,cnic.ilike.%${search}%,program_title.ilike.%${search}%,batch_no.ilike.%${search}%`);
@@ -753,7 +782,7 @@ const StudentsPage: React.FC = () => {
     if (fCity !== 'All') query = query.eq('city', fCity);
     const { data } = await query.order('created_at', { ascending: false });
     setItems((data as any as Student[]) || []);
-  }, [search, fProgram, fBatch, fCity]);
+  }, [search, fProgram, fBatch, fCity, selectedBranch]);
 
   useEffect(() => { loadList(); }, [loadList]);
 
@@ -1103,14 +1132,39 @@ const StudentsPage: React.FC = () => {
           )}
 
           {tab === 'list' && (
-            <div className="mt-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <input placeholder="Search name, CNIC, program, batch" value={search} onChange={e => { setSearch(e.target.value); }} className="w-full sm:w-64 border rounded p-2 text-sm" />
-                <select value={fProgram} onChange={e => { setFProgram(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{programs.map(p => <option key={p}>{p}</option>)}</select>
-                <select value={fBatch} onChange={e => { setFBatch(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{batches.map(b => <option key={b}>{b}</option>)}</select>
-                <select value={fCity} onChange={e => { setFCity(e.target.value); }} className="border rounded p-2 text-sm"><option>All</option>{cities.map(c => <option key={c}>{c}</option>)}</select>
+            <div className="mt-6 bg-white rounded-xl p-4 shadow-[0px_6px_58px_#c3cbd61a]">
+              <div className="flex flex-wrap items-center gap-3 justify-between text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    placeholder="Search by name, CNIC, program, batch"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="border rounded p-2 w-64"
+                  />
+                  <BranchFilter
+                    value={selectedBranch}
+                    onChange={setSelectedBranch}
+                    showAllOption={true}
+                  />
+                  <select value={fProgram} onChange={e => setFProgram(e.target.value)} className="border rounded p-2">
+                    <option value="All">All Programs</option>
+                    {programs.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <select value={fBatch} onChange={e => setFBatch(e.target.value)} className="border rounded p-2">
+                    <option value="All">All Batches</option>
+                    {batches.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                  <select value={fCity} onChange={e => setFCity(e.target.value)} className="border rounded p-2">
+                    <option value="All">All Cities</option>
+                    {cities.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-text-secondary">
+                  <span>Active: {countActive}</span>
+                  <span>Completed: {countCompleted}</span>
+                  <span>Withdrawn: {countWithdrawn}</span>
+                </div>
               </div>
-
               <div className="mt-4 space-y-8">
                 {/* Currently Enrolled */}
                 <div>
