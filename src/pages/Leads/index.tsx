@@ -181,7 +181,8 @@ const LeadsPage: React.FC = () => {
   const [tab, setTab] = useState<'add' | 'list'>('list');
   const [items, setItems] = useState<Lead[]>([]);
   const [search, setSearch] = useState('');
-  const [statusF, setStatusF] = useState<'All' | LeadStatus>('All');
+  const [stageF, setStageF] = useState<string>('All');
+  const [dateFilter, setDateFilter] = useState<string>('All'); // All, Today, This Week, This Month, Custom
   const [form, setForm] = useState<LeadFormState>(makeDefaultLeadForm());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -260,21 +261,42 @@ const LeadsPage: React.FC = () => {
   useEffect(() => { loadLeads(); }, []);
 
   /**
-   * Filtered leads based on search query and status filter
+   * Filtered leads based on search query, stage filter, and date filter
    * Searches across name, email, phone, and city fields
    */
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(l => {
-      // Filter by status if not 'All'
-      if (statusF !== 'All' && l.status !== statusF) return false;
+      // Filter by stage if not 'All'
+      if (stageF !== 'All' && l.stage !== stageF) return false;
+
+      // Filter by date if not 'All'
+      if (dateFilter !== 'All' && l.lead_date) {
+        const leadDate = new Date(l.lead_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (dateFilter === 'Today') {
+          const leadDateOnly = new Date(leadDate);
+          leadDateOnly.setHours(0, 0, 0, 0);
+          if (leadDateOnly.getTime() !== today.getTime()) return false;
+        } else if (dateFilter === 'This Week') {
+          const weekStart = new Date(today);
+          weekStart.setDate(today.getDate() - today.getDay());
+          if (leadDate < weekStart) return false;
+        } else if (dateFilter === 'This Month') {
+          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+          if (leadDate < monthStart) return false;
+        }
+      }
+
       // If no search query, include all
       if (!q) return true;
       // Search across multiple fields
       const bucket = `${l.full_name || ''} ${l.email || ''} ${l.phone || ''} ${l.city || ''}`.toLowerCase();
       return bucket.includes(q);
     });
-  }, [items, search, statusF]);
+  }, [items, search, stageF, dateFilter]);
 
   /**
    * Reset form to default values while preserving user context
@@ -683,15 +705,20 @@ const LeadsPage: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3 justify-between text-sm">
                 <div className="flex items-center gap-2">
                   <input placeholder="Search by name, email, phone" value={search} onChange={e => setSearch(e.target.value)} className="border rounded p-2 w-64" />
-                  <select value={statusF} onChange={e => setStatusF(e.target.value as any)} className="border rounded p-2">
-                    <option value="All">All Statuses</option>
-                    <option value="new">New</option>
-                    <option value="documentation">Documentation</option>
-                    <option value="university">University</option>
-                    <option value="visa">Visa</option>
-                    <option value="enrolled">Enrolled</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="rejected">Rejected</option>
+                  <select value={stageF} onChange={e => setStageF(e.target.value)} className="border rounded p-2">
+                    <option value="All">All Stages</option>
+                    <option value="Entry stage">Entry stage</option>
+                    <option value="Initial Stage">Initial Stage</option>
+                    <option value="Follow up">Follow up</option>
+                    <option value="Near to Confirm">Near to Confirm</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Case lose">Case lose</option>
+                  </select>
+                  <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="border rounded p-2">
+                    <option value="All">All Dates</option>
+                    <option value="Today">Today</option>
+                    <option value="This Week">This Week</option>
+                    <option value="This Month">This Month</option>
                   </select>
                 </div>
                 {loading && <div className="text-xs text-text-secondary">Loading...</div>}
