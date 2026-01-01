@@ -38,6 +38,8 @@ import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import TeacherSearchDropdown from '../../components/TeacherSearchDropdown';
+import { getUserBranch, getBranchFilter } from '../../utils/branchAccess';
+import BranchFilter from '../../components/BranchFilter';
 
 
 // Types
@@ -177,10 +179,20 @@ const Cases: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      const { data, error } = await supabase
+      // Get branch filter
+      const branchFilter = await getBranchFilter(supabase, selectedBranch);
+
+      let query = supabase
         .from('dashboard_cases')
-        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, university_id')
-        .order('created_at', { ascending: false });
+        .select('id, case_number, title, assignees, employee, status, stage, branch, type, created_at, university_id');
+
+      // Apply branch filter if specified
+      if (branchFilter) {
+        query = query.eq('branch', branchFilter);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
       if (!error) {
         // Fetch course information for each case
         const caseIds = (data ?? []).map((row: any) => row.case_number || String(row.id));
@@ -234,7 +246,7 @@ const Cases: React.FC = () => {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dashboard_cases' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(chan); };
-  }, [activeCaseId]);
+  }, [activeCaseId, selectedBranch]);
 
   // UI state
   const [tab, setTab] = useState<'Active' | 'Backlog'>('Active');
@@ -255,7 +267,7 @@ const Cases: React.FC = () => {
   const [isCaseDragOver, setIsCaseDragOver] = useState(false);
 
   // Filters
-  const [filterBranch, setFilterBranch] = useState<string>('All');
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<CaseStage | 'All'>('All');
   const [filterType, setFilterType] = useState<string>('All');
   const [search, setSearch] = useState<string>('');
@@ -322,20 +334,20 @@ const Cases: React.FC = () => {
   // Task Details modal
   const [selectedTask, setSelectedTask] = useState<{ caseId: string; task: Task } | null>(null);
 
-  // Derived filters
+  // Derived filters (branch filtering now done at database level)
   const branches = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.branch).filter(Boolean))) as string[]], [cases]);
   const types = useMemo(() => ['All', ...Array.from(new Set(cases.map(c => c.type).filter(Boolean))) as string[]], [cases]);
   const statuses: (CaseStage | 'All')[] = ['All', ...CASE_STAGES];
   const filteredCases = useMemo(() => {
     const term = search.trim().toLowerCase();
     return cases.filter(c => {
-      if (filterBranch !== 'All' && c.branch !== filterBranch) return false;
+      // Branch filtering is now done at database level via RLS and selectedBranch
       if (filterType !== 'All' && c.type !== filterType) return false;
       if (filterStatus !== 'All' && (c.status || '') !== filterStatus) return false;
       if (term && !(`${c.caseId}`.toLowerCase().includes(term) || (c.title || '').toLowerCase().includes(term))) return false;
       return true;
     });
-  }, [cases, filterBranch, filterType, filterStatus, search]);
+  }, [cases, filterType, filterStatus, search]);
 
   const activeCase = useMemo(() => cases.find(c => c.caseId === activeCaseId) || cases[0], [cases, activeCaseId]);
   const tasks = tab === 'Active' ? activeCase?.active || [] : activeCase?.backlog || [];
@@ -646,10 +658,13 @@ const Cases: React.FC = () => {
                   {/* Filters */}
                   <div className="mb-3 grid grid-cols-1 gap-2">
                     <input value={search} onChange={e => setSearch(e.target.value)} className="w-full border rounded p-2 text-sm" placeholder="Search by ID or Title" />
-                    <div className="grid grid-cols-3 gap-2">
-                      <select value={filterBranch} onChange={e => setFilterBranch(e.target.value)} className="border rounded p-2 text-sm">
-                        {branches.map(b => <option key={b}>{b}</option>)}
-                      </select>
+                    <BranchFilter
+                      value={selectedBranch}
+                      onChange={setSelectedBranch}
+                      showAllOption={true}
+                      className="w-full"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
                       <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as CaseStage | 'All')} className="border rounded p-2 text-sm">
                         {statuses.map(s => <option key={s}>{s}</option>)}
                       </select>
@@ -658,7 +673,7 @@ const Cases: React.FC = () => {
                       </select>
                     </div>
                     <div className="text-right">
-                      <button type="button" onClick={() => { setFilterBranch('All'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
+                      <button type="button" onClick={() => { setSelectedBranch('all'); setFilterStatus('All'); setFilterType('All'); setSearch(''); }} className="text-xs text-text-secondary hover:underline">Clear filters</button>
                     </div>
                   </div>
 
