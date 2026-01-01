@@ -686,7 +686,7 @@ const CaseTaskDetailPage: React.FC = () => {
         if (tfDeadlineDate && tfDeadlineTime) {
           const calendarEventId = `task-${id}`;
           const taskNotes = `Case: ${caseNumber}\nPriority: ${tfPriority}\nStatus: ${tfStatus}${tfDesc ? '\n\n' + tfDesc : ''}`;
-          
+
           await supabase.from('calendar_events').insert([{
             id: calendarEventId,
             user_email: assigneeData.email,
@@ -702,6 +702,9 @@ const CaseTaskDetailPage: React.FC = () => {
         }
       }
     }
+
+    // Immediately refresh the tasks list
+    await loadCaseTasks();
 
     setShowAddTask(false);
     setTfName('');
