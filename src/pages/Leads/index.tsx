@@ -182,7 +182,7 @@ const LeadsPage: React.FC = () => {
   const [items, setItems] = useState<Lead[]>([]);
   const [search, setSearch] = useState('');
   const [stageF, setStageF] = useState<string>('All');
-  const [dateFilter, setDateFilter] = useState<string>('All'); // All, Today, This Week, This Month, Custom
+  const [dateFilter, setDateFilter] = useState<string>(''); // Specific date filter
   const [form, setForm] = useState<LeadFormState>(makeDefaultLeadForm());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -270,24 +270,16 @@ const LeadsPage: React.FC = () => {
       // Filter by stage if not 'All'
       if (stageF !== 'All' && l.stage !== stageF) return false;
 
-      // Filter by date if not 'All'
-      if (dateFilter !== 'All' && l.lead_date) {
+      // Filter by specific date if selected
+      if (dateFilter && l.lead_date) {
         const leadDate = new Date(l.lead_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const filterDate = new Date(dateFilter);
 
-        if (dateFilter === 'Today') {
-          const leadDateOnly = new Date(leadDate);
-          leadDateOnly.setHours(0, 0, 0, 0);
-          if (leadDateOnly.getTime() !== today.getTime()) return false;
-        } else if (dateFilter === 'This Week') {
-          const weekStart = new Date(today);
-          weekStart.setDate(today.getDate() - today.getDay());
-          if (leadDate < weekStart) return false;
-        } else if (dateFilter === 'This Month') {
-          const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-          if (leadDate < monthStart) return false;
-        }
+        // Compare only the date parts (ignore time)
+        leadDate.setHours(0, 0, 0, 0);
+        filterDate.setHours(0, 0, 0, 0);
+
+        if (leadDate.getTime() !== filterDate.getTime()) return false;
       }
 
       // If no search query, include all
@@ -714,12 +706,23 @@ const LeadsPage: React.FC = () => {
                     <option value="Confirmed">Confirmed</option>
                     <option value="Case lose">Case lose</option>
                   </select>
-                  <select value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="border rounded p-2">
-                    <option value="All">All Dates</option>
-                    <option value="Today">Today</option>
-                    <option value="This Week">This Week</option>
-                    <option value="This Month">This Month</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-text-secondary">Filter by Date:</label>
+                    <input
+                      type="date"
+                      value={dateFilter}
+                      onChange={e => setDateFilter(e.target.value)}
+                      className="border rounded p-2"
+                    />
+                    {dateFilter && (
+                      <button
+                        onClick={() => setDateFilter('')}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {loading && <div className="text-xs text-text-secondary">Loading...</div>}
               </div>
