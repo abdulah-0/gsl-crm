@@ -176,6 +176,12 @@ const Cases: React.FC = () => {
     })();
   }, []);
 
+  // Filters - MUST BE BEFORE useEffect that uses selectedBranch
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<CaseStage | 'All'>('All');
+  const [filterType, setFilterType] = useState<string>('All');
+  const [search, setSearch] = useState<string>('');
+
 
   useEffect(() => {
     const load = async () => {
@@ -265,12 +271,6 @@ const Cases: React.FC = () => {
 
   // Drag-over visual state (drop a case onto Tasks section)
   const [isCaseDragOver, setIsCaseDragOver] = useState(false);
-
-  // Filters - MOVED BEFORE useEffect
-  const [selectedBranch, setSelectedBranch] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<CaseStage | 'All'>('All');
-  const [filterType, setFilterType] = useState<string>('All');
-  const [search, setSearch] = useState<string>('');
 
   // Case Details modal
   const [showCaseDetails, setShowCaseDetails] = useState(false);
