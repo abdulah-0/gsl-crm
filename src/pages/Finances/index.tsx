@@ -33,6 +33,8 @@ import Sidebar from '../../components/common/Sidebar';
 import Header from '../../components/common/Header';
 import { supabase } from '../../lib/supabaseClient';
 import { useBranches } from '../../hooks/useBranches';
+import { getUserBranch, getBranchFilter } from '../../utils/branchAccess';
+import BranchFilter from '../../components/BranchFilter';
 
 import { Bar, BarChart, CartesianGrid, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from 'recharts';
 import { jsPDF } from 'jspdf';
@@ -453,12 +455,6 @@ const Finances: React.FC = () => {
   type AccountRow = { student_id: string; name: string; total: number; paid: number; remaining: number; next_due: string | null };
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
 
-
-  const [search, setSearch] = useState('');
-  const [branchFilter, setBranchFilter] = useState<string>('All Branches');
-  const [page, setPage] = useState(1);
-  const pageSize = 5;
-
   const isValid = useMemo(() => {
     const amt = Number(amount);
     const hasStudent = !!pendingSelected;
@@ -519,6 +515,12 @@ const Finances: React.FC = () => {
     })();
   }, []);
 
+  // Filter states - MUST BE BEFORE useEffect that uses selectedBranch
+  const [search, setSearch] = useState('');
+  const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+
 
 
 
@@ -571,7 +573,7 @@ const Finances: React.FC = () => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [selectedBranch]); // Added selectedBranch dependency
 
   // Pending students search (debounced)
   useEffect(() => {
@@ -802,16 +804,14 @@ const Finances: React.FC = () => {
 
   const filtered = useMemo(() => {
     const term = search.toLowerCase();
+    // Branch filtering is now done at database level via RLS and selectedBranch
     return vouchers.filter(v => (
-      (branchFilter === 'All Branches' || v.branch === branchFilter) &&
-      (
-        v.id.toLowerCase().includes(term) ||
-        v.type.toLowerCase().includes(term) ||
-        v.branch.toLowerCase().includes(term) ||
-        (v.description?.toLowerCase().includes(term) ?? false)
-      )
+      v.id.toLowerCase().includes(term) ||
+      v.type.toLowerCase().includes(term) ||
+      v.branch.toLowerCase().includes(term) ||
+      (v.description?.toLowerCase().includes(term) ?? false)
     ));
-  }, [vouchers, branchFilter, search]);
+  }, [vouchers, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
@@ -930,11 +930,22 @@ const Finances: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const { data, error } = await supabase
+      // Get branch filter
+      const branchFilter = await getBranchFilter(supabase, selectedBranch);
+
+      let query = supabase
         .from('vouchers')
-        .select('*')
+        .select('*');
+
+      // Apply branch filter if specified
+      if (branchFilter) {
+        query = query.eq('branch', branchFilter);
+      }
+
+      const { data, error } = await query
         .order('occurred_at', { ascending: false })
         .limit(5000); // Increased limit to ensure all data is loaded for charts
+
       if (!cancelled && data) setVouchers(data.map(mapDbToRow));
       if (error) console.error('Load vouchers error', error);
     };
@@ -1251,10 +1262,11 @@ const Finances: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <h2 className="text-lg font-bold text-text-primary" style={{ fontFamily: 'Nunito Sans' }}>Recent Vouchers</h2>
               <div className="flex flex-col md:flex-row gap-3 md:items-center">
-                <select value={branchFilter} onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }} className="border rounded-lg p-2">
-                  <option>All Branches</option>
-                  {(branchList.length ? branchList : branchNames).map(b => (<option key={b}>{b}</option>))}
-                </select>
+                <BranchFilter
+                  value={selectedBranch}
+                  onChange={(value) => { setSelectedBranch(value); setPage(1); }}
+                  showAllOption={true}
+                />
                 <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Search..." className="border rounded-lg p-2" />
                 <div className="flex gap-2">
                   <button onClick={() => downloadCSV('vouchers.csv', filtered)} className="px-3 py-2 border rounded-lg hover:bg-gray-50">CSV</button>
