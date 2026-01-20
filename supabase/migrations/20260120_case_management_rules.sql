@@ -110,7 +110,83 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
--- 4. Partial Unique Index for One Active Case Per Student
+-- 4. Handle Existing Duplicate Active Cases
+-- ============================================================================
+-- Before creating the unique constraint, we need to handle existing duplicates
+-- This query identifies students with multiple active cases
+
+DO $$
+DECLARE
+  duplicate_count INT;
+BEGIN
+  -- Count how many students have duplicate active cases
+  SELECT COUNT(*) INTO duplicate_count
+  FROM (
+    SELECT student_id, COUNT(*) as case_count
+    FROM public.dashboard_cases
+    WHERE student_id IS NOT NULL 
+      AND student_id != ''
+      AND COALESCE(stage, status, 'Initial Stage') NOT IN ('Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected')
+    GROUP BY student_id
+    HAVING COUNT(*) > 1
+  ) duplicates;
+
+  IF duplicate_count > 0 THEN
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'FOUND % STUDENTS WITH MULTIPLE ACTIVE CASES', duplicate_count;
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'The following students have multiple active cases:';
+    
+    -- Show the duplicate cases
+    FOR rec IN (
+      SELECT 
+        student_id,
+        STRING_AGG(case_number || ' (' || COALESCE(stage, status, 'Initial Stage') || ')', ', ' ORDER BY created_at) as cases,
+        COUNT(*) as case_count
+      FROM public.dashboard_cases
+      WHERE student_id IS NOT NULL 
+        AND student_id != ''
+        AND COALESCE(stage, status, 'Initial Stage') NOT IN ('Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected')
+      GROUP BY student_id
+      HAVING COUNT(*) > 1
+    ) LOOP
+      RAISE NOTICE 'Student %: % cases - %', rec.student_id, rec.case_count, rec.cases;
+    END LOOP;
+    
+    RAISE NOTICE '========================================';
+    RAISE NOTICE 'AUTOMATIC FIX: Moving older cases to "Not Enrolled" status';
+    RAISE NOTICE '========================================';
+    
+    -- Automatically move older duplicate cases to terminal stage
+    -- Keep only the most recent case active for each student
+    UPDATE public.dashboard_cases
+    SET 
+      stage = 'Not Enrolled',
+      status = 'Not Enrolled'
+    WHERE id IN (
+      SELECT id
+      FROM (
+        SELECT 
+          id,
+          student_id,
+          ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY created_at DESC) as rn
+        FROM public.dashboard_cases
+        WHERE student_id IS NOT NULL 
+          AND student_id != ''
+          AND COALESCE(stage, status, 'Initial Stage') NOT IN ('Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected')
+      ) ranked
+      WHERE rn > 1
+    );
+    
+    RAISE NOTICE 'Fixed % duplicate cases by moving them to "Not Enrolled" status', duplicate_count;
+    RAISE NOTICE 'Only the most recent case for each student remains active';
+  ELSE
+    RAISE NOTICE 'No duplicate active cases found - proceeding with unique index creation';
+  END IF;
+END $$;
+
+-- ============================================================================
+-- 5. Partial Unique Index for One Active Case Per Student
 -- ============================================================================
 -- Ensures a student can only have one active case at database level
 -- Only applies to cases NOT in terminal stages
@@ -123,7 +199,7 @@ CREATE UNIQUE INDEX idx_dashboard_cases_one_active_per_student
     AND COALESCE(stage, status, 'Initial Stage') NOT IN ('Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected');
 
 -- ============================================================================
--- 5. Trigger to Validate Stage Changes and Record History
+-- 6. Trigger to Validate Stage Changes and Record History
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.validate_and_record_case_stage_change()
 RETURNS TRIGGER AS $$
@@ -172,7 +248,7 @@ CREATE TRIGGER before_update_dashboard_cases_stage
   EXECUTE FUNCTION public.validate_and_record_case_stage_change();
 
 -- ============================================================================
--- 6. Enable RLS on case_stage_history (inherit from dashboard_cases)
+-- 7. Enable RLS on case_stage_history (inherit from dashboard_cases)
 -- ============================================================================
 ALTER TABLE public.case_stage_history ENABLE ROW LEVEL SECURITY;
 
