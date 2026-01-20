@@ -123,6 +123,45 @@ const normalizeCaseStage = (raw?: string | null): CaseStage => {
   return match || 'Initial Stage';
 };
 
+// Terminal stages where case is considered closed
+const TERMINAL_STAGES: CaseStage[] = ['Enrollment', 'Not Enrolled', 'Backout', 'Visa Rejected'];
+
+// Ordered progression stages (non-terminal)
+const ORDERED_STAGES: CaseStage[] = [
+  'Initial Stage',
+  'Offer Applied',
+  'Offer Received',
+  'Fee Paid',
+  'Interview',
+  'CAS Applied',
+  'CAS Received',
+  'Visa Applied',
+  'Visa Received',
+];
+
+// Validate if stage transition is allowed
+const isValidStageTransition = (currentStage: CaseStage, newStage: CaseStage): boolean => {
+  // Same stage is always allowed
+  if (currentStage === newStage) return true;
+
+  // Moving to terminal stage is always allowed
+  if (TERMINAL_STAGES.includes(newStage)) return true;
+
+  // Cannot move from terminal stage
+  if (TERMINAL_STAGES.includes(currentStage)) return false;
+
+  // Check if both stages are in ordered progression
+  const currentIndex = ORDERED_STAGES.indexOf(currentStage);
+  const newIndex = ORDERED_STAGES.indexOf(newStage);
+
+  // If either stage is not in ordered list, reject
+  if (currentIndex === -1 || newIndex === -1) return false;
+
+  // Only allow forward movement
+  return newIndex > currentIndex;
+};
+
+
 const CASE_STAGE_COLORS: Record<CaseStage, string> = {
   'Initial Stage': 'bg-amber-100 text-amber-700',
   'Offer Applied': 'bg-cyan-100 text-cyan-700',
@@ -459,6 +498,29 @@ const Cases: React.FC = () => {
 
       if (!id) return;
       let prevStatus: CaseStage | undefined;
+
+      // Find the case to get current stage
+      const currentCase = cases.find(c => c.caseId === id);
+      if (!currentCase) return;
+
+      const currentStage = normalizeCaseStage(currentCase.status);
+
+      // Validate stage transition
+      if (!isValidStageTransition(currentStage, next)) {
+        if (TERMINAL_STAGES.includes(currentStage)) {
+          showToast(
+            `Cannot change stage from "${currentStage}" - this case is closed. Terminal stages cannot be changed.`,
+            'error'
+          );
+        } else {
+          showToast(
+            `Cannot move backward from "${currentStage}" to "${next}". Cases can only move forward or to terminal stages (Enrollment, Not Enrolled, Backout, Visa Rejected).`,
+            'error'
+          );
+        }
+        return;
+      }
+
       // Optimistic UI update and capture previous
       setCases(prev => prev.map(c => {
         if (c.caseId === id) {
@@ -471,7 +533,13 @@ const Cases: React.FC = () => {
       if (error) {
         // revert
         setCases(prev => prev.map(c => c.caseId === id ? { ...c, status: prevStatus } : c));
-        showToast('Failed to update stage', 'error');
+
+        // Check if it's a stage progression error from the trigger
+        if (error.message?.includes('Invalid stage transition')) {
+          showToast(error.message, 'error');
+        } else {
+          showToast('Failed to update stage', 'error');
+        }
       } else {
         setJustDroppedId(id);
         setTimeout(() => setJustDroppedId(null), 500);
@@ -508,6 +576,31 @@ const Cases: React.FC = () => {
 
     const title = formTitle.trim() || sf.basic_name || 'New Case';
     if (!title) return;
+
+    // Check if student already has an active case
+    if (selectedStudentId) {
+      const { data: existingCases, error: checkError } = await supabase
+        .from('dashboard_cases')
+        .select('case_number, stage, status')
+        .eq('student_id', selectedStudentId);
+
+      if (!checkError && existingCases && existingCases.length > 0) {
+        // Check if any case is not in terminal stage
+        const activeCase = existingCases.find(c => {
+          const stage = normalizeCaseStage(c.stage || c.status);
+          return !TERMINAL_STAGES.includes(stage);
+        });
+
+        if (activeCase) {
+          showToast(
+            `This student already has an active case: ${activeCase.case_number}. Please complete or close that case before creating a new one.`,
+            'error'
+          );
+          return;
+        }
+      }
+    }
+
     const assignees = formAssignees.split(',').map(s => s.trim()).filter(Boolean);
     const sel = selectedStudentId ? studentsForDropdown.find(x => x.id === selectedStudentId) : null;
     const payload: any = {
@@ -523,7 +616,16 @@ const Cases: React.FC = () => {
       .insert([payload])
       .select('case_number')
       .single();
-    if (!error && data) {
+    if (error) {
+      // Check if it's a unique constraint violation
+      if (error.message?.includes('idx_dashboard_cases_one_active_per_student')) {
+        showToast('This student already has an active case. Please complete or close that case first.', 'error');
+      } else {
+        showToast('Failed to create case: ' + error.message, 'error');
+      }
+      return;
+    }
+    if (data) {
       setActiveCaseId(data.case_number);
       setShowAddCase(false);
       setFormCaseId(''); setFormTitle(''); setFormAssignees(''); setFormEstimate(0); setFormPriority('Medium'); setSelectedStudentId('');
@@ -537,6 +639,7 @@ const Cases: React.FC = () => {
         add_course_or_uni: '', add_travel_history: '', add_visa_refusal: '', add_asylum_family: '',
         office_date: '', office_application_started: '', office_university_applied: '', office_counsellor_name: '', office_counsellor_sign: '', office_next_follow_up_date: ''
       });
+      showToast('Case created successfully');
     }
   };
 
