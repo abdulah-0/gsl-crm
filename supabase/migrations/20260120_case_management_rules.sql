@@ -118,6 +118,7 @@ $$ LANGUAGE plpgsql STABLE;
 DO $$
 DECLARE
   duplicate_count INT;
+  rec RECORD;
 BEGIN
   -- Count how many students have duplicate active cases
   SELECT COUNT(*) INTO duplicate_count
