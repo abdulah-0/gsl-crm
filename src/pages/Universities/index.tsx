@@ -61,6 +61,17 @@ const UniversitiesPage: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Edit modal state
+  const [editing, setEditing] = useState<UniversityRow | null>(null);
+  const [eName, setEName] = useState('');
+  const [eCountry, setECountry] = useState('');
+  const [eCity, setECity] = useState('');
+  const [eWebsite, setEWebsite] = useState('');
+  const [eEmail, setEEmail] = useState('');
+  const [ePhone, setEPhone] = useState('');
+  const [eAffiliationType, setEAffiliationType] = useState('');
+  const [eNotes, setENotes] = useState('');
+
   const [currentUserEmail, setCurrentUserEmail] = useState<string>('');
 
   useEffect(() => {
@@ -168,6 +179,59 @@ const UniversitiesPage: React.FC = () => {
     }
   };
 
+  const openEdit = (u: UniversityRow) => {
+    setEditing(u);
+    setEName(u.name);
+    setECountry(u.country || '');
+    setECity(u.city || '');
+    setEWebsite(u.website || '');
+    setEEmail(u.email || '');
+    setEPhone(u.phone || '');
+    setEAffiliationType(u.affiliation_type || '');
+    setENotes(u.notes || '');
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editing) return;
+    const nm = eName.trim();
+    if (!nm) { alert('University Name is required'); return; }
+    setSaving(true);
+    try {
+      const payload: any = {
+        name: nm,
+        country: eCountry || null,
+        city: eCity || null,
+        website: eWebsite || null,
+        email: eEmail || null,
+        phone: ePhone || null,
+        affiliation_type: eAffiliationType || null,
+        notes: eNotes || null,
+      };
+      const { error } = await supabase.from('universities').update(payload).eq('id', editing.id);
+      if (error) throw error;
+      setEditing(null);
+      await load();
+      alert('University updated successfully');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to update university');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteUniversity = async (u: UniversityRow) => {
+    if (!confirm(`Delete university "${u.name}"? This action cannot be undone.`)) return;
+    try {
+      const { error } = await supabase.from('universities').delete().eq('id', u.id);
+      if (error) throw error;
+      await load();
+      alert('University deleted successfully');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to delete university');
+    }
+  };
+
   const countries = useMemo(() => ['All', ...Array.from(new Set(items.map(i => i.country).filter(Boolean))) as string[]], [items]);
   const affiliations = useMemo(() => ['All', ...Array.from(new Set(items.map(i => i.affiliation_type).filter(Boolean))) as string[]], [items]);
 
@@ -215,13 +279,14 @@ const UniversitiesPage: React.FC = () => {
                   <th className="py-2 px-2">Affiliation Type</th>
                   <th className="py-2 px-2">Added By</th>
                   <th className="py-2 px-2">Added On</th>
+                  <th className="py-2 px-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="py-4 text-center text-gray-500">Loading...</td></tr>
+                  <tr><td colSpan={10} className="py-4 text-center text-gray-500">Loading...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="py-4 text-center text-gray-500">No universities found</td></tr>
+                  <tr><td colSpan={10} className="py-4 text-center text-gray-500">No universities found</td></tr>
                 ) : (
                   filtered.map(u => (
                     <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50">
@@ -236,6 +301,10 @@ const UniversitiesPage: React.FC = () => {
                       <td className="py-2 px-2">{u.affiliation_type || '-'}</td>
                       <td className="py-2 px-2">{u.created_by || '-'}</td>
                       <td className="py-2 px-2">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '-'}</td>
+                      <td className="py-2 px-2">
+                        <button onClick={() => openEdit(u)} className="text-blue-600 hover:underline mr-2">Edit</button>
+                        <button onClick={() => deleteUniversity(u)} className="text-red-600 hover:underline">Delete</button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -311,6 +380,54 @@ const UniversitiesPage: React.FC = () => {
           </div>
         </section>
       </div>
+
+      {/* Edit University Modal */}
+      {editing && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <form onSubmit={saveEdit} className="bg-white w-full max-w-2xl rounded-xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b">
+              <h3 className="text-lg font-bold">Edit University</h3>
+              <button type="button" onClick={() => setEditing(null)} className="text-text-secondary">✕</button>
+            </div>
+            <div className="overflow-y-auto p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <label>University Name*
+                  <input value={eName} onChange={e => setEName(e.target.value)} className="mt-1 w-full border rounded p-2" required />
+                </label>
+                <label>Country
+                  <input value={eCountry} onChange={e => setECountry(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label>City
+                  <input value={eCity} onChange={e => setECity(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label>Website URL
+                  <input value={eWebsite} onChange={e => setEWebsite(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label>Contact Email
+                  <input value={eEmail} onChange={e => setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label>Contact Phone
+                  <input value={ePhone} onChange={e => setEPhone(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label>Affiliation Type
+                  <input value={eAffiliationType} onChange={e => setEAffiliationType(e.target.value)} className="mt-1 w-full border rounded p-2" />
+                </label>
+                <label className="sm:col-span-2">Notes
+                  <textarea value={eNotes} onChange={e => setENotes(e.target.value)} className="mt-1 w-full border rounded p-2" rows={3} />
+                </label>
+              </div>
+            </div>
+            <div className="border-t p-5">
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 border rounded">Cancel</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 bg-[#ffa332] text-white rounded font-semibold disabled:opacity-60">
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
     </main>
   );
 };
