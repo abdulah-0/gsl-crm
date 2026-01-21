@@ -556,92 +556,96 @@ const UsersPage: React.FC = () => {
 
       {/* Edit User Modal */}
       {editing && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <form onSubmit={saveEdit} className="bg-white w-full max-w-lg rounded-xl p-5 shadow-xl">
-            <div className="flex items-center justify-between"><h3 className="text-lg font-bold">Edit User</h3><button type="button" onClick={() => setEditing(null)} className="text-text-secondary">✕</button></div>
-            <div className="mt-3 grid grid-cols-1 gap-3 text-sm">
-              <label><span className="text-text-secondary">Full Name</span><input value={eFull} onChange={e => setEFull(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
-              <label><span className="text-text-secondary">Email</span><input type="email" value={eEmail} onChange={e => setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
-              <label><span className="text-text-secondary">Password (optional)</span>
-                <div className="mt-1 flex items-center gap-2">
-                  <input type={eShowPw ? 'text' : 'password'} value={ePassword} onChange={e => setEPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(not stored here)" />
-                  <button type="button" onClick={() => setEShowPw(s => !s)} className="px-2 py-1 border rounded text-xs">{eShowPw ? 'Hide' : 'Show'}</button>
-                </div>
-              </label>
-              <label><span className="text-text-secondary">Role</span>
-                <select value={eRole} onChange={e => { const v = e.target.value as any; setERole(v); if (v === 'Super Admin') { const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id => { m[id] = { add: true, edit: true, del: true }; }); setEAccess(m); setEPerms(ALL_TABS.map(t => normalizeModule(t.id))); } else if (v === 'Teacher') { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard', 'teachers']); } else { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
-                  <option>Super Admin</option>
-                  <option>Admin</option>
-                  <option>Counsellor</option>
-                  <option>Staff</option>
-                  <option>Teacher</option>
-                  <option>Director</option>
-                  <option>Reporter</option>
-                  <option>Custom</option>
-                </select>
-              </label>
-              <label><span className="text-text-secondary">Branch</span>
-                <select value={eBranch} onChange={e => setEBranch(e.target.value)} className="mt-1 w-full border rounded p-2" required>
-                  <option value="">Select Branch</option>
-                  {branches.map(b => (
-                    <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
-                  ))}
-                </select>
-              </label>
-              <label><span className="text-text-secondary">Reports To (Supervisors)</span>
-                <div className="mt-1 border rounded p-2 max-h-32 overflow-auto">
-                  {allUsers.filter(u => u.email !== editing?.email).map(u => (
-                    <label key={u.email} className="flex items-center gap-2 py-1 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={eReportsTo.includes(u.email)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setEReportsTo([...eReportsTo, u.email]);
-                          } else {
-                            setEReportsTo(eReportsTo.filter(email => email !== u.email));
-                          }
-                        }}
-                      />
-                      <span>{u.full_name} ({u.role})</span>
-                    </label>
-                  ))}
-                  {allUsers.filter(u => u.email !== editing?.email).length === 0 && (
-                    <div className="text-text-secondary text-xs">No other users available</div>
-                  )}
-                </div>
-              </label>
-              <label><span className="text-text-secondary">Status</span>
-                <select value={eStatus} onChange={e => setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
-                  <option>Active</option>
-                  <option>Inactive</option>
-                  <option>Dormant</option>
-                </select>
-              </label>
-              <div>
-                <div className="text-text-secondary mb-1">Module Access</div>
-                <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-56 overflow-auto text-xs">
-                  {ALL_TABS.map(t => (
-                    <div key={t.id} className="flex items-center justify-between gap-2">
-                      <span className="truncate">{t.label}</span>
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.add} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), add: ev.target.checked } }))} />
-                          <span>Add</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.edit} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), edit: ev.target.checked } }))} />
-                          <span>Edit</span>
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.del} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), del: ev.target.checked } }))} />
-                          <span>Delete</span>
-                        </label>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <form onSubmit={saveEdit} className="bg-white w-full max-w-lg rounded-xl shadow-xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b"><h3 className="text-lg font-bold">Edit User</h3><button type="button" onClick={() => setEditing(null)} className="text-text-secondary">✕</button></div>
+            <div className="overflow-y-auto p-5">
+              <div className="grid grid-cols-1 gap-3 text-sm">
+                <label><span className="text-text-secondary">Full Name</span><input value={eFull} onChange={e => setEFull(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
+                <label><span className="text-text-secondary">Email</span><input type="email" value={eEmail} onChange={e => setEEmail(e.target.value)} className="mt-1 w-full border rounded p-2" required /></label>
+                <label><span className="text-text-secondary">Password (optional)</span>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input type={eShowPw ? 'text' : 'password'} value={ePassword} onChange={e => setEPassword(e.target.value)} className="flex-1 border rounded p-2" placeholder="(not stored here)" />
+                    <button type="button" onClick={() => setEShowPw(s => !s)} className="px-2 py-1 border rounded text-xs">{eShowPw ? 'Hide' : 'Show'}</button>
+                  </div>
+                </label>
+                <label><span className="text-text-secondary">Role</span>
+                  <select value={eRole} onChange={e => { const v = e.target.value as any; setERole(v); if (v === 'Super Admin') { const m: Record<string, ModulePermissions> = {} as any; MODULE_IDS.forEach(id => { m[id] = { add: true, edit: true, del: true }; }); setEAccess(m); setEPerms(ALL_TABS.map(t => normalizeModule(t.id))); } else if (v === 'Teacher') { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard', 'teachers']); } else { const m = emptyPermMap(); setEAccess(m); setEPerms(['dashboard']); } }} className="mt-1 w-full border rounded p-2">
+                    <option>Super Admin</option>
+                    <option>Admin</option>
+                    <option>Counsellor</option>
+                    <option>Staff</option>
+                    <option>Teacher</option>
+                    <option>Director</option>
+                    <option>Reporter</option>
+                    <option>Custom</option>
+                  </select>
+                </label>
+                <label><span className="text-text-secondary">Branch</span>
+                  <select value={eBranch} onChange={e => setEBranch(e.target.value)} className="mt-1 w-full border rounded p-2" required>
+                    <option value="">Select Branch</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.branch_code || b.id}>{b.branch_name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label><span className="text-text-secondary">Reports To (Supervisors)</span>
+                  <div className="mt-1 border rounded p-2 max-h-32 overflow-auto">
+                    {allUsers.filter(u => u.email !== editing?.email).map(u => (
+                      <label key={u.email} className="flex items-center gap-2 py-1 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={eReportsTo.includes(u.email)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setEReportsTo([...eReportsTo, u.email]);
+                            } else {
+                              setEReportsTo(eReportsTo.filter(email => email !== u.email));
+                            }
+                          }}
+                        />
+                        <span>{u.full_name} ({u.role})</span>
+                      </label>
+                    ))}
+                    {allUsers.filter(u => u.email !== editing?.email).length === 0 && (
+                      <div className="text-text-secondary text-xs">No other users available</div>
+                    )}
+                  </div>
+                </label>
+                <label><span className="text-text-secondary">Status</span>
+                  <select value={eStatus} onChange={e => setEStatus(e.target.value as any)} className="mt-1 w-full border rounded p-2">
+                    <option>Active</option>
+                    <option>Inactive</option>
+                    <option>Dormant</option>
+                  </select>
+                </label>
+                <div>
+                  <div className="text-text-secondary mb-1">Module Access</div>
+                  <div className="grid grid-cols-2 gap-2 border rounded p-2 max-h-56 overflow-auto text-xs">
+                    {ALL_TABS.map(t => (
+                      <div key={t.id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{t.label}</span>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.add} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), add: ev.target.checked } }))} />
+                            <span>Add</span>
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.edit} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), edit: ev.target.checked } }))} />
+                            <span>Edit</span>
+                          </label>
+                          <label className="flex items-center gap-1">
+                            <input type="checkbox" disabled={eRole === 'Super Admin'} checked={eRole === 'Super Admin' || !!eAccess[t.id]?.del} onChange={(ev) => setEAccess(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || { add: false, edit: false, del: false }), del: ev.target.checked } }))} />
+                            <span>Delete</span>
+                          </label>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
+            </div>
+            <div className="border-t p-5">
               <div className="text-right"><button type="submit" className="px-4 py-2 rounded bg-[#ffa332] text-white font-bold">Save Changes</button></div>
             </div>
           </form>
