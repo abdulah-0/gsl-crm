@@ -73,7 +73,12 @@ const Messenger: React.FC = () => {
         const row: any = payload.new;
         if (!me) return;
         if ((row.sender_email === me.email && row.recipient_email === sel) || (row.sender_email === sel && row.recipient_email === me.email)) {
-          setMsgs(prev => [...prev, { id: row.id, sender_email: row.sender_email, recipient_email: row.recipient_email, body: row.body, created_at: row.created_at }]);
+          // Check if message already exists (prevent duplicates from optimistic update)
+          setMsgs(prev => {
+            const exists = prev.some(m => m.id === row.id);
+            if (exists) return prev;
+            return [...prev, { id: row.id, sender_email: row.sender_email, recipient_email: row.recipient_email, body: row.body, created_at: row.created_at }];
+          });
           setTimeout(() => { if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight; }, 0);
         }
       })
@@ -83,8 +88,35 @@ const Messenger: React.FC = () => {
 
   const send = async () => {
     if (!me || !sel || !text.trim()) return;
-    await supabase.from('messages').insert([{ sender_email: me.email, recipient_email: sel, body: text.trim() }]);
-    setText('');
+    const body = text.trim();
+    setText(''); // Clear input immediately for better UX
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert([{ sender_email: me.email, recipient_email: sel, body }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optimistically add message to local state
+      if (data) {
+        setMsgs(prev => [...prev, {
+          id: data.id,
+          sender_email: data.sender_email,
+          recipient_email: data.recipient_email,
+          body: data.body,
+          created_at: data.created_at
+        }]);
+        setTimeout(() => {
+          if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+        }, 0);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      setText(body); // Restore text on error
+    }
   };
 
   const contactName = useMemo(() => contacts.find(c => c.email === sel)?.full_name || sel, [contacts, sel]);
