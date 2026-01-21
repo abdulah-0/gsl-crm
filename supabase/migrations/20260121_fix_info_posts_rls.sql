@@ -1,14 +1,39 @@
 -- Fix info_posts RLS policies to allow authorized users to create posts
--- This migration updates the RLS policies to be more robust
+-- This migration creates the table if needed and updates the RLS policies to be more robust
 
 BEGIN;
 
--- Drop existing policies
+-- Enable uuid generation if available
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+-- Create table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.info_posts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  title text NOT NULL,
+  description text,
+  type text NOT NULL CHECK (type IN ('image','video','text')),
+  file_url text,
+  text_content text,
+  pinned boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  created_by text
+);
+
+-- Enable RLS
+ALTER TABLE public.info_posts ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist
+DROP POLICY IF EXISTS info_posts_select ON public.info_posts;
 DROP POLICY IF EXISTS info_posts_insert ON public.info_posts;
 DROP POLICY IF EXISTS info_posts_update ON public.info_posts;
 DROP POLICY IF EXISTS info_posts_delete ON public.info_posts;
 
--- Recreate INSERT policy with better email matching
+-- Everyone authenticated can read
+CREATE POLICY info_posts_select ON public.info_posts
+  FOR SELECT
+  USING (true);
+
+-- Admin/Super Admin can insert (using auth.jwt() for better compatibility)
 CREATE POLICY info_posts_insert ON public.info_posts
   FOR INSERT
   WITH CHECK (
@@ -23,7 +48,7 @@ CREATE POLICY info_posts_insert ON public.info_posts
     )
   );
 
--- Recreate UPDATE policy
+-- Admin/Super Admin can update
 CREATE POLICY info_posts_update ON public.info_posts
   FOR UPDATE
   USING (
@@ -49,7 +74,7 @@ CREATE POLICY info_posts_update ON public.info_posts
     )
   );
 
--- Recreate DELETE policy
+-- Admin/Super Admin can delete
 CREATE POLICY info_posts_delete ON public.info_posts
   FOR DELETE
   USING (
@@ -65,3 +90,4 @@ CREATE POLICY info_posts_delete ON public.info_posts
   );
 
 COMMIT;
+
