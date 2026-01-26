@@ -54,11 +54,7 @@
     "test:rbac": "playwright test tests/rbac.spec.js",
     "test:modules": "playwright test tests/modules.spec.js",
     "test:logout": "playwright test tests/auto-logout.spec.js",
-    "test:report": "playwright show-report",
-    "mysql:export": "tsx mysql/scripts/export-from-supabase.ts",
-    "mysql:import": "tsx mysql/scripts/import-to-mysql.ts",
-    "mysql:test-connection": "tsx -e \"import('./mysql/config/database').then(db => db.testConnection())\"",
-    "mysql:schema": "mysql -u root -p gsl_crm < mysql/schema/schema.sql"
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.10",
