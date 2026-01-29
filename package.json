@@ -54,10 +54,7 @@
     "test:rbac": "playwright test tests/rbac.spec.js",
     "test:modules": "playwright test tests/modules.spec.js",
     "test:logout": "playwright test tests/auto-logout.spec.js",
-    "test:report": "playwright show-report",
-    "mysql:dev": "ts-node api/mysql/server.ts",
-    "mysql:migrate": "ts-node mysql/scripts/migrate_data.ts",
-    "mysql:verify": "ts-node mysql/scripts/migrate_data.ts --verify"
+    "test:report": "playwright show-report"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.10",
@@ -74,13 +71,8 @@
     "@tailwindcss/typography": "^0.5.16",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.21.2",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.11.5",
     "prop-types": "^15.8.1",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
@@ -89,15 +81,10 @@
     "react-router-dom": "6.0.2",
     "recharts": "^2.15.2",
     "tailwind-merge": "^3.3.1",
-    "ts-node": "^10.9.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/jsonwebtoken": "^9.0.7",
-    "@types/node": "^22.10.5",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "4.3.4",
